@@ -585,6 +585,45 @@
                     </div>
                 </div>
 
+                <!-- Keyboard & Mouse Control Section -->
+                <div class="gamepad-section" style="margin-top: 20px;">
+                    <div class="gamepad-header">
+                        <h3>⌨️ Keyboard & Mouse Control</h3>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="keyboardMouseToggle" onchange="toggleKeyboardMouse()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="gamepad-status" id="keyboardMouseStatus">
+                        ⚫ Keyboard/Mouse Disabled
+                    </div>
+
+                    <div class="gamepad-info">
+                        <strong>Controls:</strong><br>
+                        <small>
+                        • <strong>W/A/S/D</strong>: Move (W=forward, S=back, A=left, D=right)<br>
+                        • <strong>Mouse</strong>: Look around (X=yaw, Y=pitch)<br>
+                        • <strong>Click to capture</strong>: Enable mouse control<br>
+                        • <strong>ESC</strong>: Release mouse control<br>
+                        • <strong>Space</strong>: Emergency stop<br>
+                        • <strong>E</strong>: Stand up | <strong>Q</strong>: Crouch<br>
+                        • <strong>R</strong>: Toggle Lidar
+                        </small>
+                    </div>
+
+                    <div class="gamepad-values" id="keyboardMouseValues">
+                        <div class="gamepad-value">Forward: <span id="val-kb-forward">0.00</span></div>
+                        <div class="gamepad-value">Strafe: <span id="val-kb-strafe">0.00</span></div>
+                        <div class="gamepad-value">Yaw: <span id="val-kb-yaw">0.00</span></div>
+                        <div class="gamepad-value">Pitch: <span id="val-kb-pitch">0.00</span></div>
+                    </div>
+
+                    <div id="mouseControlInfo" style="padding: 10px; margin-top: 10px; background: #fff3cd; border-radius: 5px; display: none;">
+                        <small>🖱️ <strong>Mouse captured</strong> - Move mouse to control robot. Press ESC to release.</small>
+                    </div>
+                </div>
+
                 <!-- WebRTC Latency Test Section -->
                 <div class="gamepad-section" style="margin-top: 20px;">
                     <div class="gamepad-header">
@@ -1301,6 +1340,253 @@
                 gamepadIndex = null;
             }
         });
+
+        // ========== KEYBOARD & MOUSE CONTROL ==========
+        let keyboardMouseEnabled = false;
+        let keyboardMouseInterval = null;
+        let keysPressed = {};
+        let mouseMovement = {x: 0, y: 0};
+        let pointerLocked = false;
+        const KEYBOARD_POLL_RATE = 33; // 30Hz - same as gamepad
+        const MOUSE_SENSITIVITY = 0.002; // Adjust for mouse control sensitivity
+        const MOUSE_PITCH_SENSITIVITY = 0.001; // Separate sensitivity for pitch
+
+        function toggleKeyboardMouse() {
+            const toggle = document.getElementById('keyboardMouseToggle');
+            keyboardMouseEnabled = toggle.checked;
+
+            if (keyboardMouseEnabled) {
+                if (!isConnected) {
+                    alert('Please connect to the robot first!');
+                    toggle.checked = false;
+                    keyboardMouseEnabled = false;
+                    return;
+                }
+
+                // Initialize keyboard/mouse control
+                console.log('Keyboard/Mouse control enabled');
+                updateKeyboardMouseStatus('active', '🟢 Keyboard/Mouse Active');
+
+                // Start polling
+                keyboardMouseInterval = setInterval(pollKeyboardMouse, KEYBOARD_POLL_RATE);
+
+                // Request pointer lock on first click
+                document.addEventListener('click', requestPointerLock);
+            } else {
+                // Disable keyboard/mouse control
+                console.log('Keyboard/Mouse control disabled');
+                updateKeyboardMouseStatus('inactive', '⚫ Keyboard/Mouse Disabled');
+
+                // Stop polling
+                if (keyboardMouseInterval) {
+                    clearInterval(keyboardMouseInterval);
+                    keyboardMouseInterval = null;
+                }
+
+                // Release pointer lock
+                if (document.pointerLockElement) {
+                    document.exitPointerLock();
+                }
+
+                // Remove event listener
+                document.removeEventListener('click', requestPointerLock);
+
+                // Reset keys
+                keysPressed = {};
+                mouseMovement = {x: 0, y: 0};
+            }
+        }
+
+        function requestPointerLock() {
+            if (keyboardMouseEnabled && !pointerLocked) {
+                document.body.requestPointerLock();
+            }
+        }
+
+        function updateKeyboardMouseStatus(state, text) {
+            const status = document.getElementById('keyboardMouseStatus');
+            status.className = 'gamepad-status ' + state;
+            status.textContent = text;
+        }
+
+        // Keyboard event listeners
+        document.addEventListener('keydown', (e) => {
+            if (!keyboardMouseEnabled) return;
+
+            // Prevent default for control keys
+            if (['w', 'a', 's', 'd', 'q', 'e', 'r', ' '].includes(e.key.toLowerCase())) {
+                e.preventDefault();
+            }
+
+            keysPressed[e.key.toLowerCase()] = true;
+
+            // Handle action keys (non-movement)
+            if (e.key === ' ') {
+                // Emergency stop
+                handleKeyboardAction('emergency_stop');
+            } else if (e.key.toLowerCase() === 'e') {
+                // Stand up
+                handleKeyboardAction('stand_up');
+            } else if (e.key.toLowerCase() === 'q') {
+                // Crouch
+                handleKeyboardAction('crouch');
+            } else if (e.key.toLowerCase() === 'r') {
+                // Toggle lidar
+                handleKeyboardAction('toggle_lidar');
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (!keyboardMouseEnabled) return;
+            keysPressed[e.key.toLowerCase()] = false;
+        });
+
+        // Mouse movement tracking
+        document.addEventListener('pointerlockchange', () => {
+            pointerLocked = document.pointerLockElement === document.body;
+            const mouseInfo = document.getElementById('mouseControlInfo');
+
+            if (pointerLocked) {
+                console.log('Pointer locked - mouse control active');
+                mouseInfo.style.display = 'block';
+            } else {
+                console.log('Pointer unlocked - mouse control inactive');
+                mouseInfo.style.display = 'none';
+                mouseMovement = {x: 0, y: 0};
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!keyboardMouseEnabled || !pointerLocked) return;
+
+            // Accumulate mouse movement
+            mouseMovement.x += e.movementX;
+            mouseMovement.y += e.movementY;
+        });
+
+        async function handleKeyboardAction(action) {
+            try {
+                const response = await fetch('/gamepad/action', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action})
+                });
+
+                if (!response.ok) {
+                    console.error('Action failed:', action);
+                }
+
+                // Special handling for emergency stop
+                if (action === 'emergency_stop') {
+                    showEmergencyStop();
+                }
+            } catch (error) {
+                console.error('Error sending action:', error);
+            }
+        }
+
+        async function pollKeyboardMouse() {
+            if (!keyboardMouseEnabled || !isConnected) return;
+
+            // Calculate movement from keyboard
+            let forward = 0;
+            let strafe = 0;
+
+            if (keysPressed['w']) forward += 1;
+            if (keysPressed['s']) forward -= 1;
+            if (keysPressed['a']) strafe += 1;
+            if (keysPressed['d']) strafe -= 1;
+
+            // Calculate rotation from mouse
+            let yaw = mouseMovement.x * MOUSE_SENSITIVITY;
+            let pitch = mouseMovement.y * MOUSE_PITCH_SENSITIVITY;
+
+            // Reset mouse movement after reading
+            mouseMovement = {x: 0, y: 0};
+
+            // Get velocity settings from localStorage
+            const settings = JSON.parse(localStorage.getItem('gamepadSettings') || '{}');
+            const sensLinear = parseFloat(settings.sensitivity_linear || 1.0);
+            const sensStrafe = parseFloat(settings.sensitivity_strafe || 1.0);
+            const sensRotation = parseFloat(settings.sensitivity_rotation || 1.0);
+            const speedMult = parseFloat(settings.speed_multiplier || 1.0);
+            const maxLinear = parseFloat(settings.max_linear_velocity || 0.6);
+            const maxStrafe = parseFloat(settings.max_strafe_velocity || 0.4);
+            const maxRotation = parseFloat(settings.max_rotation_velocity || 0.8);
+
+            // Apply sensitivity and velocity limits
+            let vx = forward * sensLinear * speedMult;
+            let vy = strafe * sensStrafe * speedMult;
+            let vyaw = -yaw * sensRotation; // Negative for natural mouse movement
+
+            // Clamp to max velocities
+            vx = Math.max(-maxLinear, Math.min(maxLinear, vx));
+            vy = Math.max(-maxStrafe, Math.min(maxStrafe, vy));
+            vyaw = Math.max(-maxRotation, Math.min(maxRotation, vyaw));
+
+            // Update display
+            document.getElementById('val-kb-forward').textContent = vx.toFixed(2);
+            document.getElementById('val-kb-strafe').textContent = vy.toFixed(2);
+            document.getElementById('val-kb-yaw').textContent = vyaw.toFixed(2);
+            document.getElementById('val-kb-pitch').textContent = pitch.toFixed(2);
+
+            // Calculate velocity magnitude for display
+            const velocityMagnitude = Math.sqrt(vx*vx + vy*vy + vyaw*vyaw);
+
+            // Update velocity status display
+            const velocityStatus = document.getElementById('velocityStatus');
+            if (velocityStatus) {
+                velocityStatus.textContent = velocityMagnitude.toFixed(2) + ' m/s';
+
+                if (velocityMagnitude > 0.01) {
+                    velocityStatus.classList.remove('stopped');
+                    velocityStatus.classList.add('moving');
+                } else {
+                    velocityStatus.classList.remove('moving');
+                    velocityStatus.classList.add('stopped');
+                }
+            }
+
+            // Convert to gamepad-style input (lx, ly, rx, ry)
+            const lx = vy / maxStrafe; // Strafe normalized
+            const ly = vx / maxLinear; // Forward normalized
+            const rx = vyaw / maxRotation; // Yaw normalized
+            const ry = 0; // Pitch not used for movement
+
+            // Send movement command via WebSocket (preferred) or HTTP (fallback)
+            if (!commandInFlight) {
+                commandInFlight = true;
+                const sendTime = performance.now();
+
+                if (useWebSocket && socketConnected) {
+                    // ========== WEBSOCKET PATH (LOW LATENCY) ==========
+                    currentCommandStartTime = performance.now();
+                    socket.emit('gamepad_command', {lx, ly, rx, ry});
+                    commandInFlight = false;
+                } else {
+                    // ========== HTTP FALLBACK PATH ==========
+                    fetch('/gamepad/command', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({lx, ly, rx, ry})
+                    })
+                    .then(response => {
+                        const latency = performance.now() - sendTime;
+                        updateLatencyDisplay(latency, 'HTTP');
+                        commandInFlight = false;
+
+                        if (response.ok) {
+                            return response.json();
+                        }
+                        throw new Error('Command failed');
+                    })
+                    .catch(error => {
+                        commandInFlight = false;
+                        console.error('Error sending movement command:', error);
+                    });
+                }
+            }
+        }
 
         // Initialize form fields
         updateFormFields();
