@@ -80,6 +80,52 @@ def run_event_loop(loop):
     asyncio.set_event_loop(loop)
     loop.run_forever()
 
+async def initialize_robot():
+    """Initialize robot into AI mode and Agile Mode (FreeWalk)"""
+    try:
+        logging.info(">>> initialize_robot() function started <<<")
+        # First, check and set motion mode
+        logging.info("Checking motion mode...")
+        response = await connection.datachannel.pub_sub.publish_request_new(
+            RTC_TOPIC["MOTION_SWITCHER"],
+            {"api_id": 1001}
+        )
+
+        if response and 'data' in response:
+            import json
+            if 'data' in response['data']:
+                data = json.loads(response['data']['data'])
+                current_mode = data.get('name', 'unknown')
+                logging.info(f"Current motion mode: {current_mode}")
+
+                # Switch to AI mode if not already
+                # AI mode uses Move command for speed control, not wireless controller
+                if current_mode != "ai":
+                    logging.info(f"Switching from {current_mode} to AI mode...")
+                    await connection.datachannel.pub_sub.publish_request_new(
+                        RTC_TOPIC["MOTION_SWITCHER"],
+                        {
+                            "api_id": 1002,
+                            "parameter": {"name": "ai"}
+                        }
+                    )
+                    await asyncio.sleep(5)  # Wait for mode switch (AI mode takes longer)
+                    logging.info("Switched to AI mode")
+
+        # Send FreeWalk command to enter Agile Mode (AI mode with obstacle avoidance)
+        logging.info("Sending FreeWalk command to enter Agile Mode...")
+        await connection.datachannel.pub_sub.publish_request_new(
+            RTC_TOPIC["SPORT_MOD"],
+            {"api_id": SPORT_CMD["FreeWalk"]}
+        )
+        await asyncio.sleep(2)  # Wait for robot to enter agile mode
+        logging.info("Robot in Agile Mode (FreeWalk) - ready for AI movement with obstacle avoidance")
+
+    except Exception as e:
+        logging.error(f"Error initializing robot: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+
 async def recv_camera_stream(track: MediaStreamTrack):
     """Receive video frames from the robot and put them in the queue"""
     global latest_frame
@@ -293,52 +339,6 @@ def enable_gamepad():
 
         if not is_connected:
             return jsonify({'status': 'error', 'message': 'Robot not connected'}), 400
-
-        # Initialize robot when enabling gamepad
-        async def initialize_robot():
-            try:
-                logging.info(">>> initialize_robot() function started <<<")
-                # First, check and set motion mode
-                logging.info("Checking motion mode...")
-                response = await connection.datachannel.pub_sub.publish_request_new(
-                    RTC_TOPIC["MOTION_SWITCHER"],
-                    {"api_id": 1001}
-                )
-
-                if response and 'data' in response:
-                    import json
-                    if 'data' in response['data']:
-                        data = json.loads(response['data']['data'])
-                        current_mode = data.get('name', 'unknown')
-                        logging.info(f"Current motion mode: {current_mode}")
-
-                        # Switch to AI mode if not already
-                        # AI mode uses Move command for speed control, not wireless controller
-                        if current_mode != "ai":
-                            logging.info(f"Switching from {current_mode} to AI mode...")
-                            await connection.datachannel.pub_sub.publish_request_new(
-                                RTC_TOPIC["MOTION_SWITCHER"],
-                                {
-                                    "api_id": 1002,
-                                    "parameter": {"name": "ai"}
-                                }
-                            )
-                            await asyncio.sleep(5)  # Wait for mode switch (AI mode takes longer)
-                            logging.info("Switched to AI mode")
-
-                # Send FreeWalk command to enter Agile Mode (AI mode with obstacle avoidance)
-                logging.info("Sending FreeWalk command to enter Agile Mode...")
-                await connection.datachannel.pub_sub.publish_request_new(
-                    RTC_TOPIC["SPORT_MOD"],
-                    {"api_id": SPORT_CMD["FreeWalk"]}
-                )
-                await asyncio.sleep(2)  # Wait for robot to enter agile mode
-                logging.info("Robot in Agile Mode (FreeWalk) - ready for AI movement with obstacle avoidance")
-
-            except Exception as e:
-                logging.error(f"Error initializing robot: {e}")
-                import traceback
-                logging.error(traceback.format_exc())
 
         with gamepad_lock:
             gamepad_enabled = enable
