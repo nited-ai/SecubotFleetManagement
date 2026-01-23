@@ -507,6 +507,34 @@
                     </div>
                 </div>
 
+                <!-- WebRTC Latency Test Section -->
+                <div class="gamepad-section" style="margin-top: 20px;">
+                    <div class="gamepad-header">
+                        <h3>⚡ Latency Test</h3>
+                    </div>
+
+                    <div style="padding: 15px;">
+                        <p style="margin-bottom: 10px; font-size: 14px;">
+                            Compare HTTP vs Direct WebRTC latency by sending a "move forward" command:
+                        </p>
+
+                        <button class="btn btn-primary" onclick="testHttpLatency()" style="width: 48%; margin-right: 2%;">
+                            Test HTTP
+                        </button>
+                        <button class="btn btn-primary" onclick="testWebRTCLatency()" style="width: 48%;">
+                            Test WebRTC
+                        </button>
+
+                        <div id="latencyTestResults" style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px; font-family: monospace; font-size: 13px;">
+                            <div><strong>HTTP Latency:</strong> <span id="httpLatency">--</span> ms</div>
+                            <div><strong>WebRTC Latency:</strong> <span id="webrtcLatency">--</span> ms</div>
+                            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #dee2e6;">
+                                <strong>Improvement:</strong> <span id="latencyImprovement">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Gamepad Settings Panel -->
                 <div class="settings-panel">
                     <div class="settings-header" onclick="toggleSettings()">
@@ -1225,6 +1253,115 @@
                 });
             }
         });
+
+        // ========== LATENCY TESTING ==========
+
+        async function testHttpLatency() {
+            try {
+                const testCommand = {
+                    lx: 0.0,
+                    ly: 0.3,  // Move forward slowly
+                    rx: 0.0,
+                    ry: 0.0
+                };
+
+                const startTime = performance.now();
+
+                const response = await fetch('/gamepad/command', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(testCommand)
+                });
+
+                const latency = performance.now() - startTime;
+
+                if (response.ok) {
+                    document.getElementById('httpLatency').textContent = latency.toFixed(1);
+                    document.getElementById('httpLatency').style.color = '#007bff';
+                    updateLatencyComparison();
+
+                    // Stop robot after 0.5 seconds
+                    setTimeout(async () => {
+                        await fetch('/gamepad/command', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({lx: 0, ly: 0, rx: 0, ry: 0})
+                        });
+                    }, 500);
+                } else {
+                    showMessage('HTTP test failed', 'error');
+                }
+            } catch (error) {
+                console.error('HTTP latency test error:', error);
+                showMessage('HTTP test error: ' + error.message, 'error');
+            }
+        }
+
+        async function testWebRTCLatency() {
+            try {
+                const testCommand = {
+                    vx: 0.3,  // Move forward slowly
+                    vy: 0.0,
+                    vyaw: 0.0
+                };
+
+                const startTime = performance.now();
+
+                const response = await fetch('/webrtc/test_direct_command', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(testCommand)
+                });
+
+                const latency = performance.now() - startTime;
+
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('webrtcLatency').textContent = latency.toFixed(1);
+                    document.getElementById('webrtcLatency').style.color = '#28a745';
+                    updateLatencyComparison();
+
+                    console.log('WebRTC test result:', data);
+
+                    // Stop robot after 0.5 seconds
+                    setTimeout(async () => {
+                        await fetch('/webrtc/test_direct_command', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({vx: 0, vy: 0, vyaw: 0})
+                        });
+                    }, 500);
+                } else {
+                    showMessage('WebRTC test failed', 'error');
+                }
+            } catch (error) {
+                console.error('WebRTC latency test error:', error);
+                showMessage('WebRTC test error: ' + error.message, 'error');
+            }
+        }
+
+        function updateLatencyComparison() {
+            const httpLatency = parseFloat(document.getElementById('httpLatency').textContent);
+            const webrtcLatency = parseFloat(document.getElementById('webrtcLatency').textContent);
+
+            if (!isNaN(httpLatency) && !isNaN(webrtcLatency)) {
+                const improvement = httpLatency - webrtcLatency;
+                const improvementPercent = ((improvement / httpLatency) * 100).toFixed(1);
+
+                const improvementSpan = document.getElementById('latencyImprovement');
+
+                if (improvement > 0) {
+                    improvementSpan.textContent = `${improvement.toFixed(1)} ms faster (${improvementPercent}% improvement) ⚡`;
+                    improvementSpan.style.color = '#28a745';
+                } else if (improvement < 0) {
+                    improvementSpan.textContent = `${Math.abs(improvement).toFixed(1)} ms slower (${Math.abs(improvementPercent)}% worse) ⚠️`;
+                    improvementSpan.style.color = '#dc3545';
+                } else {
+                    improvementSpan.textContent = 'Same latency';
+                    improvementSpan.style.color = '#6c757d';
+                }
+            }
+        }
     </script>
 </body>
 </html>

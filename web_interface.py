@@ -881,6 +881,61 @@ def ping():
     """Lightweight ping endpoint for network latency testing"""
     return jsonify({'pong': time.time()})
 
+@app.route('/webrtc/test_direct_command', methods=['POST'])
+def webrtc_test_direct_command():
+    """
+    Test endpoint to send a command directly via WebRTC data channel
+    This bypasses HTTP for the actual command, only using HTTP to trigger it
+    Used for latency comparison testing
+    """
+    global connection, event_loop
+
+    try:
+        if not is_connected:
+            return jsonify({'status': 'error', 'message': 'Not connected to robot'}), 400
+
+        data = request.json
+        vx = float(data.get('vx', 0.0))
+        vy = float(data.get('vy', 0.0))
+        vyaw = float(data.get('vyaw', 0.0))
+
+        # Record start time for latency measurement
+        start_time = time.time()
+
+        # Send command directly via WebRTC
+        async def send_direct_command():
+            try:
+                # Send Move command via WebRTC data channel
+                await connection.datachannel.pub_sub.publish_request_new(
+                    RTC_TOPIC["SPORT_MOD"],
+                    {
+                        "api_id": SPORT_CMD["Move"],
+                        "parameter": {"x": vx, "y": vy, "z": vyaw}
+                    }
+                )
+                logging.info(f"✓ Direct WebRTC command sent: vx={vx}, vy={vy}, vyaw={vyaw}")
+            except Exception as e:
+                logging.error(f"Error sending direct WebRTC command: {e}")
+
+        if event_loop and event_loop.is_running():
+            # Send command asynchronously
+            future = asyncio.run_coroutine_threadsafe(send_direct_command(), event_loop)
+            # Wait for completion to measure round-trip time
+            future.result(timeout=1.0)
+
+        # Calculate latency
+        latency_ms = (time.time() - start_time) * 1000
+
+        return jsonify({
+            'status': 'success',
+            'latency_ms': round(latency_ms, 2),
+            'velocities': {'vx': vx, 'vy': vy, 'vyaw': vyaw}
+        })
+
+    except Exception as e:
+        logging.error(f"WebRTC test command error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 if __name__ == '__main__':
     print("Starting Unitree Go2 Web Interface...")
     print("Open http://localhost:5000 in your browser")
