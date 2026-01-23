@@ -383,20 +383,83 @@
             color: white;
         }
 
-        .zero-velocity-indicator {
-            padding: 8px;
+        .velocity-status-panel {
+            padding: 12px;
             border-radius: 5px;
             margin-top: 10px;
-            text-align: center;
-            font-size: 0.85em;
-            background: #d4edda;
-            color: #155724;
-            display: none;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
         }
 
-        .zero-velocity-indicator.active {
-            display: block;
-            animation: fadeIn 0.3s;
+        .velocity-status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+
+        .velocity-status-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .velocity-status-label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .velocity-status-value {
+            font-family: monospace;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 3px;
+            background: #e9ecef;
+        }
+
+        .velocity-status-value.moving {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .velocity-status-value.stopped {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .latency-indicator {
+            font-family: monospace;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+
+        .latency-excellent {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .latency-good {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .latency-acceptable {
+            background: #ffe5cc;
+            color: #cc5200;
+        }
+
+        .latency-poor {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .connection-method {
+            font-size: 0.75em;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #667eea;
+            color: white;
+            margin-left: 5px;
         }
 
         @keyframes fadeIn {
@@ -502,8 +565,55 @@
                         Clear Emergency Stop
                     </button>
 
-                    <div id="zeroVelocityIndicator" class="zero-velocity-indicator">
-                        ✓ Zero Velocity - Robot Stopped
+                    <!-- Velocity and Latency Status Panel -->
+                    <div class="velocity-status-panel">
+                        <div class="velocity-status-row">
+                            <span class="velocity-status-label">Velocity:</span>
+                            <span class="velocity-status-value stopped" id="velocityStatus">0.00 m/s</span>
+                        </div>
+                        <div class="velocity-status-row">
+                            <span class="velocity-status-label">Connection:</span>
+                            <span>
+                                <span class="latency-indicator latency-excellent" id="currentLatency">-- ms</span>
+                                <span class="connection-method" id="connectionMethod">HTTP</span>
+                            </span>
+                        </div>
+                        <div class="velocity-status-row">
+                            <span class="velocity-status-label">Avg Latency:</span>
+                            <span class="latency-indicator latency-excellent" id="avgLatency">-- ms</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WebRTC Latency Test Section -->
+                <div class="gamepad-section" style="margin-top: 20px;">
+                    <div class="gamepad-header">
+                        <h3>⚡ Latency Test</h3>
+                    </div>
+
+                    <div style="padding: 15px;">
+                        <p style="margin-bottom: 10px; font-size: 14px;">
+                            Compare HTTP vs WebSocket vs WebRTC latency:
+                        </p>
+
+                        <button class="btn btn-primary" onclick="testHttpLatency()" style="width: 32%; margin-right: 1%;">
+                            Test HTTP
+                        </button>
+                        <button class="btn btn-primary" onclick="testWebSocketLatency()" style="width: 32%; margin-right: 1%; background: #28a745;">
+                            Test WebSocket
+                        </button>
+                        <button class="btn btn-primary" onclick="testWebRTCLatency()" style="width: 32%;">
+                            Test WebRTC
+                        </button>
+
+                        <div id="latencyTestResults" style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px; font-family: monospace; font-size: 13px;">
+                            <div><strong>HTTP Latency:</strong> <span id="httpLatency">--</span> ms</div>
+                            <div><strong>WebSocket Latency:</strong> <span id="websocketLatency">--</span> ms</div>
+                            <div><strong>WebRTC Latency:</strong> <span id="webrtcLatency">--</span> ms</div>
+                            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #dee2e6;">
+                                <strong>Best Method:</strong> <span id="latencyImprovement">--</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -580,8 +690,43 @@
         </div>
     </div>
 
+    <!-- Socket.IO Client Library -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
     <script>
         let isConnected = false;
+
+        // ========== WEBSOCKET INITIALIZATION ==========
+        const socket = io();
+        let socketConnected = false;
+        let useWebSocket = true;  // Prefer WebSocket, fallback to HTTP if needed
+
+        socket.on('connect', () => {
+            console.log('✅ WebSocket connected');
+            socketConnected = true;
+            useWebSocket = true;
+        });
+
+        socket.on('disconnect', () => {
+            console.log('❌ WebSocket disconnected');
+            socketConnected = false;
+            useWebSocket = false;  // Fallback to HTTP
+        });
+
+        socket.on('reconnect', () => {
+            console.log('🔄 WebSocket reconnected');
+            socketConnected = true;
+            useWebSocket = true;
+        });
+
+        socket.on('command_response', (data) => {
+            // Calculate WebSocket latency
+            if (currentCommandStartTime > 0) {
+                const latency = performance.now() - currentCommandStartTime;
+                updateLatencyDisplay(latency, 'WebSocket');
+                currentCommandStartTime = 0;
+            }
+        });
 
         function updateFormFields() {
             const method = document.getElementById('connectionMethod').value;
@@ -745,8 +890,66 @@
         let lastCommandTime = 0; // Track command timing
         let commandLatencies = []; // Track latency history
 
+        // Continuous latency monitoring
+        let currentCommandStartTime = 0;
+        let lastVelocityMagnitude = 0;
+        let websocketResponseReceived = false;
+
         function applyDeadzone(value) {
             return Math.abs(value) < DEADZONE ? 0 : value;
+        }
+
+        function updateLatencyDisplay(latency, method) {
+            // Update current latency
+            const currentLatencySpan = document.getElementById('currentLatency');
+            if (currentLatencySpan) {
+                currentLatencySpan.textContent = latency.toFixed(0) + ' ms';
+            }
+
+            // Update connection method
+            const methodSpan = document.getElementById('connectionMethod');
+            if (methodSpan) {
+                methodSpan.textContent = method;
+            }
+
+            // Track latency history
+            commandLatencies.push(latency);
+            if (commandLatencies.length > 10) commandLatencies.shift();
+
+            // Calculate and display average
+            const avgLatency = commandLatencies.reduce((a, b) => a + b, 0) / commandLatencies.length;
+            const avgLatencySpan = document.getElementById('avgLatency');
+            if (avgLatencySpan) {
+                avgLatencySpan.textContent = avgLatency.toFixed(0) + ' ms';
+            }
+
+            // Apply color coding to current latency
+            if (currentLatencySpan) {
+                currentLatencySpan.className = 'latency-indicator';
+                if (latency < 100) {
+                    currentLatencySpan.classList.add('latency-excellent');
+                } else if (latency < 200) {
+                    currentLatencySpan.classList.add('latency-good');
+                } else if (latency < 300) {
+                    currentLatencySpan.classList.add('latency-acceptable');
+                } else {
+                    currentLatencySpan.classList.add('latency-poor');
+                }
+            }
+
+            // Apply color coding to average latency
+            if (avgLatencySpan) {
+                avgLatencySpan.className = 'latency-indicator';
+                if (avgLatency < 100) {
+                    avgLatencySpan.classList.add('latency-excellent');
+                } else if (avgLatency < 200) {
+                    avgLatencySpan.classList.add('latency-good');
+                } else if (avgLatency < 300) {
+                    avgLatencySpan.classList.add('latency-acceptable');
+                } else {
+                    avgLatencySpan.classList.add('latency-poor');
+                }
+            }
         }
 
         function detectGamepad() {
@@ -894,59 +1097,76 @@
             document.getElementById('val-rx').textContent = rx.toFixed(2);
             document.getElementById('val-ry').textContent = ry.toFixed(2);
 
-            // Send movement command (fire-and-forget to avoid blocking)
-            // Don't wait for response to prevent blocking the polling loop
+            // Get velocity settings from localStorage
+            const settings = JSON.parse(localStorage.getItem('gamepadSettings') || '{}');
+            const sensLinear = parseFloat(settings.sensitivity_linear || 1.0);
+            const sensStrafe = parseFloat(settings.sensitivity_strafe || 1.0);
+            const sensRotation = parseFloat(settings.sensitivity_rotation || 1.0);
+            const speedMult = parseFloat(settings.speed_multiplier || 1.0);
+            const maxLinear = parseFloat(settings.max_linear_velocity || 0.6);
+            const maxStrafe = parseFloat(settings.max_strafe_velocity || 0.4);
+            const maxRotation = parseFloat(settings.max_rotation_velocity || 0.8);
+
+            // Apply sensitivity and velocity limits
+            let vx = ly * sensLinear * speedMult;
+            let vy = -lx * sensStrafe * speedMult;
+            let vyaw = -rx * sensRotation * speedMult;
+
+            // Clamp to max velocities
+            vx = Math.max(-maxLinear, Math.min(maxLinear, vx));
+            vy = Math.max(-maxStrafe, Math.min(maxStrafe, vy));
+            vyaw = Math.max(-maxRotation, Math.min(maxRotation, vyaw));
+
+            // Calculate velocity magnitude for display
+            const velocityMagnitude = Math.sqrt(vx*vx + vy*vy + vyaw*vyaw);
+
+            // Update velocity status display
+            const velocityStatus = document.getElementById('velocityStatus');
+            if (velocityStatus) {
+                velocityStatus.textContent = velocityMagnitude.toFixed(2) + ' m/s';
+
+                if (velocityMagnitude > 0.01) {
+                    velocityStatus.classList.remove('stopped');
+                    velocityStatus.classList.add('moving');
+                } else {
+                    velocityStatus.classList.remove('moving');
+                    velocityStatus.classList.add('stopped');
+                }
+            }
+
+            // Send movement command via WebSocket (preferred) or HTTP (fallback)
             if (!commandInFlight) {
                 commandInFlight = true;
                 const sendTime = performance.now();
 
-                fetch('/gamepad/command', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({lx, ly, rx, ry})
-                })
-                .then(response => {
-                    const latency = performance.now() - sendTime;
-                    commandInFlight = false;
+                if (useWebSocket && socketConnected) {
+                    // ========== WEBSOCKET PATH (LOW LATENCY) ==========
+                    // Track start time for latency measurement
+                    currentCommandStartTime = performance.now();
+                    socket.emit('gamepad_command', {lx, ly, rx, ry});
+                    commandInFlight = false; // Don't block on WebSocket
+                } else {
+                    // ========== HTTP FALLBACK PATH ==========
+                    fetch('/gamepad/command', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({lx, ly, rx, ry})
+                    })
+                    .then(response => {
+                        const latency = performance.now() - sendTime;
+                        updateLatencyDisplay(latency, 'HTTP');
+                        commandInFlight = false;
 
-                    // Track latency
-                    commandLatencies.push(latency);
-                    if (commandLatencies.length > 10) commandLatencies.shift();
-
-                    // Update latency display
-                    const avgLatency = commandLatencies.reduce((a, b) => a + b, 0) / commandLatencies.length;
-                    const latencySpan = document.getElementById('val-latency');
-                    if (latencySpan) {
-                        latencySpan.textContent = avgLatency.toFixed(0);
-                        // Color code: green <50ms, yellow <150ms, red >=150ms
-                        if (avgLatency < 50) {
-                            latencySpan.style.color = '#28a745';
-                        } else if (avgLatency < 150) {
-                            latencySpan.style.color = '#ffc107';
-                        } else {
-                            latencySpan.style.color = '#dc3545';
+                        if (response.ok) {
+                            return response.json();
                         }
-                    }
-
-                    if (response.ok) {
-                        return response.json();
-                    }
-                    throw new Error('Command failed');
-                })
-                .then(data => {
-                    // Handle response to show zero-velocity indicator
-                    const indicator = document.getElementById('zeroVelocityIndicator');
-                    if (data.zero_velocity) {
-                        indicator.classList.add('active');
-                        setTimeout(() => {
-                            indicator.classList.remove('active');
-                        }, 2000);
-                    }
-                })
-                .catch(error => {
-                    commandInFlight = false;
-                    console.error('Error sending movement command:', error);
-                });
+                        throw new Error('Command failed');
+                    })
+                    .catch(error => {
+                        commandInFlight = false;
+                        console.error('Error sending movement command:', error);
+                    });
+                }
             }
 
             // Handle button presses (detect rising edge)
@@ -1225,6 +1445,163 @@
                 });
             }
         });
+
+        // ========== LATENCY TESTING ==========
+
+        async function testHttpLatency() {
+            try {
+                const testCommand = {
+                    lx: 0.0,
+                    ly: 0.3,  // Move forward slowly
+                    rx: 0.0,
+                    ry: 0.0
+                };
+
+                const startTime = performance.now();
+
+                const response = await fetch('/gamepad/command', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(testCommand)
+                });
+
+                const latency = performance.now() - startTime;
+
+                if (response.ok) {
+                    document.getElementById('httpLatency').textContent = latency.toFixed(1);
+                    document.getElementById('httpLatency').style.color = '#007bff';
+                    updateLatencyComparison();
+
+                    // Stop robot after 0.5 seconds
+                    setTimeout(async () => {
+                        await fetch('/gamepad/command', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({lx: 0, ly: 0, rx: 0, ry: 0})
+                        });
+                    }, 500);
+                } else {
+                    showMessage('HTTP test failed', 'error');
+                }
+            } catch (error) {
+                console.error('HTTP latency test error:', error);
+                showMessage('HTTP test error: ' + error.message, 'error');
+            }
+        }
+
+        async function testWebSocketLatency() {
+            try {
+                if (!socketConnected) {
+                    showMessage('WebSocket not connected', 'error');
+                    return;
+                }
+
+                const testCommand = {
+                    lx: 0.0,
+                    ly: 0.3,  // Move forward slowly
+                    rx: 0.0,
+                    ry: 0.0
+                };
+
+                const startTime = performance.now();
+
+                // Send via WebSocket
+                socket.emit('gamepad_command', testCommand);
+
+                const latency = performance.now() - startTime;
+
+                document.getElementById('websocketLatency').textContent = latency.toFixed(1);
+                document.getElementById('websocketLatency').style.color = '#28a745';
+                updateLatencyComparison();
+
+                // Stop robot after 0.5 seconds
+                setTimeout(() => {
+                    socket.emit('gamepad_command', {lx: 0, ly: 0, rx: 0, ry: 0});
+                }, 500);
+
+            } catch (error) {
+                console.error('WebSocket latency test error:', error);
+                showMessage('WebSocket test error: ' + error.message, 'error');
+            }
+        }
+
+        async function testWebRTCLatency() {
+            try {
+                const testCommand = {
+                    vx: 0.3,  // Move forward slowly
+                    vy: 0.0,
+                    vyaw: 0.0
+                };
+
+                const startTime = performance.now();
+
+                const response = await fetch('/webrtc/test_direct_command', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(testCommand)
+                });
+
+                const latency = performance.now() - startTime;
+
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('webrtcLatency').textContent = latency.toFixed(1);
+                    document.getElementById('webrtcLatency').style.color = '#28a745';
+                    updateLatencyComparison();
+
+                    console.log('WebRTC test result:', data);
+
+                    // Stop robot after 0.5 seconds
+                    setTimeout(async () => {
+                        await fetch('/webrtc/test_direct_command', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({vx: 0, vy: 0, vyaw: 0})
+                        });
+                    }, 500);
+                } else {
+                    showMessage('WebRTC test failed', 'error');
+                }
+            } catch (error) {
+                console.error('WebRTC latency test error:', error);
+                showMessage('WebRTC test error: ' + error.message, 'error');
+            }
+        }
+
+        function updateLatencyComparison() {
+            const httpLatency = parseFloat(document.getElementById('httpLatency').textContent);
+            const websocketLatency = parseFloat(document.getElementById('websocketLatency').textContent);
+            const webrtcLatency = parseFloat(document.getElementById('webrtcLatency').textContent);
+
+            const improvementSpan = document.getElementById('latencyImprovement');
+
+            // Find the best (lowest) latency
+            const latencies = [];
+            if (!isNaN(httpLatency)) latencies.push({name: 'HTTP', value: httpLatency});
+            if (!isNaN(websocketLatency)) latencies.push({name: 'WebSocket', value: websocketLatency});
+            if (!isNaN(webrtcLatency)) latencies.push({name: 'WebRTC', value: webrtcLatency});
+
+            if (latencies.length === 0) {
+                improvementSpan.textContent = '--';
+                return;
+            }
+
+            // Sort by latency (lowest first)
+            latencies.sort((a, b) => a.value - b.value);
+
+            const best = latencies[0];
+            const worst = latencies[latencies.length - 1];
+            const improvement = worst.value - best.value;
+            const improvementPercent = ((improvement / worst.value) * 100).toFixed(1);
+
+            if (latencies.length >= 2) {
+                improvementSpan.textContent = `${best.name} is fastest (${improvement.toFixed(1)}ms / ${improvementPercent}% faster) ⚡`;
+                improvementSpan.style.color = '#28a745';
+            } else {
+                improvementSpan.textContent = `${best.name}: ${best.value.toFixed(1)}ms`;
+                improvementSpan.style.color = '#6c757d';
+            }
+        }
     </script>
 </body>
 </html>
