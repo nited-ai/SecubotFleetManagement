@@ -41,6 +41,10 @@ emergency_stop_active = False
 current_body_height = 1  # 0=low, 1=middle, 2=high
 lidar_state = False  # Track lidar on/off state
 
+# Keyboard & Mouse control variables
+keyboard_mouse_enabled = False
+keyboard_mouse_lock = threading.Lock()
+
 # AI Mode Free functions state tracking
 speed_level = 0  # -1=slow, 0=normal, 1=fast
 free_bound_active = False  # Bound Run Mode
@@ -359,16 +363,52 @@ def enable_gamepad():
         logging.error(f"Enable gamepad error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/keyboard_mouse/enable', methods=['POST'])
+def enable_keyboard_mouse():
+    """Enable or disable keyboard/mouse control"""
+    global keyboard_mouse_enabled, emergency_stop_active
+
+    try:
+        data = request.json
+        enable = data.get('enable', False)
+
+        if not is_connected:
+            return jsonify({'status': 'error', 'message': 'Robot not connected'}), 400
+
+        with keyboard_mouse_lock:
+            keyboard_mouse_enabled = enable
+            if enable:
+                emergency_stop_active = False
+                logging.info("=" * 50)
+                logging.info("KEYBOARD/MOUSE CONTROL ENABLED")
+                logging.info("=" * 50)
+
+                # Initialize robot asynchronously (same as gamepad)
+                if event_loop and event_loop.is_running():
+                    logging.info("Starting robot initialization for keyboard/mouse control...")
+                    asyncio.run_coroutine_threadsafe(initialize_robot(), event_loop)
+                else:
+                    logging.error(f"Event loop not running! event_loop={event_loop}, is_running={event_loop.is_running() if event_loop else 'N/A'}")
+            else:
+                logging.info("Keyboard/mouse control disabled")
+
+        return jsonify({'status': 'success', 'enabled': keyboard_mouse_enabled})
+
+    except Exception as e:
+        logging.error(f"Enable keyboard/mouse error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 @app.route('/gamepad/command', methods=['POST'])
 def gamepad_command():
-    """Send gamepad movement command to robot"""
+    """Send gamepad or keyboard/mouse movement command to robot"""
     global last_command_time, emergency_stop_active, last_sent_velocities, zero_velocity_sent
 
     request_start_time = time.time()  # Track request processing time
 
     try:
-        if not is_connected or not gamepad_enabled or emergency_stop_active:
-            return jsonify({'status': 'error', 'message': 'Gamepad control not active'}), 400
+        # Allow command if either gamepad OR keyboard/mouse is enabled
+        if not is_connected or (not gamepad_enabled and not keyboard_mouse_enabled) or emergency_stop_active:
+            return jsonify({'status': 'error', 'message': 'Control not active'}), 400
 
         # Rate limiting - reduced for more responsive control
         # Only enforce rate limit for non-zero velocity commands
@@ -500,7 +540,7 @@ def gamepad_command():
 @socketio.on('gamepad_command')
 def handle_websocket_gamepad_command(data):
     """
-    WebSocket handler for gamepad movement commands
+    WebSocket handler for gamepad or keyboard/mouse movement commands
     This provides lower latency than HTTP by using persistent WebSocket connection
     """
     global last_command_time, emergency_stop_active, last_sent_velocities, zero_velocity_sent
@@ -508,10 +548,11 @@ def handle_websocket_gamepad_command(data):
     request_start_time = time.time()
 
     try:
-        if not is_connected or not gamepad_enabled or emergency_stop_active:
+        # Allow command if either gamepad OR keyboard/mouse is enabled
+        if not is_connected or (not gamepad_enabled and not keyboard_mouse_enabled) or emergency_stop_active:
             emit('command_response', {
                 'status': 'error',
-                'message': 'Gamepad control not active'
+                'message': 'Control not active'
             })
             return
 
@@ -1009,6 +1050,7 @@ def status():
     return jsonify({
         'connected': is_connected,
         'gamepad_enabled': gamepad_enabled,
+        'keyboard_mouse_enabled': keyboard_mouse_enabled,
         'emergency_stop': emergency_stop_active
     })
 

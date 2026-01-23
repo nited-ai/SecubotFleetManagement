@@ -1351,49 +1351,78 @@
         const MOUSE_SENSITIVITY = 0.3; // Increased for usable mouse control (was 0.002)
         const MOUSE_PITCH_SENSITIVITY = 0.15; // Separate sensitivity for pitch (was 0.001)
 
-        function toggleKeyboardMouse() {
+        async function toggleKeyboardMouse() {
             const toggle = document.getElementById('keyboardMouseToggle');
-            keyboardMouseEnabled = toggle.checked;
+            const enable = toggle.checked;
 
-            if (keyboardMouseEnabled) {
+            if (enable) {
                 if (!isConnected) {
                     alert('Please connect to the robot first!');
                     toggle.checked = false;
-                    keyboardMouseEnabled = false;
                     return;
                 }
 
-                // Initialize keyboard/mouse control
-                console.log('Keyboard/Mouse control enabled');
-                updateKeyboardMouseStatus('active', '🟢 Keyboard/Mouse Active');
+                // Enable keyboard/mouse control on backend
+                try {
+                    const response = await fetch('/keyboard_mouse/enable', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({enable: true})
+                    });
 
-                // Start polling
-                keyboardMouseInterval = setInterval(pollKeyboardMouse, KEYBOARD_POLL_RATE);
+                    if (!response.ok) {
+                        throw new Error('Failed to enable keyboard/mouse control');
+                    }
 
-                // Request pointer lock on first click
-                document.addEventListener('click', requestPointerLock);
+                    // Initialize keyboard/mouse control
+                    keyboardMouseEnabled = true;
+                    console.log('✅ Keyboard/Mouse control enabled');
+                    updateKeyboardMouseStatus('active', '🟢 Keyboard/Mouse Active');
+
+                    // Start polling
+                    keyboardMouseInterval = setInterval(pollKeyboardMouse, KEYBOARD_POLL_RATE);
+
+                    // Request pointer lock on first click
+                    document.addEventListener('click', requestPointerLock);
+                } catch (error) {
+                    console.error('Error enabling keyboard/mouse control:', error);
+                    alert('Failed to enable keyboard/mouse control');
+                    toggle.checked = false;
+                }
             } else {
-                // Disable keyboard/mouse control
-                console.log('Keyboard/Mouse control disabled');
-                updateKeyboardMouseStatus('inactive', '⚫ Keyboard/Mouse Disabled');
+                // Disable keyboard/mouse control on backend
+                try {
+                    await fetch('/keyboard_mouse/enable', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({enable: false})
+                    });
 
-                // Stop polling
-                if (keyboardMouseInterval) {
-                    clearInterval(keyboardMouseInterval);
-                    keyboardMouseInterval = null;
+                    // Disable keyboard/mouse control
+                    keyboardMouseEnabled = false;
+                    console.log('⚫ Keyboard/Mouse control disabled');
+                    updateKeyboardMouseStatus('inactive', '⚫ Keyboard/Mouse Disabled');
+
+                    // Stop polling
+                    if (keyboardMouseInterval) {
+                        clearInterval(keyboardMouseInterval);
+                        keyboardMouseInterval = null;
+                    }
+
+                    // Release pointer lock
+                    if (document.pointerLockElement) {
+                        document.exitPointerLock();
+                    }
+
+                    // Remove event listener
+                    document.removeEventListener('click', requestPointerLock);
+
+                    // Reset keys
+                    keysPressed = {};
+                    mouseMovement = {x: 0, y: 0};
+                } catch (error) {
+                    console.error('Error disabling keyboard/mouse control:', error);
                 }
-
-                // Release pointer lock
-                if (document.pointerLockElement) {
-                    document.exitPointerLock();
-                }
-
-                // Remove event listener
-                document.removeEventListener('click', requestPointerLock);
-
-                // Reset keys
-                keysPressed = {};
-                mouseMovement = {x: 0, y: 0};
             }
         }
 
@@ -1558,6 +1587,11 @@
             if (!commandInFlight) {
                 commandInFlight = true;
                 const sendTime = performance.now();
+
+                // Debug log (only when there's movement)
+                if (velocityMagnitude > 0.01) {
+                    console.log(`[KB/Mouse] Sending command: lx=${lx.toFixed(2)}, ly=${ly.toFixed(2)}, rx=${rx.toFixed(2)} → vx=${vx.toFixed(2)}, vy=${vy.toFixed(2)}, vyaw=${vyaw.toFixed(2)}`);
+                }
 
                 if (useWebSocket && socketConnected) {
                     // ========== WEBSOCKET PATH (LOW LATENCY) ==========
