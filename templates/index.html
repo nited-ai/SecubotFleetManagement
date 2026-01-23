@@ -1348,8 +1348,8 @@
         let mouseMovement = {x: 0, y: 0};
         let pointerLocked = false;
         const KEYBOARD_POLL_RATE = 33; // 30Hz - same as gamepad
-        const MOUSE_SENSITIVITY = 0.002; // Adjust for mouse control sensitivity
-        const MOUSE_PITCH_SENSITIVITY = 0.001; // Separate sensitivity for pitch
+        const MOUSE_SENSITIVITY = 0.3; // Increased for usable mouse control (was 0.002)
+        const MOUSE_PITCH_SENSITIVITY = 0.15; // Separate sensitivity for pitch (was 0.001)
 
         function toggleKeyboardMouse() {
             const toggle = document.getElementById('keyboardMouseToggle');
@@ -1494,8 +1494,8 @@
 
             if (keysPressed['w']) forward += 1;
             if (keysPressed['s']) forward -= 1;
-            if (keysPressed['a']) strafe += 1;
-            if (keysPressed['d']) strafe -= 1;
+            if (keysPressed['a']) strafe -= 1;  // FIXED: A key = strafe left (negative)
+            if (keysPressed['d']) strafe += 1;  // FIXED: D key = strafe right (positive)
 
             // Calculate rotation from mouse
             let yaw = mouseMovement.x * MOUSE_SENSITIVITY;
@@ -1514,15 +1514,22 @@
             const maxStrafe = parseFloat(settings.max_strafe_velocity || 0.4);
             const maxRotation = parseFloat(settings.max_rotation_velocity || 0.8);
 
-            // Apply sensitivity and velocity limits
-            let vx = forward * sensLinear * speedMult;
-            let vy = strafe * sensStrafe * speedMult;
-            let vyaw = -yaw * sensRotation; // Negative for natural mouse movement
+            // Convert keyboard/mouse input to normalized gamepad-style values (-1.0 to 1.0)
+            // This matches how gamepad sends values to the backend
+            let lx = strafe * sensStrafe * speedMult;  // Strafe (left stick X)
+            let ly = forward * sensLinear * speedMult;  // Forward (left stick Y)
+            let rx = yaw * sensRotation;  // Yaw rotation (right stick X)
+            let ry = 0;  // Pitch not used for movement
 
-            // Clamp to max velocities
-            vx = Math.max(-maxLinear, Math.min(maxLinear, vx));
-            vy = Math.max(-maxStrafe, Math.min(maxStrafe, vy));
-            vyaw = Math.max(-maxRotation, Math.min(maxRotation, vyaw));
+            // Clamp to -1.0 to 1.0 range (gamepad stick range)
+            lx = Math.max(-1.0, Math.min(1.0, lx));
+            ly = Math.max(-1.0, Math.min(1.0, ly));
+            rx = Math.max(-1.0, Math.min(1.0, rx));
+
+            // Calculate actual velocities for display (what the robot will receive)
+            const vx = ly * maxLinear;
+            const vy = -lx * maxStrafe;  // Backend inverts lx
+            const vyaw = -rx * maxRotation;  // Backend inverts rx
 
             // Update display
             document.getElementById('val-kb-forward').textContent = vx.toFixed(2);
@@ -1546,12 +1553,6 @@
                     velocityStatus.classList.add('stopped');
                 }
             }
-
-            // Convert to gamepad-style input (lx, ly, rx, ry)
-            const lx = vy / maxStrafe; // Strafe normalized
-            const ly = vx / maxLinear; // Forward normalized
-            const rx = vyaw / maxRotation; // Yaw normalized
-            const ry = 0; // Pitch not used for movement
 
             // Send movement command via WebSocket (preferred) or HTTP (fallback)
             if (!commandInFlight) {
