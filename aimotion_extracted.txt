@@ -1,0 +1,71 @@
+
+========== PAGE 1 ==========
+Humanoid Open Source Quadruped Robotic
+Components PerSceepatricohn AI English
+Robot Adaptation Robot Arms
+
+Ai sport control interface：By calling the sport_client of SDK, Go2 is sent motion commands such as speed control, position contro
+Go2 SDK l, crouching and standing.
+Development Guide Ai sport state interface：By subscribing to the sportmodestate message in the SDK, the position, speed, attitude and other motion
+Search article titles states of Go2 can be obtained.
+About Go2 Ai sport control interface
+Remote Controller
+The calling method of Ai sport control interface
+SDK Concepts 3
+The control interface adopts Api mode for users to interact with Go2 motion control module. You can call the SportClient class in the SD
+Application Development 7
+K to program, the example program is as follows.
+Software Interface Services 19
+C++
+Motion Services Interface V2.0
+/**
+* @file sport_client_test.cpp
+DDS Services Interface
+* @brief Use the class named SportClient to request sport mode
+Avoidance Services Interface * @date 2023-12-20
+*/
+VuiClient Interface #include <unitree/robot/go2/sport/sport_client.hpp>
+#include <unistd.h>
+RobotStateClient Interface
+//Forced close progress
+Motion Switcher Service Interface
+void MySigintHandler(int sig)
+Sports Services Interface {
+exit(0);
+AI motion Services interface }
+Basic Services Interface int main()
+{
+LiDAR Services Interface
+signal(SIGINT, MySigintHandler);
+Multimedia Services Interface
+//Init channel
+UWB Services Interface unitree::robot::ChannelFactory::Instance()->Init();
+Fault Services Interface //Create SportClient
+unitree::robot::SportClient sport_client;
+SLAM and Navigation Services Interfac
+//Set time-out period for request
+Aruco Recharge Service Interface
+sport_client.SetTimeout(10.0f);
+Odometer Services Interface
+//Init SportClient
+D1 Mechanical Arm Services Interface sport_client.Init();
+ROS2 Services Interface //Use api to balance stand
+sport_client.BalanceStand();
+Python Services Interface
+sleep(3);
+Case reference 8
+//Use api to sit down
+Debugging Specification sport_client.StandDown();
+FAQ sleep(3);
+return 0;
+}
+Introduction of Ai motion control interface
+The control interface can realize the speed, position control and mode switching of Go2. The related functions of the motion control int
+erface are listed below.
+Function Name Damp
+Function Prototype int32_t Damp()
+Function Overview Enter damping state
+Parameter None
+Return Value If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+ All t j i t t i d t d i t t Thi d h th hi h t i it di 

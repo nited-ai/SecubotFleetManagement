@@ -1,0 +1,1038 @@
+
+
+宇树科技 文档中心Humanoid RobotH1 SDK Development GuideG1 SDK Development GuideR1 SDK Development GuideOpen Source AdaptationTeleoperationReinforcement Learning on Motion ControlQuadruped RobotGo2 SDK Development GuideB2 SDK Development GuideGo2-W SDK Development GuideAlgorithm PracticeA2 SDK Development GuideRobotic ArmsZ1 SDK Development GuideComponentsMotor SDK Development GuideSV1-25 development guideDex3-1 DeveloperDex1-1 DeveloperPerceptionL1 SDK Development GuideL2 SDK Development GuideAIEnglishSearch无搜索结果Go2 SDK Development GuideAbout Go2Remote ControllerSDK Concepts3Architecture DescriptionRobot Dog Application8Basic ApplicationMotion ApplicationDDS ApplicationImage ApplicationNetwork ApplicationUWB ApplicationLiDAR ApplicationSLAM ApplicationFAULTSApplication Development7Obtain SDKQuick StartCreating Customer ApplicationApp BindingPayloadExpansion Dock ConfigurationTouchScreen RC Supporting InstructionsSoftware Interface Services19Motion Services Interface V2.0DDS Services InterfaceAvoidance Services InterfaceVuiClient InterfaceRobotStateClient InterfaceMotion Switcher Service InterfaceSports Services InterfaceAI motion Services interfaceBasic Services InterfaceLiDAR Services InterfaceMultimedia Services InterfaceUWB Services InterfaceFault Services InterfaceSLAM and Navigation Services InterfaceAruco Recharge Service InterfaceOdometer Services InterfaceD1 Mechanical Arm Services InterfaceROS2 Services InterfacePython Services InterfaceCase reference8DDS CommunicationHigh Motion ControlBasic Motion ControlDeployment FrameworkLight ControlGet Remote Control StatusRL Control RoutineExapmle of motor errorsDebugging SpecificationFAQSoftware Interface ServicesAI motion Services interfaceAI motion Services interfaceLast Updated On：2025-11-21 11:19:48
+
+Scope of Application
+This document interface description is applicable to the Go2 Edu model, requiring the Go2 software version to be less than V1.1.6.
+
+If your software version is greater than or equal to V1.1.6, please refer to Motion Services Interface V2.0.
+For any other questions, feel free to contact our official technical support.
+
+Thank you for your support!
+
+AI Motion Service corresponds to the AI mode on the Unitree Go App. To control the Go2 robot through the interfaces provided in this chapter, you first need to switch the Go2's motion control mode to AI mode. Here are two methods to switch the mode:
+
+Use the Unitree Go App to switch to AI mode. For specific operations, please refer to the corresponding tutorial video.
+Use the motion switcher service interface to switch the motion control to AI mode. For specific operations, please refer to the interface description.
+
+Interface Type
+The Ai sports service is divided into two parts: Ai sport control interface and state interface.
+
+Ai sport control interface：By calling the sport_client of SDK, Go2 is sent motion commands such as speed control, position control, crouching and standing.
+Ai sport state interface：By subscribing to the sportmodestate message in the SDK, the position, speed, attitude and other motion states of Go2 can be obtained.
+
+Ai sport control interface
+The calling method of Ai sport control interface
+The control interface adopts Api mode for users to interact with Go2 motion control module. You can call the SportClient class in the SDK to program, the example program is as follows.
+/**
+ * @file sport_client_test.cpp
+ * @brief Use the class named SportClient to request sport mode
+ * @date 2023-12-20
+ */
+#include <unitree/robot/go2/sport/sport_client.hpp>
+#include <unistd.h>
+
+//Forced close progress
+void MySigintHandler(int sig)
+{
+  exit(0);
+}
+
+int main()
+{ 
+  signal(SIGINT, MySigintHandler);
+  
+  //Init channel
+  unitree::robot::ChannelFactory::Instance()->Init();
+
+  //Create SportClient
+  unitree::robot::SportClient sport_client;
+
+  //Set time-out period for request
+  sport_client.SetTimeout(10.0f);
+  
+  //Init SportClient
+  sport_client.Init();
+
+  //Use api to balance stand  
+  sport_client.BalanceStand();
+  
+  sleep(3);
+
+  //Use api to sit down
+  sport_client.StandDown();
+  
+  sleep(3);
+
+  return 0;
+}
+Introduction of Ai motion control interface
+The control interface can realize the speed, position control and mode switching of Go2. The related functions of the motion control interface are listed below.
+
+
+
+Function Name
+Damp
+
+
+
+
+Function Prototype
+int32_t Damp()
+
+
+Function Overview
+Enter damping state
+
+
+Parameter
+None
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+All motor joints stop moving and enter a damping state. This mode has the highest priority and is used for emergency stops in unexpected situations
+
+
+
+
+
+
+Function Name
+BalanceStand
+
+
+
+
+Function Prototype
+int32_t BalanceStand()
+
+
+Function Overview
+Unlock
+
+
+Parameter
+None
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+Release the joint motor lock and switch from normal standing, crouching, continuous stepping state to balanced standing mode. In this mode, push the remote control stick and the robot will move
+
+
+
+
+
+
+Function Name
+StopMove
+
+
+
+
+Function Prototype
+int32_t StopMove()
+
+
+Function Overview
+Stop the current action and restore most instructions to their default values
+
+
+Parameter
+None
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+Stop the current action and restore most instructions to their default values
+
+
+
+
+
+
+Function Name
+StandUp
+
+
+
+
+Function Prototype
+int32_t StandUp()
+
+
+Function Overview
+Joint locking, standing high
+
+
+Parameter
+None
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+The robot dog stands normally tall and the motor joints remain locked. Compared to the balanced standing mode, the posture of the robot dog in this mode will not always be balanced. The default standing height is 0.32m
+
+
+
+
+
+
+Function Name
+StandDown
+
+
+
+
+Function Prototype
+int32_t StandDown()
+
+
+Function Overview
+Joint locking, standing low
+
+
+Parameter
+None
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+The robotic dog lies down and the motor joint remains locked
+
+
+
+
+
+
+Function Name
+RecoveryStand
+
+
+
+
+Function Prototype
+int32_t RecoveryStand()
+
+
+Function Overview
+Recovery standing
+
+
+Parameter
+None
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+Return from overturned to balanced standing. For safety, the response will only return to standing in the overturned state
+
+
+
+
+
+
+Function Name
+Move
+
+
+
+
+Function Prototype
+int32_t Move(float vx, float vy, float vyaw)
+
+
+Function Overview
+Move at the specified speed
+
+
+Parameter
+Value range [-0.6~0.6 ] (m/s) Vy: Value range [-0.4~0.4 ] (m/s) Vyaw: Value range [-0.8~0.8 ] (rad/s)
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+Control the moving speed, the set speed is the speed of the body coordinate system. It is recommended that you call BalanceStand once before you call Move to ensure that you unlock and enter a removable state
+
+
+
+
+
+
+Function Name
+SpeedLevel
+
+
+
+
+Function Prototype
+int32_t SpeedLevel (int level)
+
+
+Function Overview
+Set the speed range
+
+
+Parameter
+Speed range enumeration value, with values of -1 for slow speed, and 1 for fast speed
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+
+
+
+
+
+
+
+Function Name
+ContinuousGait
+
+
+
+
+Function Prototype
+int32_t ContinuousGait(bool flag)
+
+
+Function Overview
+Continuous walk
+
+
+Parameter
+flag: Set true to open continuous walk, and false to close continuous walk
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+After starting a continuous walk, the robot dog will keep stepping, even if the current speed is 0
+
+
+
+
+
+
+Function Name
+MoveToPos
+
+
+
+
+Function Prototype
+int32_t MoveToPos(float x, float y, float yaw)
+
+
+Function Overview
+Move to the specified position and yaw
+
+
+Parameter
+(x,y) is the position, and yaw is the yaw angle in odometer coordinate system
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+
+
+
+
+
+
+
+Function Name
+HandStand
+
+
+
+
+Function Prototype
+int32_t HandStand(bool flag)
+
+
+Function Overview
+The robot use forward leg to stand
+
+
+Parameter
+flag: Set true to open hand stand, and false to close hand stand
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+
+
+
+
+
+
+
+Function Name
+FrontFlip
+
+
+
+
+Function Prototype
+int32_t FrontFlip()
+
+
+Function Overview
+The robot front flip
+
+
+Parameter
+flag: none
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+
+
+
+
+
+
+
+Function Name
+SwitchMoveMode
+
+
+
+
+Function Prototype
+int32_t SwitchMoveMode(bool flag)
+
+
+Function Overview
+Switch the mode of Move()
+
+
+Parameter
+Set the flag true to enable the continuous response mode. In the motion mode, the robot responds to the latest command all the time. And set the flag false to close the continuous response mode. If a new command is not received, the robot automatically stops after one second.
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Remarks
+The continuous response mode is disabled by default. For security purposes, you are advised to enable the continuous response mode with caution.
+
+
+
+
+
+
+Function Name
+TrajectoryFollow
+
+
+
+
+Function Prototype
+int32_trajectoryFollow (std:: vector< PathPoint >& path)
+
+
+Function Overview
+Track Tracking.
+
+
+Parameter
+path is the target motion trajectory of the robotic dog in the future, It consists of 30 trajectory points, PathPoints
+
+
+Return Value
+If the call is successful, 0 will be returned. Otherwise, relevant error codes will be returned
+
+
+Note
+The structure definition of the trajectory point (PathPoint) in the path is as follows:Each trajectory point contains the position and speed of the robotic dog at a certain time in the future, with the reference coordinate system being the absolute coordinate system of the robot. Through trajectory tracking, more complex and flexible movements can be achieved. For specific usage methods, please refer to examples
+
+
+
+
+
+
+Function Name
+LeftFlip
+
+
+
+
+Function Prototype
+int32_t LeftFlip()
+
+
+Overview
+Performs a left flip.
+
+
+Parameters
+None.
+
+
+Return Value
+Returns 0 on success, otherwise returns the relevant error code.
+
+
+Remarks
+Executes a single left flip. After the flip, it automatically enters the Agile Mode. This mode can only be entered when not in motion.
+
+
+
+
+
+
+Function Name
+BackFlip
+
+
+
+
+Function Prototype
+int32_t BackFlip()
+
+
+Overview
+Performs a backflip.
+
+
+Parameters
+None.
+
+
+Return Value
+Returns 0 on success, otherwise returns the relevant error code.
+
+
+Remarks
+Executes a single backflip. After the flip, it automatically enters the Agile Mode. This mode can only be entered when not in motion.
+
+
+
+
+
+
+Function Name
+FreeWalk
+
+
+
+
+Function Prototype
+int32_t FreeWalk()
+
+
+Overview
+Enters the Agile Mode.
+
+
+Parameters
+None.
+
+
+Return Value
+Returns 0 on success, otherwise returns the relevant error code.
+
+
+Remarks
+Enters the Agile Mode.
+
+
+
+
+
+
+Function Name
+FreeBound
+
+
+
+
+Function Prototype
+int32_t FreeBound(bool flag)
+
+
+Overview
+Enters the Bound Run Mode.
+
+
+Parameters
+flag: Set to true to enter Bound Run Mode; set to false to exit Bound Run Mode and enter Agile Mode.
+
+
+Return Value
+Returns 0 on success, otherwise returns the relevant error code.
+
+
+Remarks
+Enters the Bound Run Mode.
+
+
+
+
+
+
+Function Name
+FreeJump
+
+
+
+
+Function Prototype
+int32_t FreeJump(bool flag)
+
+
+Overview
+Enters the Jump Mode.
+
+
+Parameters
+flag: Set to true to enter Jump Mode; set to false to exit Jump Mode and enter Agile Mode.
+
+
+Return Value
+Returns 0 on success, otherwise returns the relevant error code.
+
+
+Remarks
+Enters the Jump Mode.
+
+
+
+
+
+
+Function Name
+FreeAvoid
+
+
+
+
+Function Prototype
+int32_t FreeAvoid(bool flag)
+
+
+Overview
+Enters the Avoidance Mode.
+
+
+Parameters
+flag: Set to true to enter Avoidance Mode; set to false to exit Avoidance Mode and enter Agile Mode.
+
+
+Return Value
+Returns 0 on success, otherwise returns the relevant error code.
+
+
+Remarks
+Enters the Avoidance Mode. In this mode, the robot can avoid obstacles while moving; when stationary, it can dodge objects in front.
+
+
+
+
+
+
+Function Name
+WalkStair
+
+
+
+
+Function Prototype
+int32_t WalkStair(bool flag)
+
+
+Overview
+Enters the Stair Climbing Mode.
+
+
+Parameters
+flag: Set to true to enter Stair Climbing Mode; set to false to exit Stair Climbing Mode and enter Agile Mode.
+
+
+Return Value
+Returns 0 on success, otherwise returns the relevant error code.
+
+
+Remarks
+Enters the Stair Climbing Mode.
+
+
+
+
+
+
+Function Name
+WalkUpright
+
+
+
+
+Function Prototype
+int32_t WalkUpright(bool flag)
+
+
+Overview
+Enters the Upright Hind Legs Mode.
+
+
+Parameters
+flag: Set to true to enter Upright Hind Legs Mode; set to false to exit Upright Hind Legs Mode and enter Agile Mode.
+
+
+Return Value
+Returns 0 on success, otherwise returns the relevant error code.
+
+
+Remarks
+Enters the Upright Hind Legs Mode.
+
+
+
+
+
+
+Function Name
+CrossStep
+
+
+
+
+Function Prototype
+int32_t CrossStep(bool flag)
+
+
+Overview
+Enters the Cross-Step Mode.
+
+
+Parameters
+flag: Set to true to enter Cross-Step Mode; set to false to exit Cross-Step Mode and enter Agile Mode.
+
+
+Return Value
+Returns 0 on success, otherwise returns the relevant error code.
+
+
+Remarks
+Enters the Cross-Step Mode.
+
+
+
+Example
+There are examples of speed control and position control.
+/**
+ * @file move_test.cpp
+ * @brief Use the api named Move to control the vel of robot
+ * @date 2023-12-20
+ */
+#include <unitree/robot/go2/sport/sport_client.hpp>
+#include <unistd.h>
+
+//Forced close progress
+void MySigintHandler(int sig)
+{
+  exit(0);
+}
+
+int main()
+{ 
+  signal(SIGINT, MySigintHandler);
+  
+  //Init channel
+  unitree::robot::ChannelFactory::Instance()->Init();
+
+  //Create SportClient
+  unitree::robot::SportClient sport_client;
+
+  //Set time-out period for request
+  sport_client.SetTimeout(10.0f);
+  
+  //Init SportClient
+  sport_client.Init();
+  
+  //sport_client.WaitLeaseApplied();
+
+  //Use api to balance stand  
+  sport_client.BalanceStand();
+  
+  sleep(3);
+
+  //Use api to move
+  sport_client.Move(0.1, 0., 0.);
+  
+  sleep(3);
+
+  //Stop move
+  sport_client.StopMove();
+  
+  return 0;
+}
+/**
+ * @file move_to_pos_test.cpp
+ * @brief Use the api named MoveToPos to control the pos of robot
+ * @date 2023-12-20
+ */
+#include <unitree/robot/go2/sport/sport_client.hpp>
+#include <Eigen/Dense>
+#include <unitree/robot/channel/channel_subscriber.hpp>
+
+//The topic of odom
+#define TOPIC_ODOM_STATE "rt/lf/odommodestate"
+
+using namespace std;
+using namespace unitree::common;
+using namespace unitree::robot;
+
+//Forced close progress
+void MySigintHandler(int sig)
+{
+  exit(0);
+}
+
+
+class MoveToPosTest{
+public:
+    MoveToPosTest(){
+        sport_client_.SetTimeout(1.0f);
+        sport_client_.Init();
+    }
+    ~MoveToPosTest(){}
+    
+    void Init(){
+        
+        odommodestate_subscriber_.reset(new ChannelSubscriber<unitree_go::msg::dds_::SportModeState_>(TOPIC_ODOM_STATE));
+        odommodestate_subscriber_->InitChannel(std::bind(&MoveToPosTest::OdomModeStateMessageHandler, this, std::placeholders::_1), 1);
+    }
+    
+    void OdomModeStateMessageHandler(const void *message){
+        unitree_go::msg::dds_::SportModeState_ sport_mode_state = *(unitree_go::msg::dds_::SportModeState_*)message;
+        
+        Eigen::Matrix<float, 3, 1> cur_pose;
+        
+        yaw_ = sport_mode_state.imu_state().rpy()[2];
+
+        cur_pose[0] = sport_mode_state.position()[0];
+        cur_pose[1] = sport_mode_state.position()[1];
+        cur_pose[2] = 0.0;
+
+        if(this->have_odom_data_ == false){
+
+            this->have_odom_data_ = true;
+
+            Eigen::Matrix<float, 3, 1> target_in_base;
+
+            //Move one meter along the robot's direction
+            target_in_base << 1.0, 0.0, 0.0;
+
+            Eigen::Matrix<float, 4, 1> qua;
+
+            Eigen::Matrix<float, 3, 3> r;
+
+            float c_yaw = cos(yaw_);
+            float s_yaw = sin(yaw_);
+
+            r << c_yaw,-s_yaw,0,
+                 s_yaw,c_yaw,0,
+                 0,0,1;
+
+            target_pos_ = cur_pose + r * target_in_base;
+
+            std::cout<<"[Target Pos] is : "<<target_pos_.transpose()<<std::endl;
+            std::cout<<"[Target Yaw] is : "<<yaw_<<std::endl;
+
+        }
+    }
+
+    void run(){
+        if(have_send_ == false && have_odom_data_ == true){
+            sport_client_.MoveToPos(target_pos_[0],target_pos_[1],yaw_);
+            
+            have_send_ = true;
+        }
+    }
+
+
+private:
+    
+    ChannelSubscriberPtr<unitree_go::msg::dds_::SportModeState_> odommodestate_subscriber_;
+    
+    bool have_odom_data_ = false;    
+    bool have_send_ = false;
+
+    Eigen::Matrix<float, 3, 1> target_pos_;
+    float yaw_;
+
+    unitree::robot::SportClient sport_client_;
+};
+
+
+int main(){
+
+    signal(SIGINT, MySigintHandler);
+
+    unitree::robot::ChannelFactory::Instance()->Init();
+
+    MoveToPosTest move_to_pos_test_;
+
+    move_to_pos_test_.Init();
+
+    while(true){
+        move_to_pos_test_.run();
+    
+        sleep(1.0);
+    }
+
+    return 0;
+}
+Ai sport state interface
+Ai sport state interface call method
+By subscribing the topic of "rt/sportmodestate", you can realize the acquisition of the robot's position, speed, attitude and other motion states.
+/**
+ * @file sportmodestate_test.cpp
+ * @brief Subscribe the sportmodestate to get state of robot
+ * @date 2023-12-20
+ */
+#include <unitree/idl/go2/SportModeState_.hpp>
+#include <unitree/robot/channel/channel_subscriber.hpp>
+
+//high frequency (500Hz)
+#define TOPIC_HIGHSTATE "rt/sportmodestate"
+
+using namespace unitree::robot;
+
+//Callback function
+void SportModeStateHandler(const void* message) 
+{
+  unitree_go::msg::dds_::SportModeState_ state = *(unitree_go::msg::dds_::SportModeState_*)message;
+  
+  
+  std::cout<<"position: "
+           <<state.position()[0]<<", "
+           <<state.position()[1]<<", "
+           <<state.position()[2]<<std::endl;
+  
+  std::cout<<": "
+           <<state.imu_state().quaternion()[0]<<", "
+           <<state.imu_state().quaternion()[1]<<", "
+           <<state.imu_state().quaternion()[2]<<", "
+           <<state.imu_state().quaternion()[3]<<std::endl;
+}
+
+
+int main()
+{
+  //Init
+  unitree::robot::ChannelFactory::Instance()->Init();
+
+  //Create a subscriber to get sport mode state
+  ChannelSubscriber<unitree_go::msg::dds_::SportModeState_> sport_mode_state_sub_(TOPIC_HIGHSTATE);
+
+  //Init channel
+  sport_mode_state_sub_.InitChannel(SportModeStateHandler);
+  
+  while(1)
+  {
+    usleep(20000);
+  }
+  
+  return 0;
+}
+Introduction of Ai sport state types
+The method to obtain the status of Ai sport parts is as follows
+TimeSpec stamp(); 
+uint32_t errorCode(); // Error
+IMU imuState();// IMU status
+Uint8_t mode();// Sports mode
+/* Sports mode
+0. idle, default stand
+1. balanceStand
+2. pose
+3. locomotion
+4. reserve
+5. lieDown
+6. jointLock
+7. damping
+8. recoveryStand
+*/
+
+float progress(); // Action execution status: 0. dance false; 1. dance true
+uint8_t gaitType(); // Gait type
+/*
+Gait type 
+0.idle  
+1.trot  
+2.run  
+3.climb stair  
+4.forwardDownStair   
+9.adjust
+*/
+
+float footRaiseHeight();// Leg lift height
+std::array<float, 3> position();// 3D position
+float bodyHeight();// Body height
+std::array<float, 3> velocity();// Three-dimensional velocity
+float yawSpeed();// Yaw speed
+std::array<float,4> rangeObstacle();// Obstacle distance
+std::array<int16_t,4> footForce();// Four foot force
+std::array<float,12> footPositionBody();// The position of the foot end relative to the body
+std::array<float,12> footSpeedBody();// The speed of the foot relative to the body
+std::array<PathPoint, 10> pathPoints();// The current tracked path point
+The method for obtaining IMU data is:
+std::array<float, 4> quaternion();    // Quaternion (w, x, y, z)
+std::array<float, 3> gyroscope();    // Angular velocity (unit: rad/s)
+std::array<float, 3> accelerometer();    // Acceleration m/(s2)
+std::array<float, 3> rpy();    // Unit: rad
+int8_Temperature ();// temperature
+The structure of PathPoint is:
+typedef struct
+{
+  float tFromStart; // Time at which the path point is located
+  float x; //x position
+  float y; //y position
+  float yaw; // Yaw angle
+  float vx; //x speed
+  float vy; //y speed
+  float vyaw; // Yaw speed
+} PathPoint;
+This page contains contentInterface TypeAi sport control interfaceThe calling method of Ai sport control interfaceIntroduction of Ai motion control interfaceExampleAi sport state interfaceAi sport state interface call methodIntroduction of Ai sport state types Helpful FeedbackUnitreeRobotG1H1Go2Go1B2B2-WD1-T4D LiDAR L1Z1GO-M8010-6B1AliengoA1A1 MotorSuper Robot Waterproof Joint：B1-16FitnessUnitree Fitness PUMPIndustrial ApplicationsInspection Project Implementation PlanFire And RescueSupportRepair ServiceOpen SourceStore / CooperateTerms & PoliciesDownloadGo1A1/AliengoGo2Unitree PUMPB2Unitree SimBook OnlinePurchase OnlineExplore UnitreeNewsAbout UsContact UsSubscribe MessageOLOJoinContactsCopyright © 2016 - 2024HangZhou YuShu TECHNOLOGY CO.,LTD All Rights Reserved浙ICP备17044557号浙公网安备 33010802011921号AI Document AssistantHello, I am your AI Document Assistant. You can ask me questions and inquire about the relevant content in the document center.
+Here are some examples of what you can ask:How do I get the Go2 SDK?How to develop with Go2?What is the operation method of H1?The content is generated by an AI model and may not be entirely accurate; please carefully discern.

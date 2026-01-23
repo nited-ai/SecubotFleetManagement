@@ -156,7 +156,12 @@ SPORT_CMD = {
     "StandOut": 1039,
     "FreeWalk": 1045,
     "Standup": 1050,
-    "CrossWalk": 1051
+    "CrossWalk": 1051,
+    # AI Mode Free functions (Agile Mode)
+    "FreeBound": 1046,
+    "FreeJump": 1047,
+    "FreeAvoid": 1048,
+    "WalkStair": 1049
 }
 
 class VUI_COLOR:
