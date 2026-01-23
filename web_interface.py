@@ -9,6 +9,7 @@ import threading
 import time
 from queue import Queue, Empty
 from flask import Flask, render_template, Response, request, jsonify
+from flask_socketio import SocketIO, emit
 from unitree_webrtc_connect.webrtc_driver import UnitreeWebRTCConnection, WebRTCConnectionMethod
 from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD
 from aiortc import MediaStreamTrack
@@ -19,6 +20,8 @@ import numpy as np
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'unitree_webrtc_secret_key'
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Global variables
 frame_queue = Queue(maxsize=30)  # Increased buffer size
@@ -492,6 +495,139 @@ def gamepad_command():
         logging.error(f"Gamepad command error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+# ========== WEBSOCKET GAMEPAD COMMAND HANDLER ==========
+
+@socketio.on('gamepad_command')
+def handle_websocket_gamepad_command(data):
+    """
+    WebSocket handler for gamepad movement commands
+    This provides lower latency than HTTP by using persistent WebSocket connection
+    """
+    global last_command_time, emergency_stop_active, last_sent_velocities, zero_velocity_sent
+
+    request_start_time = time.time()
+
+    try:
+        if not is_connected or not gamepad_enabled or emergency_stop_active:
+            emit('command_response', {
+                'status': 'error',
+                'message': 'Gamepad control not active'
+            })
+            return
+
+        # Rate limiting
+        current_time = time.time()
+        last_command_time = current_time
+
+        # Get gamepad values
+        lx = float(data.get('lx', 0.0))  # Lateral (strafe)
+        ly = float(data.get('ly', 0.0))  # Linear (forward/back)
+        rx = float(data.get('rx', 0.0))  # Yaw (rotation)
+        ry = float(data.get('ry', 0.0))  # Pitch (head up/down)
+
+        # Apply dead zones
+        deadzone_left = gamepad_settings['deadzone_left_stick']
+        deadzone_right = gamepad_settings['deadzone_right_stick']
+
+        if abs(lx) < deadzone_left:
+            lx = 0.0
+        if abs(ly) < deadzone_left:
+            ly = 0.0
+        if abs(rx) < deadzone_right:
+            rx = 0.0
+        if abs(ry) < deadzone_right:
+            ry = 0.0
+
+        # Apply sensitivity multipliers
+        ly *= gamepad_settings['sensitivity_linear']
+        lx *= gamepad_settings['sensitivity_strafe']
+        rx *= gamepad_settings['sensitivity_rotation']
+
+        # Apply speed multiplier
+        speed_mult = gamepad_settings['speed_multiplier']
+        ly *= speed_mult
+        lx *= speed_mult
+        rx *= speed_mult
+
+        # Apply velocity limits and axis mapping
+        max_linear = gamepad_settings['max_linear_velocity']
+        max_strafe = gamepad_settings['max_strafe_velocity']
+        max_rotation = gamepad_settings['max_rotation_velocity']
+
+        vx = max(-max_linear, min(max_linear, ly))
+        vy = max(-max_strafe, min(max_strafe, -lx))
+        vyaw = max(-max_rotation, min(max_rotation, -rx))
+
+        # Check if all velocities are zero
+        is_zero_velocity = (abs(vx) < 0.01 and abs(vy) < 0.01 and abs(vyaw) < 0.01)
+
+        # Determine if we need to send a command
+        velocities_changed = (
+            abs(vx - last_sent_velocities['vx']) > 0.01 or
+            abs(vy - last_sent_velocities['vy']) > 0.01 or
+            abs(vyaw - last_sent_velocities['vyaw']) > 0.01
+        )
+
+        should_send = velocities_changed or (is_zero_velocity and not zero_velocity_sent)
+
+        if not should_send:
+            emit('command_response', {
+                'status': 'success',
+                'message': 'No change',
+                'zero_velocity': is_zero_velocity
+            })
+            return
+
+        # Send Move command asynchronously (fire-and-forget)
+        async def send_movement():
+            try:
+                asyncio.create_task(
+                    connection.datachannel.pub_sub.publish_request_new(
+                        RTC_TOPIC["SPORT_MOD"],
+                        {
+                            "api_id": SPORT_CMD["Move"],
+                            "parameter": {
+                                "x": vx,
+                                "y": vy,
+                                "z": vyaw
+                            }
+                        }
+                    )
+                )
+
+                if is_zero_velocity:
+                    logging.info("✓ [WebSocket] Zero velocity command sent")
+
+            except Exception as e:
+                logging.error(f"Error sending WebSocket Move command: {e}")
+
+        if event_loop and event_loop.is_running():
+            asyncio.run_coroutine_threadsafe(send_movement(), event_loop)
+
+        # Update tracking variables
+        last_sent_velocities['vx'] = vx
+        last_sent_velocities['vy'] = vy
+        last_sent_velocities['vyaw'] = vyaw
+        zero_velocity_sent = is_zero_velocity
+
+        # Calculate processing time
+        processing_time = (time.time() - request_start_time) * 1000
+
+        # Send response back to client
+        emit('command_response', {
+            'status': 'success',
+            'zero_velocity': is_zero_velocity,
+            'velocities': {'vx': round(vx, 3), 'vy': round(vy, 3), 'vyaw': round(vyaw, 3)},
+            'processing_time_ms': round(processing_time, 2)
+        })
+
+    except Exception as e:
+        logging.error(f"WebSocket gamepad command error: {e}")
+        emit('command_response', {
+            'status': 'error',
+            'message': str(e)
+        })
+
 @app.route('/gamepad/settings', methods=['GET'])
 def get_gamepad_settings():
     """Get current gamepad settings"""
@@ -937,7 +1073,8 @@ def webrtc_test_direct_command():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
-    print("Starting Unitree Go2 Web Interface...")
+    print("Starting Unitree Go2 Web Interface with WebSocket support...")
     print("Open http://localhost:5000 in your browser")
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    print("WebSocket enabled for low-latency gamepad control")
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
 

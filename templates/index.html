@@ -515,21 +515,25 @@
 
                     <div style="padding: 15px;">
                         <p style="margin-bottom: 10px; font-size: 14px;">
-                            Compare HTTP vs Direct WebRTC latency by sending a "move forward" command:
+                            Compare HTTP vs WebSocket vs WebRTC latency:
                         </p>
 
-                        <button class="btn btn-primary" onclick="testHttpLatency()" style="width: 48%; margin-right: 2%;">
+                        <button class="btn btn-primary" onclick="testHttpLatency()" style="width: 32%; margin-right: 1%;">
                             Test HTTP
                         </button>
-                        <button class="btn btn-primary" onclick="testWebRTCLatency()" style="width: 48%;">
+                        <button class="btn btn-primary" onclick="testWebSocketLatency()" style="width: 32%; margin-right: 1%; background: #28a745;">
+                            Test WebSocket
+                        </button>
+                        <button class="btn btn-primary" onclick="testWebRTCLatency()" style="width: 32%;">
                             Test WebRTC
                         </button>
 
                         <div id="latencyTestResults" style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px; font-family: monospace; font-size: 13px;">
                             <div><strong>HTTP Latency:</strong> <span id="httpLatency">--</span> ms</div>
+                            <div><strong>WebSocket Latency:</strong> <span id="websocketLatency">--</span> ms</div>
                             <div><strong>WebRTC Latency:</strong> <span id="webrtcLatency">--</span> ms</div>
                             <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #dee2e6;">
-                                <strong>Improvement:</strong> <span id="latencyImprovement">--</span>
+                                <strong>Best Method:</strong> <span id="latencyImprovement">--</span>
                             </div>
                         </div>
                     </div>
@@ -608,8 +612,47 @@
         </div>
     </div>
 
+    <!-- Socket.IO Client Library -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
     <script>
         let isConnected = false;
+
+        // ========== WEBSOCKET INITIALIZATION ==========
+        const socket = io();
+        let socketConnected = false;
+        let useWebSocket = true;  // Prefer WebSocket, fallback to HTTP if needed
+
+        socket.on('connect', () => {
+            console.log('✅ WebSocket connected');
+            socketConnected = true;
+            useWebSocket = true;
+        });
+
+        socket.on('disconnect', () => {
+            console.log('❌ WebSocket disconnected');
+            socketConnected = false;
+            useWebSocket = false;  // Fallback to HTTP
+        });
+
+        socket.on('reconnect', () => {
+            console.log('🔄 WebSocket reconnected');
+            socketConnected = true;
+            useWebSocket = true;
+        });
+
+        socket.on('command_response', (data) => {
+            // Handle command response from WebSocket
+            if (data.zero_velocity) {
+                const indicator = document.getElementById('zeroVelocityIndicator');
+                if (indicator) {
+                    indicator.classList.add('active');
+                    setTimeout(() => {
+                        indicator.classList.remove('active');
+                    }, 2000);
+                }
+            }
+        });
 
         function updateFormFields() {
             const method = document.getElementById('connectionMethod').value;
@@ -922,18 +965,16 @@
             document.getElementById('val-rx').textContent = rx.toFixed(2);
             document.getElementById('val-ry').textContent = ry.toFixed(2);
 
-            // Send movement command (fire-and-forget to avoid blocking)
-            // Don't wait for response to prevent blocking the polling loop
+            // Send movement command via WebSocket (preferred) or HTTP (fallback)
             if (!commandInFlight) {
                 commandInFlight = true;
                 const sendTime = performance.now();
 
-                fetch('/gamepad/command', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({lx, ly, rx, ry})
-                })
-                .then(response => {
+                if (useWebSocket && socketConnected) {
+                    // ========== WEBSOCKET PATH (LOW LATENCY) ==========
+                    socket.emit('gamepad_command', {lx, ly, rx, ry});
+
+                    // Measure latency (approximate, since WebSocket is async)
                     const latency = performance.now() - sendTime;
                     commandInFlight = false;
 
@@ -955,26 +996,56 @@
                             latencySpan.style.color = '#dc3545';
                         }
                     }
+                } else {
+                    // ========== HTTP FALLBACK PATH ==========
+                    fetch('/gamepad/command', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({lx, ly, rx, ry})
+                    })
+                    .then(response => {
+                        const latency = performance.now() - sendTime;
+                        commandInFlight = false;
 
-                    if (response.ok) {
-                        return response.json();
-                    }
-                    throw new Error('Command failed');
-                })
-                .then(data => {
-                    // Handle response to show zero-velocity indicator
-                    const indicator = document.getElementById('zeroVelocityIndicator');
-                    if (data.zero_velocity) {
-                        indicator.classList.add('active');
-                        setTimeout(() => {
-                            indicator.classList.remove('active');
-                        }, 2000);
-                    }
-                })
-                .catch(error => {
-                    commandInFlight = false;
-                    console.error('Error sending movement command:', error);
-                });
+                        // Track latency
+                        commandLatencies.push(latency);
+                        if (commandLatencies.length > 10) commandLatencies.shift();
+
+                        // Update latency display
+                        const avgLatency = commandLatencies.reduce((a, b) => a + b, 0) / commandLatencies.length;
+                        const latencySpan = document.getElementById('val-latency');
+                        if (latencySpan) {
+                            latencySpan.textContent = avgLatency.toFixed(0);
+                            // Color code: green <50ms, yellow <150ms, red >=150ms
+                            if (avgLatency < 50) {
+                                latencySpan.style.color = '#28a745';
+                            } else if (avgLatency < 150) {
+                                latencySpan.style.color = '#ffc107';
+                            } else {
+                                latencySpan.style.color = '#dc3545';
+                            }
+                        }
+
+                        if (response.ok) {
+                            return response.json();
+                        }
+                        throw new Error('Command failed');
+                    })
+                    .then(data => {
+                        // Handle response to show zero-velocity indicator
+                        const indicator = document.getElementById('zeroVelocityIndicator');
+                        if (data && data.zero_velocity) {
+                            indicator.classList.add('active');
+                            setTimeout(() => {
+                                indicator.classList.remove('active');
+                            }, 2000);
+                        }
+                    })
+                    .catch(error => {
+                        commandInFlight = false;
+                        console.error('Error sending movement command:', error);
+                    });
+                }
             }
 
             // Handle button presses (detect rising edge)
@@ -1297,6 +1368,42 @@
             }
         }
 
+        async function testWebSocketLatency() {
+            try {
+                if (!socketConnected) {
+                    showMessage('WebSocket not connected', 'error');
+                    return;
+                }
+
+                const testCommand = {
+                    lx: 0.0,
+                    ly: 0.3,  // Move forward slowly
+                    rx: 0.0,
+                    ry: 0.0
+                };
+
+                const startTime = performance.now();
+
+                // Send via WebSocket
+                socket.emit('gamepad_command', testCommand);
+
+                const latency = performance.now() - startTime;
+
+                document.getElementById('websocketLatency').textContent = latency.toFixed(1);
+                document.getElementById('websocketLatency').style.color = '#28a745';
+                updateLatencyComparison();
+
+                // Stop robot after 0.5 seconds
+                setTimeout(() => {
+                    socket.emit('gamepad_command', {lx: 0, ly: 0, rx: 0, ry: 0});
+                }, 500);
+
+            } catch (error) {
+                console.error('WebSocket latency test error:', error);
+                showMessage('WebSocket test error: ' + error.message, 'error');
+            }
+        }
+
         async function testWebRTCLatency() {
             try {
                 const testCommand = {
@@ -1342,24 +1449,36 @@
 
         function updateLatencyComparison() {
             const httpLatency = parseFloat(document.getElementById('httpLatency').textContent);
+            const websocketLatency = parseFloat(document.getElementById('websocketLatency').textContent);
             const webrtcLatency = parseFloat(document.getElementById('webrtcLatency').textContent);
 
-            if (!isNaN(httpLatency) && !isNaN(webrtcLatency)) {
-                const improvement = httpLatency - webrtcLatency;
-                const improvementPercent = ((improvement / httpLatency) * 100).toFixed(1);
+            const improvementSpan = document.getElementById('latencyImprovement');
 
-                const improvementSpan = document.getElementById('latencyImprovement');
+            // Find the best (lowest) latency
+            const latencies = [];
+            if (!isNaN(httpLatency)) latencies.push({name: 'HTTP', value: httpLatency});
+            if (!isNaN(websocketLatency)) latencies.push({name: 'WebSocket', value: websocketLatency});
+            if (!isNaN(webrtcLatency)) latencies.push({name: 'WebRTC', value: webrtcLatency});
 
-                if (improvement > 0) {
-                    improvementSpan.textContent = `${improvement.toFixed(1)} ms faster (${improvementPercent}% improvement) ⚡`;
-                    improvementSpan.style.color = '#28a745';
-                } else if (improvement < 0) {
-                    improvementSpan.textContent = `${Math.abs(improvement).toFixed(1)} ms slower (${Math.abs(improvementPercent)}% worse) ⚠️`;
-                    improvementSpan.style.color = '#dc3545';
-                } else {
-                    improvementSpan.textContent = 'Same latency';
-                    improvementSpan.style.color = '#6c757d';
-                }
+            if (latencies.length === 0) {
+                improvementSpan.textContent = '--';
+                return;
+            }
+
+            // Sort by latency (lowest first)
+            latencies.sort((a, b) => a.value - b.value);
+
+            const best = latencies[0];
+            const worst = latencies[latencies.length - 1];
+            const improvement = worst.value - best.value;
+            const improvementPercent = ((improvement / worst.value) * 100).toFixed(1);
+
+            if (latencies.length >= 2) {
+                improvementSpan.textContent = `${best.name} is fastest (${improvement.toFixed(1)}ms / ${improvementPercent}% faster) ⚡`;
+                improvementSpan.style.color = '#28a745';
+            } else {
+                improvementSpan.textContent = `${best.name}: ${best.value.toFixed(1)}ms`;
+                improvementSpan.style.color = '#6c757d';
             }
         }
     </script>
