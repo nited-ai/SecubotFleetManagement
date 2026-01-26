@@ -458,9 +458,11 @@ def gamepad_command():
         # - Forward/back: ly as-is (positive = forward)
         # - Strafe: -lx (invert for correct left/right)
         # - Rotation: -rx (invert for correct left/right rotation)
-        max_linear = gamepad_settings['max_linear_velocity']
-        max_strafe = gamepad_settings['max_strafe_velocity']
-        max_rotation = gamepad_settings['max_rotation_velocity']
+
+        # Use velocity limits from command data if provided (keyboard/mouse), otherwise use gamepad settings
+        max_linear = data.get('max_linear', gamepad_settings['max_linear_velocity'])
+        max_strafe = data.get('max_strafe', gamepad_settings['max_strafe_velocity'])
+        max_rotation = data.get('max_rotation', gamepad_settings['max_rotation_velocity'])
 
         vx = max(-max_linear, min(max_linear, ly))      # Forward/back from left stick Y
         vy = max(-max_strafe, min(max_strafe, -lx))     # Strafe from left stick X (inverted)
@@ -591,9 +593,10 @@ def handle_websocket_gamepad_command(data):
         rx *= speed_mult
 
         # Apply velocity limits and axis mapping
-        max_linear = gamepad_settings['max_linear_velocity']
-        max_strafe = gamepad_settings['max_strafe_velocity']
-        max_rotation = gamepad_settings['max_rotation_velocity']
+        # Use velocity limits from command data if provided (keyboard/mouse), otherwise use gamepad settings
+        max_linear = data.get('max_linear', gamepad_settings['max_linear_velocity'])
+        max_strafe = data.get('max_strafe', gamepad_settings['max_strafe_velocity'])
+        max_rotation = data.get('max_rotation', gamepad_settings['max_rotation_velocity'])
 
         vx = max(-max_linear, min(max_linear, ly))
         vy = max(-max_strafe, min(max_strafe, -lx))
