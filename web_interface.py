@@ -471,15 +471,13 @@ def gamepad_command():
         # Check if all velocities are zero (joysticks centered)
         is_zero_velocity = (abs(vx) < 0.01 and abs(vy) < 0.01 and abs(vyaw) < 0.01)
 
-        # Determine if we need to send a command
-        velocities_changed = (
-            abs(vx - last_sent_velocities['vx']) > 0.01 or
-            abs(vy - last_sent_velocities['vy']) > 0.01 or
-            abs(vyaw - last_sent_velocities['vyaw']) > 0.01
-        )
-
-        # Send command if velocities changed OR if we need to send explicit zero
-        should_send = velocities_changed or (is_zero_velocity and not zero_velocity_sent)
+        # ALWAYS send commands for continuous movement control
+        # The robot needs continuous commands to maintain movement
+        # Only skip sending if we've already sent a zero-velocity stop command
+        should_send = True
+        if is_zero_velocity and zero_velocity_sent:
+            # Already sent zero velocity, no need to send again
+            should_send = False
 
         # Only send command if needed
         if not should_send:
@@ -605,14 +603,13 @@ def handle_websocket_gamepad_command(data):
         # Check if all velocities are zero
         is_zero_velocity = (abs(vx) < 0.01 and abs(vy) < 0.01 and abs(vyaw) < 0.01)
 
-        # Determine if we need to send a command
-        velocities_changed = (
-            abs(vx - last_sent_velocities['vx']) > 0.01 or
-            abs(vy - last_sent_velocities['vy']) > 0.01 or
-            abs(vyaw - last_sent_velocities['vyaw']) > 0.01
-        )
-
-        should_send = velocities_changed or (is_zero_velocity and not zero_velocity_sent)
+        # ALWAYS send commands for continuous movement control
+        # The robot needs continuous commands to maintain movement
+        # Only skip sending if we've already sent a zero-velocity stop command
+        should_send = True
+        if is_zero_velocity and zero_velocity_sent:
+            # Already sent zero velocity, no need to send again
+            should_send = False
 
         if not should_send:
             emit('command_response', {

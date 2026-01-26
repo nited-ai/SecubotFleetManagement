@@ -1606,11 +1606,16 @@
             const maxStrafe = parseFloat(kbMouseSettings.kb_max_strafe_velocity || 0.4);
             const maxRotation = parseFloat(kbMouseSettings.kb_max_rotation_velocity || 0.8);
 
-            // Calculate rotation from mouse
-            let yaw = mouseMovement.x * mouseYawSens;
-            let pitch = mouseMovement.y * mousePitchSens;
+            // Calculate rotation from mouse (rate-based control)
+            // Mouse movement is in pixels per polling interval (33ms)
+            // Scale mouse movement to a reasonable range for rotation control
+            // Typical mouse movement: 1-50 pixels per interval for normal movement
+            // We want this to map to -1.0 to 1.0 range for gamepad-style control
+            const MOUSE_SCALE_FACTOR = 0.02;  // Adjust this to tune mouse sensitivity feel
+            let yaw = mouseMovement.x * MOUSE_SCALE_FACTOR * mouseYawSens;
+            let pitch = mouseMovement.y * MOUSE_SCALE_FACTOR * mousePitchSens;
 
-            // Reset mouse movement after reading
+            // Reset mouse movement after reading (rate-based control)
             mouseMovement = {x: 0, y: 0};
 
             // Convert keyboard/mouse input to normalized gamepad-style values (-1.0 to 1.0)
