@@ -665,40 +665,40 @@
                     <div id="kbMouseSettingsContent" class="settings-content">
                         <!-- Mouse Sensitivity Settings -->
                         <div class="setting-group">
-                            <label>Mouse Yaw Sensitivity: <span class="setting-value" id="val-mouse-yaw-sens">0.5</span>x</label>
-                            <input type="range" id="mouse-yaw-sens" min="0.1" max="2.0" step="0.1" value="0.5" oninput="updateKeyboardMouseSetting('mouse_yaw_sensitivity', this.value)">
+                            <label>Mouse Yaw Sensitivity: <span class="setting-value" id="val-mouse-yaw-sensitivity">0.5</span>x</label>
+                            <input type="range" id="mouse-yaw-sensitivity" min="0.1" max="2.0" step="0.1" value="0.5" oninput="updateKeyboardMouseSetting('mouse_yaw_sensitivity', this.value)">
                         </div>
 
                         <div class="setting-group">
-                            <label>Mouse Pitch Sensitivity: <span class="setting-value" id="val-mouse-pitch-sens">0.25</span>x</label>
-                            <input type="range" id="mouse-pitch-sens" min="0.1" max="2.0" step="0.1" value="0.25" oninput="updateKeyboardMouseSetting('mouse_pitch_sensitivity', this.value)">
+                            <label>Mouse Pitch Sensitivity: <span class="setting-value" id="val-mouse-pitch-sensitivity">0.25</span>x</label>
+                            <input type="range" id="mouse-pitch-sensitivity" min="0.1" max="2.0" step="0.1" value="0.25" oninput="updateKeyboardMouseSetting('mouse_pitch_sensitivity', this.value)">
                         </div>
 
                         <!-- Keyboard Movement Settings -->
                         <div class="setting-group">
-                            <label>Keyboard Forward/Back Speed: <span class="setting-value" id="val-kb-linear-speed">1.0</span>x</label>
-                            <input type="range" id="kb-linear-speed" min="0.1" max="2.0" step="0.1" value="1.0" oninput="updateKeyboardMouseSetting('keyboard_linear_speed', this.value)">
+                            <label>Keyboard Forward/Back Speed: <span class="setting-value" id="val-keyboard-linear-speed">1.0</span>x</label>
+                            <input type="range" id="keyboard-linear-speed" min="0.1" max="2.0" step="0.1" value="1.0" oninput="updateKeyboardMouseSetting('keyboard_linear_speed', this.value)">
                         </div>
 
                         <div class="setting-group">
-                            <label>Keyboard Strafe Speed: <span class="setting-value" id="val-kb-strafe-speed">1.0</span>x</label>
-                            <input type="range" id="kb-strafe-speed" min="0.1" max="2.0" step="0.1" value="1.0" oninput="updateKeyboardMouseSetting('keyboard_strafe_speed', this.value)">
+                            <label>Keyboard Strafe Speed: <span class="setting-value" id="val-keyboard-strafe-speed">1.0</span>x</label>
+                            <input type="range" id="keyboard-strafe-speed" min="0.1" max="2.0" step="0.1" value="1.0" oninput="updateKeyboardMouseSetting('keyboard_strafe_speed', this.value)">
                         </div>
 
                         <!-- Max Velocity Settings for Keyboard/Mouse -->
                         <div class="setting-group">
-                            <label>Max Linear Velocity: <span class="setting-value" id="val-kb-max-linear">0.6</span> m/s</label>
-                            <input type="range" id="kb-max-linear" min="0.1" max="1.0" step="0.1" value="0.6" oninput="updateKeyboardMouseSetting('kb_max_linear_velocity', this.value)">
+                            <label>Max Linear Velocity: <span class="setting-value" id="val-kb-max-linear-velocity">0.6</span> m/s</label>
+                            <input type="range" id="kb-max-linear-velocity" min="0.1" max="1.0" step="0.1" value="0.6" oninput="updateKeyboardMouseSetting('kb_max_linear_velocity', this.value)">
                         </div>
 
                         <div class="setting-group">
-                            <label>Max Strafe Velocity: <span class="setting-value" id="val-kb-max-strafe">0.4</span> m/s</label>
-                            <input type="range" id="kb-max-strafe" min="0.1" max="0.8" step="0.1" value="0.4" oninput="updateKeyboardMouseSetting('kb_max_strafe_velocity', this.value)">
+                            <label>Max Strafe Velocity: <span class="setting-value" id="val-kb-max-strafe-velocity">0.4</span> m/s</label>
+                            <input type="range" id="kb-max-strafe-velocity" min="0.1" max="0.8" step="0.1" value="0.4" oninput="updateKeyboardMouseSetting('kb_max_strafe_velocity', this.value)">
                         </div>
 
                         <div class="setting-group">
-                            <label>Max Rotation Velocity: <span class="setting-value" id="val-kb-max-rotation">0.8</span> rad/s</label>
-                            <input type="range" id="kb-max-rotation" min="0.1" max="1.5" step="0.1" value="0.8" oninput="updateKeyboardMouseSetting('kb_max_rotation_velocity', this.value)">
+                            <label>Max Rotation Velocity: <span class="setting-value" id="val-kb-max-rotation-velocity">0.8</span> rad/s</label>
+                            <input type="range" id="kb-max-rotation-velocity" min="0.1" max="1.5" step="0.1" value="0.8" oninput="updateKeyboardMouseSetting('kb_max_rotation_velocity', this.value)">
                         </div>
 
                         <!-- Reset Button -->
@@ -1717,13 +1717,13 @@
             const settings = JSON.parse(localStorage.getItem('keyboardMouseSettings') || JSON.stringify(DEFAULT_KB_MOUSE_SETTINGS));
 
             // Update UI with current settings
-            updateKbMouseSettingUI('mouse-yaw-sens', 'val-mouse-yaw-sens', settings.mouse_yaw_sensitivity);
-            updateKbMouseSettingUI('mouse-pitch-sens', 'val-mouse-pitch-sens', settings.mouse_pitch_sensitivity);
-            updateKbMouseSettingUI('kb-linear-speed', 'val-kb-linear-speed', settings.keyboard_linear_speed);
-            updateKbMouseSettingUI('kb-strafe-speed', 'val-kb-strafe-speed', settings.keyboard_strafe_speed);
-            updateKbMouseSettingUI('kb-max-linear', 'val-kb-max-linear', settings.kb_max_linear_velocity);
-            updateKbMouseSettingUI('kb-max-strafe', 'val-kb-max-strafe', settings.kb_max_strafe_velocity);
-            updateKbMouseSettingUI('kb-max-rotation', 'val-kb-max-rotation', settings.kb_max_rotation_velocity);
+            updateKbMouseSettingUI('mouse-yaw-sensitivity', 'val-mouse-yaw-sensitivity', settings.mouse_yaw_sensitivity);
+            updateKbMouseSettingUI('mouse-pitch-sensitivity', 'val-mouse-pitch-sensitivity', settings.mouse_pitch_sensitivity);
+            updateKbMouseSettingUI('keyboard-linear-speed', 'val-keyboard-linear-speed', settings.keyboard_linear_speed);
+            updateKbMouseSettingUI('keyboard-strafe-speed', 'val-keyboard-strafe-speed', settings.keyboard_strafe_speed);
+            updateKbMouseSettingUI('kb-max-linear-velocity', 'val-kb-max-linear-velocity', settings.kb_max_linear_velocity);
+            updateKbMouseSettingUI('kb-max-strafe-velocity', 'val-kb-max-strafe-velocity', settings.kb_max_strafe_velocity);
+            updateKbMouseSettingUI('kb-max-rotation-velocity', 'val-kb-max-rotation-velocity', settings.kb_max_rotation_velocity);
 
             console.log('Keyboard/Mouse settings loaded:', settings);
         }
@@ -1742,8 +1742,15 @@
             // Update the display value
             const valueId = 'val-' + settingName.replace(/_/g, '-');
             const valueSpan = document.getElementById(valueId);
+
+            console.log(`[KB/Mouse Settings] Updating ${settingName} to ${value}`);
+            console.log(`[KB/Mouse Settings] Looking for element ID: ${valueId}`);
+
             if (valueSpan) {
                 valueSpan.textContent = parseFloat(value).toFixed(2);
+                console.log(`[KB/Mouse Settings] ✅ Display updated to: ${parseFloat(value).toFixed(2)}`);
+            } else {
+                console.error(`[KB/Mouse Settings] ❌ Element not found: ${valueId}`);
             }
 
             // Load current settings
@@ -1755,7 +1762,7 @@
             // Save to localStorage
             localStorage.setItem('keyboardMouseSettings', JSON.stringify(settings));
 
-            console.log('Keyboard/Mouse setting updated:', settingName, '=', value);
+            console.log(`[KB/Mouse Settings] ✅ Saved to localStorage:`, settings);
         }
 
         function resetKeyboardMouseSettings() {
