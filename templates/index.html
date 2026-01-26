@@ -1403,6 +1403,18 @@
         let pointerLocked = false;
         const KEYBOARD_POLL_RATE = 33; // 30Hz - same as gamepad
 
+        // Velocity ramping for smooth acceleration/deceleration
+        let currentVelocities = {
+            linear: 0.0,    // Current forward/backward velocity
+            strafe: 0.0,    // Current left/right strafe velocity
+            rotation: 0.0   // Current rotation velocity
+        };
+
+        // Acceleration rates (units per second)
+        const ACCELERATION_RATE = 3.0;      // How fast to accelerate (m/s² or rad/s²)
+        const DECELERATION_RATE = 4.0;      // How fast to decelerate (faster than acceleration for responsive stopping)
+        const ROTATION_ACCEL_RATE = 6.0;    // Rotation accelerates faster for responsive turning
+
         // Default keyboard/mouse settings (will be overridden by localStorage)
         // NOTE: Physical BT remote can achieve much higher speeds - these are conservative defaults
         const DEFAULT_KB_MOUSE_SETTINGS = {
@@ -1607,39 +1619,87 @@
             const maxRotation = parseFloat(kbMouseSettings.kb_max_rotation_velocity || 0.8);
 
             // Calculate rotation from mouse (rate-based control)
-            // Mouse movement is in pixels per polling interval (33ms)
-            // Scale mouse movement to a reasonable range for rotation control
+            // INCREASED MOUSE_SCALE_FACTOR from 0.02 to 0.08 for faster rotation
             // Typical mouse movement: 1-50 pixels per interval for normal movement
-            // We want this to map to -1.0 to 1.0 range for gamepad-style control
-            const MOUSE_SCALE_FACTOR = 0.02;  // Adjust this to tune mouse sensitivity feel
-            let yaw = mouseMovement.x * MOUSE_SCALE_FACTOR * mouseYawSens;
-            let pitch = mouseMovement.y * MOUSE_SCALE_FACTOR * mousePitchSens;
+            // Fast swipes: 100-200 pixels per interval
+            // With 0.08 scale: 50px * 0.08 * 0.5 sens = 2.0 (good rotation)
+            //                  100px * 0.08 * 0.5 sens = 4.0 (clamped to 1.0, max rotation)
+            const MOUSE_SCALE_FACTOR = 0.08;  // Increased from 0.02 for faster rotation
+            let mouseYaw = mouseMovement.x * MOUSE_SCALE_FACTOR * mouseYawSens;
+            let mousePitch = mouseMovement.y * MOUSE_SCALE_FACTOR * mousePitchSens;
 
             // Reset mouse movement after reading (rate-based control)
             mouseMovement = {x: 0, y: 0};
 
-            // Convert keyboard/mouse input to normalized gamepad-style values (-1.0 to 1.0)
-            // Apply keyboard speed multipliers to the binary keyboard input
-            let lx = strafe * kbStrafeSpeed;  // Strafe (left stick X)
-            let ly = forward * kbLinearSpeed;  // Forward (left stick Y)
-            let rx = yaw;  // Yaw rotation (right stick X) - mouse already scaled
-            let ry = 0;  // Pitch not used for movement
+            // ========== VELOCITY RAMPING FOR SMOOTH ACCELERATION ==========
+            // Calculate target velocities from keyboard input
+            const targetLinear = forward * kbLinearSpeed * maxLinear;
+            const targetStrafe = strafe * kbStrafeSpeed * maxStrafe;
 
-            // Clamp to -1.0 to 1.0 range (gamepad stick range)
-            lx = Math.max(-1.0, Math.min(1.0, lx));
-            ly = Math.max(-1.0, Math.min(1.0, ly));
-            rx = Math.max(-1.0, Math.min(1.0, rx));
+            // Calculate time delta (in seconds) for this polling interval
+            const dt = KEYBOARD_POLL_RATE / 1000.0;  // 0.033 seconds (33ms)
 
-            // Calculate actual velocities for display (what the robot will receive)
-            const vx = ly * maxLinear;
-            const vy = -lx * maxStrafe;  // Backend inverts lx
-            const vyaw = -rx * maxRotation;  // Backend inverts rx
+            // Apply acceleration/deceleration ramping for keyboard input
+            // Linear velocity (forward/backward)
+            if (Math.abs(targetLinear) > 0.01) {
+                // Accelerating toward target
+                const accelStep = ACCELERATION_RATE * dt;
+                if (currentVelocities.linear < targetLinear) {
+                    currentVelocities.linear = Math.min(currentVelocities.linear + accelStep, targetLinear);
+                } else if (currentVelocities.linear > targetLinear) {
+                    currentVelocities.linear = Math.max(currentVelocities.linear - accelStep, targetLinear);
+                }
+            } else {
+                // Decelerating to zero
+                const decelStep = DECELERATION_RATE * dt;
+                if (currentVelocities.linear > 0) {
+                    currentVelocities.linear = Math.max(0, currentVelocities.linear - decelStep);
+                } else if (currentVelocities.linear < 0) {
+                    currentVelocities.linear = Math.min(0, currentVelocities.linear + decelStep);
+                }
+            }
+
+            // Strafe velocity (left/right)
+            if (Math.abs(targetStrafe) > 0.01) {
+                // Accelerating toward target
+                const accelStep = ACCELERATION_RATE * dt;
+                if (currentVelocities.strafe < targetStrafe) {
+                    currentVelocities.strafe = Math.min(currentVelocities.strafe + accelStep, targetStrafe);
+                } else if (currentVelocities.strafe > targetStrafe) {
+                    currentVelocities.strafe = Math.max(currentVelocities.strafe - accelStep, targetStrafe);
+                }
+            } else {
+                // Decelerating to zero
+                const decelStep = DECELERATION_RATE * dt;
+                if (currentVelocities.strafe > 0) {
+                    currentVelocities.strafe = Math.max(0, currentVelocities.strafe - decelStep);
+                } else if (currentVelocities.strafe < 0) {
+                    currentVelocities.strafe = Math.min(0, currentVelocities.strafe + decelStep);
+                }
+            }
+
+            // Mouse rotation (instant response, no ramping for mouse - feels more responsive)
+            // Clamp mouse rotation to -1.0 to 1.0 range
+            const targetRotation = Math.max(-1.0, Math.min(1.0, mouseYaw)) * maxRotation;
+            currentVelocities.rotation = targetRotation;
+
+            // Use ramped velocities for robot control
+            const vx = currentVelocities.linear;
+            const vy = -currentVelocities.strafe;  // Backend inverts for correct direction
+            const vyaw = -currentVelocities.rotation;  // Backend inverts for correct direction
+
+            // Convert back to normalized gamepad-style values for sending to backend
+            // Backend expects lx, ly, rx in -1.0 to 1.0 range
+            const lx = maxStrafe > 0 ? -vy / maxStrafe : 0;  // Backend inverts, so we pre-invert
+            const ly = maxLinear > 0 ? vx / maxLinear : 0;
+            const rx = maxRotation > 0 ? -vyaw / maxRotation : 0;  // Backend inverts, so we pre-invert
+            const ry = 0;  // Pitch not used for movement
 
             // Update display
             document.getElementById('val-kb-forward').textContent = vx.toFixed(2);
             document.getElementById('val-kb-strafe').textContent = vy.toFixed(2);
             document.getElementById('val-kb-yaw').textContent = vyaw.toFixed(2);
-            document.getElementById('val-kb-pitch').textContent = pitch.toFixed(2);
+            document.getElementById('val-kb-pitch').textContent = mousePitch.toFixed(2);
 
             // Calculate velocity magnitude for display
             const velocityMagnitude = Math.sqrt(vx*vx + vy*vy + vyaw*vyaw);
