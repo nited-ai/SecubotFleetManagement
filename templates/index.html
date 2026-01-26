@@ -641,7 +641,8 @@
                         • <strong>ESC</strong>: Release mouse control<br>
                         • <strong>Space</strong>: Emergency stop<br>
                         • <strong>E</strong>: Stand up | <strong>Q</strong>: Crouch<br>
-                        • <strong>R</strong>: Toggle Lidar
+                        • <strong>R</strong>: Toggle Lidar<br>
+                        • <strong>C</strong>: Push-to-talk (hold to transmit voice)
                         </small>
                     </div>
 
@@ -654,6 +655,38 @@
 
                     <div id="mouseControlInfo" style="padding: 10px; margin-top: 10px; background: #fff3cd; border-radius: 5px; display: none;">
                         <small>🖱️ <strong>Mouse captured</strong> - Move mouse to control robot. Press ESC to release.</small>
+                    </div>
+                </div>
+
+                <!-- Audio Streaming Section -->
+                <div class="gamepad-section" style="margin-top: 20px;">
+                    <div class="gamepad-header">
+                        <h3>🔊 Audio Streaming</h3>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="audioToggle" onchange="toggleAudio()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="gamepad-status inactive" id="audioStatus">
+                        ⚫ Audio Disabled
+                    </div>
+
+                    <div class="gamepad-info">
+                        <strong>Audio Controls:</strong><br>
+                        <small>
+                        • <strong>Enable Audio</strong>: Hear robot's microphones through your speakers<br>
+                        • <strong>Push-to-Talk (C key)</strong>: Hold C to transmit your voice to robot<br>
+                        • <strong>Note:</strong> Requires microphone permission from browser
+                        </small>
+                    </div>
+
+                    <div id="pushToTalkIndicator" style="padding: 10px; margin-top: 10px; background: #d4edda; border-radius: 5px; display: none;">
+                        <small>🎤 <strong>TRANSMITTING</strong> - Speaking to robot (Release C to stop)</small>
+                    </div>
+
+                    <div id="audioPermissionWarning" style="padding: 10px; margin-top: 10px; background: #f8d7da; border-radius: 5px; display: none;">
+                        <small>⚠️ <strong>Microphone permission required</strong> - Please allow microphone access to use push-to-talk</small>
                     </div>
                 </div>
 
@@ -1559,36 +1592,211 @@
             status.textContent = text;
         }
 
+        // ========== Audio Streaming Functions ==========
+
+        let audioEnabled = false;
+        let audioContext = null;
+        let mediaStream = null;
+        let audioProcessor = null;
+        let microphoneSource = null;
+
+        async function toggleAudio() {
+            const toggle = document.getElementById('audioToggle');
+            const enable = toggle.checked;
+
+            if (enable) {
+                if (!isConnected) {
+                    alert('Please connect to the robot first!');
+                    toggle.checked = false;
+                    return;
+                }
+
+                try {
+                    // Request microphone permission
+                    mediaStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            sampleRate: 48000,
+                            channelCount: 2,
+                            echoCancellation: true,
+                            noiseSuppression: true
+                        }
+                    });
+
+                    // Enable audio on backend
+                    const response = await fetch('/audio/enable', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({enable: true})
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to enable audio');
+                    }
+
+                    // Initialize Web Audio API for microphone capture
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        sampleRate: 48000
+                    });
+                    microphoneSource = audioContext.createMediaStreamSource(mediaStream);
+
+                    // Create script processor for audio data
+                    audioProcessor = audioContext.createScriptProcessor(4096, 2, 2);
+                    audioProcessor.onaudioprocess = handleAudioProcess;
+
+                    microphoneSource.connect(audioProcessor);
+                    audioProcessor.connect(audioContext.destination);
+
+                    audioEnabled = true;
+                    updateAudioStatus('active', '🟢 Audio Enabled');
+                    console.log('✅ Audio streaming enabled');
+
+                    // Hide permission warning
+                    document.getElementById('audioPermissionWarning').style.display = 'none';
+
+                } catch (error) {
+                    console.error('Error enabling audio:', error);
+
+                    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                        document.getElementById('audioPermissionWarning').style.display = 'block';
+                        alert('Microphone permission denied. Please allow microphone access to use audio features.');
+                    } else {
+                        alert('Failed to enable audio: ' + error.message);
+                    }
+
+                    toggle.checked = false;
+                }
+            } else {
+                // Disable audio
+                try {
+                    await fetch('/audio/enable', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({enable: false})
+                    });
+
+                    // Clean up audio resources
+                    if (audioProcessor) {
+                        audioProcessor.disconnect();
+                        audioProcessor = null;
+                    }
+                    if (microphoneSource) {
+                        microphoneSource.disconnect();
+                        microphoneSource = null;
+                    }
+                    if (audioContext) {
+                        audioContext.close();
+                        audioContext = null;
+                    }
+                    if (mediaStream) {
+                        mediaStream.getTracks().forEach(track => track.stop());
+                        mediaStream = null;
+                    }
+
+                    audioEnabled = false;
+                    updateAudioStatus('inactive', '⚫ Audio Disabled');
+                    console.log('⚫ Audio streaming disabled');
+
+                } catch (error) {
+                    console.error('Error disabling audio:', error);
+                }
+            }
+        }
+
+        function updateAudioStatus(state, text) {
+            const status = document.getElementById('audioStatus');
+            status.className = 'gamepad-status ' + state;
+            status.textContent = text;
+        }
+
+        function handleAudioProcess(event) {
+            // Only process audio if push-to-talk is active
+            if (!audioEnabled || !keysPressed['c']) {
+                return;
+            }
+
+            // Get audio data from input buffer
+            const inputBuffer = event.inputBuffer;
+            const leftChannel = inputBuffer.getChannelData(0);
+            const rightChannel = inputBuffer.getChannelData(1);
+
+            // Convert float32 audio to int16
+            const samples = leftChannel.length;
+            const audioData = new Int16Array(samples * 2); // Stereo
+
+            for (let i = 0; i < samples; i++) {
+                // Interleave left and right channels
+                audioData[i * 2] = Math.max(-32768, Math.min(32767, leftChannel[i] * 32768));
+                audioData[i * 2 + 1] = Math.max(-32768, Math.min(32767, rightChannel[i] * 32768));
+            }
+
+            // Convert to base64 and send via WebSocket
+            const audioBytes = new Uint8Array(audioData.buffer);
+            const base64Audio = btoa(String.fromCharCode.apply(null, audioBytes));
+
+            socket.emit('audio_data', { audio: base64Audio });
+        }
+
+        function handlePushToTalk(active) {
+            if (!audioEnabled) return;
+
+            // Send push-to-talk state to backend
+            socket.emit('push_to_talk', { active: active });
+
+            // Update visual indicator
+            const indicator = document.getElementById('pushToTalkIndicator');
+            if (active) {
+                indicator.style.display = 'block';
+                console.log('🎤 Push-to-talk ACTIVATED');
+            } else {
+                indicator.style.display = 'none';
+                console.log('🎤 Push-to-talk DEACTIVATED');
+            }
+        }
+
         // Keyboard event listeners
         document.addEventListener('keydown', (e) => {
             if (!keyboardMouseEnabled) return;
 
             // Prevent default for control keys
-            if (['w', 'a', 's', 'd', 'q', 'e', 'r', ' '].includes(e.key.toLowerCase())) {
+            if (['w', 'a', 's', 'd', 'q', 'e', 'r', ' ', 'c'].includes(e.key.toLowerCase())) {
                 e.preventDefault();
             }
 
-            keysPressed[e.key.toLowerCase()] = true;
+            const key = e.key.toLowerCase();
+            const wasPressed = keysPressed[key];
+            keysPressed[key] = true;
 
             // Handle action keys (non-movement)
             if (e.key === ' ') {
                 // Emergency stop
                 handleKeyboardAction('emergency_stop');
-            } else if (e.key.toLowerCase() === 'e') {
+            } else if (key === 'e') {
                 // Stand up
                 handleKeyboardAction('stand_up');
-            } else if (e.key.toLowerCase() === 'q') {
+            } else if (key === 'q') {
                 // Crouch
                 handleKeyboardAction('crouch');
-            } else if (e.key.toLowerCase() === 'r') {
+            } else if (key === 'r') {
                 // Toggle lidar
                 handleKeyboardAction('toggle_lidar');
+            } else if (key === 'c' && !wasPressed) {
+                // Push-to-talk activated (only when pointer is locked and audio is enabled)
+                if (pointerLocked && audioEnabled) {
+                    handlePushToTalk(true);
+                }
             }
         });
 
         document.addEventListener('keyup', (e) => {
             if (!keyboardMouseEnabled) return;
-            keysPressed[e.key.toLowerCase()] = false;
+
+            const key = e.key.toLowerCase();
+            keysPressed[key] = false;
+
+            // Handle push-to-talk release
+            if (key === 'c' && audioEnabled) {
+                handlePushToTalk(false);
+            }
         });
 
         // Mouse movement tracking

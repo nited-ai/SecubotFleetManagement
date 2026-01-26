@@ -7,14 +7,19 @@ import asyncio
 import logging
 import threading
 import time
+import base64
+import struct
 from queue import Queue, Empty
 from flask import Flask, render_template, Response, request, jsonify
 from flask_socketio import SocketIO, emit
 from unitree_webrtc_connect.webrtc_driver import UnitreeWebRTCConnection, WebRTCConnectionMethod
 from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD
-from aiortc import MediaStreamTrack
+from aiortc import MediaStreamTrack, AudioStreamTrack
+from aiortc.mediastreams import AudioFrame
+from av import AudioFrame as AVAudioFrame
 import cv2
 import numpy as np
+import pyaudio
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -74,6 +79,91 @@ gamepad_settings = {
 # Track last sent velocities for zero-velocity detection
 last_sent_velocities = {'vx': 0.0, 'vy': 0.0, 'vyaw': 0.0}
 zero_velocity_sent = False  # Track if we've sent zero velocity after movement
+
+# Audio streaming variables
+audio_enabled = False
+audio_lock = threading.Lock()
+push_to_talk_active = False
+microphone_audio_track = None
+pyaudio_instance = None
+pyaudio_stream = None
+audio_output_queue = Queue(maxsize=100)  # Queue for robot audio to play through speakers
+
+# Audio format constants (matching robot's audio format)
+AUDIO_SAMPLE_RATE = 48000
+AUDIO_CHANNELS = 2  # Stereo
+AUDIO_FORMAT = pyaudio.paInt16
+AUDIO_FRAMES_PER_BUFFER = 8192
+
+class MicrophoneAudioTrack(AudioStreamTrack):
+    """
+    Custom audio track that streams microphone audio to the robot.
+    Only active when push-to-talk is enabled.
+    """
+    def __init__(self):
+        super().__init__()
+        self.audio_queue = Queue(maxsize=50)
+        self.sample_rate = AUDIO_SAMPLE_RATE
+        self.channels = AUDIO_CHANNELS
+        self.samples_per_frame = 960  # 20ms at 48kHz
+        self.silence_frame = np.zeros((self.samples_per_frame, self.channels), dtype=np.int16)
+
+    async def recv(self):
+        """
+        Generate audio frames for WebRTC transmission.
+        Returns silence when push-to-talk is not active.
+        """
+        global push_to_talk_active
+
+        # If push-to-talk is not active, send silence
+        if not push_to_talk_active:
+            # Create silent audio frame
+            frame = AVAudioFrame.from_ndarray(
+                self.silence_frame,
+                format='s16',
+                layout='stereo'
+            )
+            frame.sample_rate = self.sample_rate
+            frame.pts = None
+            return frame
+
+        # Try to get audio data from queue (from browser microphone)
+        try:
+            audio_data = self.audio_queue.get(timeout=0.02)
+
+            # Convert bytes to numpy array
+            audio_array = np.frombuffer(audio_data, dtype=np.int16)
+
+            # Reshape to stereo if needed
+            if len(audio_array) >= self.samples_per_frame * self.channels:
+                audio_array = audio_array[:self.samples_per_frame * self.channels]
+                audio_array = audio_array.reshape((self.samples_per_frame, self.channels))
+            else:
+                # Pad with zeros if not enough data
+                padding = np.zeros((self.samples_per_frame * self.channels - len(audio_array),), dtype=np.int16)
+                audio_array = np.concatenate([audio_array, padding])
+                audio_array = audio_array.reshape((self.samples_per_frame, self.channels))
+
+            # Create audio frame
+            frame = AVAudioFrame.from_ndarray(
+                audio_array,
+                format='s16',
+                layout='stereo'
+            )
+            frame.sample_rate = self.sample_rate
+            frame.pts = None
+            return frame
+
+        except Empty:
+            # No audio data available, send silence
+            frame = AVAudioFrame.from_ndarray(
+                self.silence_frame,
+                format='s16',
+                layout='stereo'
+            )
+            frame.sample_rate = self.sample_rate
+            frame.pts = None
+            return frame
 
 def run_event_loop(loop):
     """Run asyncio event loop in a separate thread"""
@@ -159,6 +249,26 @@ async def recv_camera_stream(track: MediaStreamTrack):
         except Exception as e:
             logging.error(f"Error receiving video frame: {e}")
             break
+
+async def recv_audio_stream(frame):
+    """
+    Receive audio frames from the robot and play them through speakers.
+    This callback is triggered when audio frames are received from the robot.
+    """
+    global pyaudio_stream, audio_enabled
+
+    try:
+        if not audio_enabled or pyaudio_stream is None:
+            return
+
+        # Convert the frame to audio data (16-bit PCM)
+        audio_data = np.frombuffer(frame.to_ndarray(), dtype=np.int16)
+
+        # Play the audio data by writing it to the PyAudio stream
+        pyaudio_stream.write(audio_data.tobytes())
+
+    except Exception as e:
+        logging.error(f"Error playing audio frame: {e}")
 
 def generate_frames():
     """Generate frames for MJPEG streaming"""
@@ -396,6 +506,84 @@ def enable_keyboard_mouse():
 
     except Exception as e:
         logging.error(f"Enable keyboard/mouse error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/audio/enable', methods=['POST'])
+def enable_audio():
+    """Enable or disable audio streaming"""
+    global audio_enabled, pyaudio_instance, pyaudio_stream, microphone_audio_track
+
+    try:
+        data = request.json
+        enable = data.get('enable', False)
+
+        if not is_connected:
+            return jsonify({'status': 'error', 'message': 'Robot not connected'}), 400
+
+        with audio_lock:
+            if enable and not audio_enabled:
+                # Initialize PyAudio for receiving robot audio
+                pyaudio_instance = pyaudio.PyAudio()
+                pyaudio_stream = pyaudio_instance.open(
+                    format=AUDIO_FORMAT,
+                    channels=AUDIO_CHANNELS,
+                    rate=AUDIO_SAMPLE_RATE,
+                    output=True,
+                    frames_per_buffer=AUDIO_FRAMES_PER_BUFFER
+                )
+
+                # Enable audio channel and add callback for receiving audio
+                async def setup_audio():
+                    global microphone_audio_track
+                    try:
+                        connection.audio.switchAudioChannel(True)
+                        connection.audio.add_track_callback(recv_audio_stream)
+
+                        # Create and add microphone track for sending audio to robot
+                        microphone_audio_track = MicrophoneAudioTrack()
+                        connection.pc.addTrack(microphone_audio_track)
+
+                        logging.info("Audio streaming enabled")
+                    except Exception as e:
+                        logging.error(f"Error setting up audio: {e}")
+                        raise
+
+                if event_loop and event_loop.is_running():
+                    future = asyncio.run_coroutine_threadsafe(setup_audio(), event_loop)
+                    future.result(timeout=10)
+
+                audio_enabled = True
+                logging.info("Audio enabled - receiving from robot and ready to transmit")
+
+            elif not enable and audio_enabled:
+                # Disable audio
+                async def stop_audio():
+                    try:
+                        connection.audio.switchAudioChannel(False)
+                        logging.info("Audio streaming disabled")
+                    except Exception as e:
+                        logging.error(f"Error stopping audio: {e}")
+
+                if event_loop and event_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(stop_audio(), event_loop)
+
+                # Stop and close PyAudio stream
+                if pyaudio_stream:
+                    pyaudio_stream.stop_stream()
+                    pyaudio_stream.close()
+                    pyaudio_stream = None
+
+                if pyaudio_instance:
+                    pyaudio_instance.terminate()
+                    pyaudio_instance = None
+
+                audio_enabled = False
+                logging.info("Audio disabled")
+
+        return jsonify({'status': 'success', 'enabled': audio_enabled})
+
+    except Exception as e:
+        logging.error(f"Enable audio error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/gamepad/command', methods=['POST'])
@@ -668,6 +856,65 @@ def handle_websocket_gamepad_command(data):
             'status': 'error',
             'message': str(e)
         })
+
+# ========== WEBSOCKET AUDIO HANDLERS ==========
+
+@socketio.on('push_to_talk')
+def handle_push_to_talk(data):
+    """Handle push-to-talk state changes (C key press/release)"""
+    global push_to_talk_active
+
+    try:
+        active = data.get('active', False)
+
+        if not audio_enabled:
+            emit('push_to_talk_response', {
+                'status': 'error',
+                'message': 'Audio not enabled'
+            })
+            return
+
+        push_to_talk_active = active
+
+        if active:
+            logging.info("🎤 Push-to-talk ACTIVATED - transmitting to robot")
+        else:
+            logging.info("🎤 Push-to-talk DEACTIVATED - stopped transmitting")
+
+        emit('push_to_talk_response', {
+            'status': 'success',
+            'active': push_to_talk_active
+        })
+
+    except Exception as e:
+        logging.error(f"Push-to-talk error: {e}")
+        emit('push_to_talk_response', {
+            'status': 'error',
+            'message': str(e)
+        })
+
+@socketio.on('audio_data')
+def handle_audio_data(data):
+    """Receive audio data from browser microphone and queue it for transmission"""
+    global microphone_audio_track
+
+    try:
+        if not audio_enabled or not push_to_talk_active:
+            return
+
+        # Data is base64-encoded audio from browser
+        audio_bytes = base64.b64decode(data['audio'])
+
+        # Add to microphone track's queue for transmission
+        if microphone_audio_track:
+            try:
+                microphone_audio_track.audio_queue.put_nowait(audio_bytes)
+            except:
+                # Queue full, skip this frame
+                pass
+
+    except Exception as e:
+        logging.error(f"Audio data error: {e}")
 
 @app.route('/gamepad/settings', methods=['GET'])
 def get_gamepad_settings():
