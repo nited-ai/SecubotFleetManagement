@@ -656,6 +656,60 @@
                     </div>
                 </div>
 
+                <!-- Keyboard/Mouse Settings Panel -->
+                <div class="settings-panel">
+                    <div class="settings-header" onclick="toggleKeyboardMouseSettings()">
+                        <h3>⌨️ Keyboard/Mouse Settings</h3>
+                        <span id="kbMouseSettingsToggleIcon">▼</span>
+                    </div>
+                    <div id="kbMouseSettingsContent" class="settings-content">
+                        <!-- Mouse Sensitivity Settings -->
+                        <div class="setting-group">
+                            <label>Mouse Yaw Sensitivity: <span class="setting-value" id="val-mouse-yaw-sens">0.5</span>x</label>
+                            <input type="range" id="mouse-yaw-sens" min="0.1" max="2.0" step="0.1" value="0.5" oninput="updateKeyboardMouseSetting('mouse_yaw_sensitivity', this.value)">
+                        </div>
+
+                        <div class="setting-group">
+                            <label>Mouse Pitch Sensitivity: <span class="setting-value" id="val-mouse-pitch-sens">0.25</span>x</label>
+                            <input type="range" id="mouse-pitch-sens" min="0.1" max="2.0" step="0.1" value="0.25" oninput="updateKeyboardMouseSetting('mouse_pitch_sensitivity', this.value)">
+                        </div>
+
+                        <!-- Keyboard Movement Settings -->
+                        <div class="setting-group">
+                            <label>Keyboard Forward/Back Speed: <span class="setting-value" id="val-kb-linear-speed">1.0</span>x</label>
+                            <input type="range" id="kb-linear-speed" min="0.1" max="2.0" step="0.1" value="1.0" oninput="updateKeyboardMouseSetting('keyboard_linear_speed', this.value)">
+                        </div>
+
+                        <div class="setting-group">
+                            <label>Keyboard Strafe Speed: <span class="setting-value" id="val-kb-strafe-speed">1.0</span>x</label>
+                            <input type="range" id="kb-strafe-speed" min="0.1" max="2.0" step="0.1" value="1.0" oninput="updateKeyboardMouseSetting('keyboard_strafe_speed', this.value)">
+                        </div>
+
+                        <!-- Max Velocity Settings for Keyboard/Mouse -->
+                        <div class="setting-group">
+                            <label>Max Linear Velocity: <span class="setting-value" id="val-kb-max-linear">0.6</span> m/s</label>
+                            <input type="range" id="kb-max-linear" min="0.1" max="1.0" step="0.1" value="0.6" oninput="updateKeyboardMouseSetting('kb_max_linear_velocity', this.value)">
+                        </div>
+
+                        <div class="setting-group">
+                            <label>Max Strafe Velocity: <span class="setting-value" id="val-kb-max-strafe">0.4</span> m/s</label>
+                            <input type="range" id="kb-max-strafe" min="0.1" max="0.8" step="0.1" value="0.4" oninput="updateKeyboardMouseSetting('kb_max_strafe_velocity', this.value)">
+                        </div>
+
+                        <div class="setting-group">
+                            <label>Max Rotation Velocity: <span class="setting-value" id="val-kb-max-rotation">0.8</span> rad/s</label>
+                            <input type="range" id="kb-max-rotation" min="0.1" max="1.5" step="0.1" value="0.8" oninput="updateKeyboardMouseSetting('kb_max_rotation_velocity', this.value)">
+                        </div>
+
+                        <!-- Reset Button -->
+                        <div style="margin-top: 15px; text-align: center;">
+                            <button class="btn btn-secondary" onclick="resetKeyboardMouseSettings()" style="width: 100%;">
+                                Reset to Defaults
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Gamepad Settings Panel -->
                 <div class="settings-panel">
                     <div class="settings-header" onclick="toggleSettings()">
@@ -1348,8 +1402,17 @@
         let mouseMovement = {x: 0, y: 0};
         let pointerLocked = false;
         const KEYBOARD_POLL_RATE = 33; // 30Hz - same as gamepad
-        const MOUSE_SENSITIVITY = 0.3; // Increased for usable mouse control (was 0.002)
-        const MOUSE_PITCH_SENSITIVITY = 0.15; // Separate sensitivity for pitch (was 0.001)
+
+        // Default keyboard/mouse settings (will be overridden by localStorage)
+        const DEFAULT_KB_MOUSE_SETTINGS = {
+            mouse_yaw_sensitivity: 0.5,
+            mouse_pitch_sensitivity: 0.25,
+            keyboard_linear_speed: 1.0,
+            keyboard_strafe_speed: 1.0,
+            kb_max_linear_velocity: 0.6,
+            kb_max_strafe_velocity: 0.4,
+            kb_max_rotation_velocity: 0.8
+        };
 
         async function toggleKeyboardMouse() {
             const toggle = document.getElementById('keyboardMouseToggle');
@@ -1523,31 +1586,31 @@
 
             if (keysPressed['w']) forward += 1;
             if (keysPressed['s']) forward -= 1;
-            if (keysPressed['a']) strafe -= 1;  // FIXED: A key = strafe left (negative)
-            if (keysPressed['d']) strafe += 1;  // FIXED: D key = strafe right (positive)
+            if (keysPressed['a']) strafe -= 1;  // A key = strafe left (negative)
+            if (keysPressed['d']) strafe += 1;  // D key = strafe right (positive)
+
+            // Get keyboard/mouse settings from localStorage
+            const kbMouseSettings = JSON.parse(localStorage.getItem('keyboardMouseSettings') || JSON.stringify(DEFAULT_KB_MOUSE_SETTINGS));
+            const mouseYawSens = parseFloat(kbMouseSettings.mouse_yaw_sensitivity || 0.5);
+            const mousePitchSens = parseFloat(kbMouseSettings.mouse_pitch_sensitivity || 0.25);
+            const kbLinearSpeed = parseFloat(kbMouseSettings.keyboard_linear_speed || 1.0);
+            const kbStrafeSpeed = parseFloat(kbMouseSettings.keyboard_strafe_speed || 1.0);
+            const maxLinear = parseFloat(kbMouseSettings.kb_max_linear_velocity || 0.6);
+            const maxStrafe = parseFloat(kbMouseSettings.kb_max_strafe_velocity || 0.4);
+            const maxRotation = parseFloat(kbMouseSettings.kb_max_rotation_velocity || 0.8);
 
             // Calculate rotation from mouse
-            let yaw = mouseMovement.x * MOUSE_SENSITIVITY;
-            let pitch = mouseMovement.y * MOUSE_PITCH_SENSITIVITY;
+            let yaw = mouseMovement.x * mouseYawSens;
+            let pitch = mouseMovement.y * mousePitchSens;
 
             // Reset mouse movement after reading
             mouseMovement = {x: 0, y: 0};
 
-            // Get velocity settings from localStorage
-            const settings = JSON.parse(localStorage.getItem('gamepadSettings') || '{}');
-            const sensLinear = parseFloat(settings.sensitivity_linear || 1.0);
-            const sensStrafe = parseFloat(settings.sensitivity_strafe || 1.0);
-            const sensRotation = parseFloat(settings.sensitivity_rotation || 1.0);
-            const speedMult = parseFloat(settings.speed_multiplier || 1.0);
-            const maxLinear = parseFloat(settings.max_linear_velocity || 0.6);
-            const maxStrafe = parseFloat(settings.max_strafe_velocity || 0.4);
-            const maxRotation = parseFloat(settings.max_rotation_velocity || 0.8);
-
             // Convert keyboard/mouse input to normalized gamepad-style values (-1.0 to 1.0)
-            // This matches how gamepad sends values to the backend
-            let lx = strafe * sensStrafe * speedMult;  // Strafe (left stick X)
-            let ly = forward * sensLinear * speedMult;  // Forward (left stick Y)
-            let rx = yaw * sensRotation;  // Yaw rotation (right stick X)
+            // Apply keyboard speed multipliers to the binary keyboard input
+            let lx = strafe * kbStrafeSpeed;  // Strafe (left stick X)
+            let ly = forward * kbLinearSpeed;  // Forward (left stick Y)
+            let rx = yaw;  // Yaw rotation (right stick X) - mouse already scaled
             let ry = 0;  // Pitch not used for movement
 
             // Clamp to -1.0 to 1.0 range (gamepad stick range)
@@ -1631,6 +1694,79 @@
         if (savedIP) {
             document.getElementById('ip').value = savedIP;
             console.log('Loaded saved IP address:', savedIP);
+        }
+
+        // ========== Keyboard/Mouse Settings Functions ==========
+
+        function toggleKeyboardMouseSettings() {
+            const content = document.getElementById('kbMouseSettingsContent');
+            const icon = document.getElementById('kbMouseSettingsToggleIcon');
+
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                icon.textContent = '▼';
+            } else {
+                content.classList.add('expanded');
+                icon.textContent = '▲';
+                loadKeyboardMouseSettings(); // Load current settings when opening
+            }
+        }
+
+        function loadKeyboardMouseSettings() {
+            // Load from localStorage or use defaults
+            const settings = JSON.parse(localStorage.getItem('keyboardMouseSettings') || JSON.stringify(DEFAULT_KB_MOUSE_SETTINGS));
+
+            // Update UI with current settings
+            updateKbMouseSettingUI('mouse-yaw-sens', 'val-mouse-yaw-sens', settings.mouse_yaw_sensitivity);
+            updateKbMouseSettingUI('mouse-pitch-sens', 'val-mouse-pitch-sens', settings.mouse_pitch_sensitivity);
+            updateKbMouseSettingUI('kb-linear-speed', 'val-kb-linear-speed', settings.keyboard_linear_speed);
+            updateKbMouseSettingUI('kb-strafe-speed', 'val-kb-strafe-speed', settings.keyboard_strafe_speed);
+            updateKbMouseSettingUI('kb-max-linear', 'val-kb-max-linear', settings.kb_max_linear_velocity);
+            updateKbMouseSettingUI('kb-max-strafe', 'val-kb-max-strafe', settings.kb_max_strafe_velocity);
+            updateKbMouseSettingUI('kb-max-rotation', 'val-kb-max-rotation', settings.kb_max_rotation_velocity);
+
+            console.log('Keyboard/Mouse settings loaded:', settings);
+        }
+
+        function updateKbMouseSettingUI(sliderId, valueId, value) {
+            const slider = document.getElementById(sliderId);
+            const valueSpan = document.getElementById(valueId);
+
+            if (slider && valueSpan) {
+                slider.value = value;
+                valueSpan.textContent = value.toFixed(2);
+            }
+        }
+
+        function updateKeyboardMouseSetting(settingName, value) {
+            // Update the display value
+            const valueId = 'val-' + settingName.replace(/_/g, '-');
+            const valueSpan = document.getElementById(valueId);
+            if (valueSpan) {
+                valueSpan.textContent = parseFloat(value).toFixed(2);
+            }
+
+            // Load current settings
+            const settings = JSON.parse(localStorage.getItem('keyboardMouseSettings') || JSON.stringify(DEFAULT_KB_MOUSE_SETTINGS));
+
+            // Update the specific setting
+            settings[settingName] = parseFloat(value);
+
+            // Save to localStorage
+            localStorage.setItem('keyboardMouseSettings', JSON.stringify(settings));
+
+            console.log('Keyboard/Mouse setting updated:', settingName, '=', value);
+        }
+
+        function resetKeyboardMouseSettings() {
+            // Reset to defaults
+            localStorage.setItem('keyboardMouseSettings', JSON.stringify(DEFAULT_KB_MOUSE_SETTINGS));
+
+            // Reload UI
+            loadKeyboardMouseSettings();
+
+            console.log('Keyboard/Mouse settings reset to defaults');
+            showMessage('Settings reset to defaults', 'success');
         }
 
         // ========== Gamepad Settings Functions ==========
@@ -1748,6 +1884,7 @@
 
         // Load saved settings on page load
         window.addEventListener('load', () => {
+            // Load gamepad settings
             const savedSettings = localStorage.getItem('gamepadSettings');
             const savedPreset = localStorage.getItem('gamepadPreset');
 
@@ -1764,6 +1901,15 @@
                         btn.classList.add('active');
                     }
                 });
+            }
+
+            // Initialize keyboard/mouse settings if not present
+            const savedKbMouseSettings = localStorage.getItem('keyboardMouseSettings');
+            if (!savedKbMouseSettings) {
+                console.log('Initializing default keyboard/mouse settings');
+                localStorage.setItem('keyboardMouseSettings', JSON.stringify(DEFAULT_KB_MOUSE_SETTINGS));
+            } else {
+                console.log('Restoring saved keyboard/mouse settings');
             }
         });
 
