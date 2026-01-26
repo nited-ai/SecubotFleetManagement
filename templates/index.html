@@ -467,6 +467,39 @@
             to { opacity: 1; }
         }
 
+        /* Speed Indicator Overlay */
+        .speed-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 30px 50px;
+            border-radius: 15px;
+            font-size: 2.5em;
+            font-weight: bold;
+            z-index: 10000;
+            display: none;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.2s ease-in-out;
+            text-align: center;
+            min-width: 250px;
+        }
+
+        .speed-indicator .speed-label {
+            font-size: 0.5em;
+            color: #aaa;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .speed-indicator .speed-value {
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
         @media (max-width: 768px) {
             .content {
                 grid-template-columns: 1fr;
@@ -781,6 +814,12 @@
                 <img id="videoFeed" src="/video_feed" alt="Robot Video Feed">
             </div>
         </div>
+    </div>
+
+    <!-- Speed Indicator Overlay -->
+    <div id="speedIndicator" class="speed-indicator">
+        <div class="speed-label">Movement Speed</div>
+        <div class="speed-value" id="speedValue">100%</div>
     </div>
 
     <!-- Socket.IO Client Library -->
@@ -1574,6 +1613,71 @@
             mouseMovement.x += e.movementX;
             mouseMovement.y += e.movementY;
         });
+
+        // Mouse wheel speed control
+        let speedIndicatorTimeout = null;
+
+        document.addEventListener('wheel', (e) => {
+            // Only respond when keyboard/mouse control is enabled AND pointer is locked
+            if (!keyboardMouseEnabled || !pointerLocked) return;
+
+            e.preventDefault();  // Prevent page scroll
+
+            // Get current settings
+            const kbMouseSettings = JSON.parse(localStorage.getItem('keyboardMouseSettings') || JSON.stringify(DEFAULT_KB_MOUSE_SETTINGS));
+            let currentLinearSpeed = parseFloat(kbMouseSettings.keyboard_linear_speed || 1.0);
+            let currentStrafeSpeed = parseFloat(kbMouseSettings.keyboard_strafe_speed || 1.0);
+
+            // Constants for wheel control
+            const WHEEL_STEP = 0.3;     // Change by 0.3x per wheel notch
+            const MIN_SPEED = 0.1;      // Minimum 0.1x (10% speed)
+            const MAX_SPEED = 2.0;      // Maximum 2.0x (200% speed)
+
+            // Calculate new speed (wheel up = increase, wheel down = decrease)
+            let newSpeed;
+            if (e.deltaY < 0) {
+                // Wheel up - increase speed
+                newSpeed = Math.min(MAX_SPEED, currentLinearSpeed + WHEEL_STEP);
+            } else {
+                // Wheel down - decrease speed
+                newSpeed = Math.max(MIN_SPEED, currentLinearSpeed - WHEEL_STEP);
+            }
+
+            // Round to 1 decimal place to avoid floating point issues
+            newSpeed = Math.round(newSpeed * 10) / 10;
+
+            // Update both linear and strafe speed together (synchronized)
+            updateKeyboardMouseSetting('keyboard_linear_speed', newSpeed);
+            updateKeyboardMouseSetting('keyboard_strafe_speed', newSpeed);
+
+            // Update slider positions in settings panel
+            const linearSlider = document.getElementById('keyboard-linear-speed');
+            const strafeSlider = document.getElementById('keyboard-strafe-speed');
+            if (linearSlider) linearSlider.value = newSpeed;
+            if (strafeSlider) strafeSlider.value = newSpeed;
+
+            // Show visual feedback
+            showSpeedIndicator(newSpeed);
+
+            console.log(`🎡 Mouse wheel speed adjustment: ${(newSpeed * 100).toFixed(0)}%`);
+        }, { passive: false });  // Required for preventDefault() to work
+
+        function showSpeedIndicator(speed) {
+            const indicator = document.getElementById('speedIndicator');
+            const speedValue = document.getElementById('speedValue');
+
+            if (!indicator || !speedValue) return;
+
+            // Update display
+            speedValue.textContent = `${(speed * 100).toFixed(0)}%`;
+            indicator.style.display = 'block';
+
+            // Auto-hide after 2 seconds
+            clearTimeout(speedIndicatorTimeout);
+            speedIndicatorTimeout = setTimeout(() => {
+                indicator.style.display = 'none';
+            }, 2000);
+        }
 
         async function handleKeyboardAction(action) {
             try {
