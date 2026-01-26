@@ -709,13 +709,13 @@
 
                         <!-- Keyboard Movement Settings -->
                         <div class="setting-group">
-                            <label>Keyboard Forward/Back Speed: <span class="setting-value" id="val-keyboard-linear-speed">1.0</span>x</label>
-                            <input type="range" id="keyboard-linear-speed" min="0.1" max="2.0" step="0.1" value="1.0" oninput="updateKeyboardMouseSetting('keyboard_linear_speed', this.value)">
+                            <label>Keyboard Forward/Back Speed: <span class="setting-value" id="val-keyboard-linear-speed">0.2</span>x</label>
+                            <input type="range" id="keyboard-linear-speed" min="0.1" max="2.0" step="0.1" value="0.2" oninput="updateKeyboardMouseSetting('keyboard_linear_speed', this.value)">
                         </div>
 
                         <div class="setting-group">
-                            <label>Keyboard Strafe Speed: <span class="setting-value" id="val-keyboard-strafe-speed">1.0</span>x</label>
-                            <input type="range" id="keyboard-strafe-speed" min="0.1" max="2.0" step="0.1" value="1.0" oninput="updateKeyboardMouseSetting('keyboard_strafe_speed', this.value)">
+                            <label>Keyboard Strafe Speed: <span class="setting-value" id="val-keyboard-strafe-speed">0.2</span>x</label>
+                            <input type="range" id="keyboard-strafe-speed" min="0.1" max="2.0" step="0.1" value="0.2" oninput="updateKeyboardMouseSetting('keyboard_strafe_speed', this.value)">
                         </div>
 
                         <!-- Max Velocity Settings for Keyboard/Mouse -->
@@ -1459,8 +1459,8 @@
         const DEFAULT_KB_MOUSE_SETTINGS = {
             mouse_yaw_sensitivity: 0.5,
             mouse_pitch_sensitivity: 0.25,
-            keyboard_linear_speed: 1.0,
-            keyboard_strafe_speed: 1.0,
+            keyboard_linear_speed: 0.2,     // Start at 20% speed
+            keyboard_strafe_speed: 0.2,     // Start at 20% speed
             kb_max_linear_velocity: 1.5,    // Increased from 0.6 to match BT remote capabilities
             kb_max_strafe_velocity: 1.2,    // Increased from 0.4 to match BT remote capabilities
             kb_max_rotation_velocity: 3.0   // Increased from 2.0 to match BT remote capabilities
@@ -1629,7 +1629,7 @@
             let currentStrafeSpeed = parseFloat(kbMouseSettings.keyboard_strafe_speed || 1.0);
 
             // Constants for wheel control
-            const WHEEL_STEP = 0.3;     // Change by 0.3x per wheel notch
+            const WHEEL_STEP = 0.2;     // Change by 0.2x per wheel notch
             const MIN_SPEED = 0.1;      // Minimum 0.1x (10% speed)
             const MAX_SPEED = 2.0;      // Maximum 2.0x (200% speed)
 
