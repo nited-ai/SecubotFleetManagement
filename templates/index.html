@@ -697,8 +697,8 @@
                         </div>
 
                         <div class="setting-group">
-                            <label>Max Rotation Velocity: <span class="setting-value" id="val-kb-max-rotation-velocity">0.8</span> rad/s</label>
-                            <input type="range" id="kb-max-rotation-velocity" min="0.1" max="1.5" step="0.1" value="0.8" oninput="updateKeyboardMouseSetting('kb_max_rotation_velocity', this.value)">
+                            <label>Max Rotation Velocity: <span class="setting-value" id="val-kb-max-rotation-velocity">2.0</span> rad/s</label>
+                            <input type="range" id="kb-max-rotation-velocity" min="0.1" max="3.0" step="0.1" value="2.0" oninput="updateKeyboardMouseSetting('kb_max_rotation_velocity', this.value)">
                         </div>
 
                         <!-- Reset Button -->
@@ -1411,7 +1411,7 @@
             keyboard_strafe_speed: 1.0,
             kb_max_linear_velocity: 0.6,
             kb_max_strafe_velocity: 0.4,
-            kb_max_rotation_velocity: 0.8
+            kb_max_rotation_velocity: 2.0  // Increased from 0.8 to 2.0 for faster rotation
         };
 
         async function toggleKeyboardMouse() {
@@ -1445,8 +1445,11 @@
                     // Start polling
                     keyboardMouseInterval = setInterval(pollKeyboardMouse, KEYBOARD_POLL_RATE);
 
-                    // Request pointer lock on first click
-                    document.addEventListener('click', requestPointerLock);
+                    // Request pointer lock only when clicking on video feed
+                    const videoFeed = document.getElementById('videoFeed');
+                    if (videoFeed) {
+                        videoFeed.addEventListener('click', requestPointerLock);
+                    }
                 } catch (error) {
                     console.error('Error enabling keyboard/mouse control:', error);
                     alert('Failed to enable keyboard/mouse control');
@@ -1477,8 +1480,11 @@
                         document.exitPointerLock();
                     }
 
-                    // Remove event listener
-                    document.removeEventListener('click', requestPointerLock);
+                    // Remove event listener from video feed
+                    const videoFeed = document.getElementById('videoFeed');
+                    if (videoFeed) {
+                        videoFeed.removeEventListener('click', requestPointerLock);
+                    }
 
                     // Reset keys
                     keysPressed = {};
