@@ -14,9 +14,14 @@ class WebRTCAudioChannel:
 
         # List to hold multiple callbacks
         self.track_callbacks = []
-        
+        self.frame_count = 0  # Track frames for logging
+
     async def frame_handler(self, frame):
-        logging.info("Receiving audio frame")
+        self.frame_count += 1
+
+        # Only log every 1000 frames to reduce spam
+        if self.frame_count % 1000 == 0:
+            logging.info(f"Received {self.frame_count} audio frames from robot")
 
         # Trigger all registered callbacks
         for callback in self.track_callbacks:
