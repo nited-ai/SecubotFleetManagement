@@ -1,0 +1,68 @@
+# Coverage.py configuration for Unitree WebRTC Connect
+
+[run]
+source = .
+omit =
+    */tests/*
+    */venv/*
+    */env/*
+    */.venv/*
+    */site-packages/*
+    */dist-packages/*
+    setup.py
+    conftest.py
+    */__pycache__/*
+    */migrations/*
+
+[report]
+# Fail if coverage is below 80%
+fail_under = 80
+
+# Show missing lines
+show_missing = True
+
+# Skip covered files in report
+skip_covered = False
+
+# Precision for coverage percentage
+precision = 2
+
+# Exclude lines from coverage
+exclude_lines =
+    # Standard pragma
+    pragma: no cover
+    
+    # Don't complain about missing debug code
+    def __repr__
+    def __str__
+    
+    # Don't complain if tests don't hit defensive assertion code
+    raise AssertionError
+    raise NotImplementedError
+    
+    # Don't complain if non-runnable code isn't run
+    if __name__ == .__main__.:
+    if __name__==.__main__.:
+    
+    # Don't complain about abstract methods
+    @abstractmethod
+    @abc.abstractmethod
+    
+    # Don't complain about type checking blocks
+    if TYPE_CHECKING:
+    if typing.TYPE_CHECKING:
+    
+    # Don't complain about protocol methods
+    \.\.\.
+    pass
+    
+    # Don't complain about logging
+    logger\.debug
+    logger\.info
+    
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml
+

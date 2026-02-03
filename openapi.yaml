@@ -1,0 +1,353 @@
+openapi: 3.0.3
+info:
+  title: Unitree WebRTC Connect API
+  description: |
+    REST API for controlling Unitree Go2 robots via WebRTC.
+    
+    This API provides endpoints for:
+    - Robot connection management (LocalSTA, LocalAP, Remote)
+    - Real-time video streaming (MJPEG)
+    - Bidirectional audio streaming (robot ↔ user)
+    - Robot control (gamepad, keyboard/mouse)
+    - Settings management
+    - Robot actions (stand, sit, crouch, etc.)
+    - AI mode functions (FreeWalk, FreeBound, FreeJump, FreeAvoid)
+    
+    **WebSocket Events:**
+    - `gamepad_command` - Low-latency movement commands
+    - `start_microphone` - Push-to-talk start
+    - `stop_microphone` - Push-to-talk stop
+    
+  version: 1.0.0
+  contact:
+    name: Unitree WebRTC Connect
+    url: https://github.com/yourusername/unitree_webrtc_connect
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: Connection
+    description: Robot connection management
+  - name: Video
+    description: Video streaming
+  - name: Audio
+    description: Audio streaming
+  - name: Control
+    description: Robot control (gamepad/keyboard/mouse)
+  - name: Settings
+    description: Control settings management
+  - name: Actions
+    description: Robot actions and AI mode functions
+  - name: Status
+    description: Connection status and diagnostics
+
+paths:
+  /:
+    get:
+      summary: Main web interface
+      description: Serves the main HTML page with video streaming and control interface
+      tags:
+        - Connection
+      responses:
+        '200':
+          description: HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /video_feed:
+    get:
+      summary: Video streaming endpoint
+      description: MJPEG video stream from robot camera
+      tags:
+        - Video
+      responses:
+        '200':
+          description: MJPEG video stream
+          content:
+            multipart/x-mixed-replace:
+              schema:
+                type: string
+                format: binary
+
+  /connect:
+    post:
+      summary: Connect to robot
+      description: |
+        Establish WebRTC connection to Unitree Go2 robot.
+        
+        **Connection Methods:**
+        - `LocalSTA`: Direct IP connection (robot on same WiFi network)
+        - `LocalAP`: Serial number connection (robot in AP mode)
+        - `Remote`: Cloud connection (requires username/password)
+      tags:
+        - Connection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - method
+              properties:
+                method:
+                  type: string
+                  enum: [LocalSTA, LocalAP, Remote]
+                  description: Connection method
+                ip:
+                  type: string
+                  description: Robot IP address (required for LocalSTA)
+                  example: "192.168.1.100"
+                serial_number:
+                  type: string
+                  description: Robot serial number (required for LocalAP)
+                  example: "B42D2000XXXXXXXX"
+                username:
+                  type: string
+                  description: Username (required for Remote)
+                  example: "user@example.com"
+                password:
+                  type: string
+                  description: Password (required for Remote)
+                  example: "password123"
+            examples:
+              localsta:
+                summary: LocalSTA connection
+                value:
+                  method: LocalSTA
+                  ip: "192.168.1.100"
+              localap:
+                summary: LocalAP connection
+                value:
+                  method: LocalAP
+                  serial_number: "B42D2000XXXXXXXX"
+              remote:
+                summary: Remote connection
+                value:
+                  method: Remote
+                  username: "user@example.com"
+                  password: "password123"
+      responses:
+        '200':
+          description: Connection successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Connected to robot
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Connection failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /disconnect:
+    post:
+      summary: Disconnect from robot
+      description: Close WebRTC connection and cleanup resources
+      tags:
+        - Connection
+      responses:
+        '200':
+          description: Disconnection successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Disconnected from robot
+        '500':
+          description: Disconnection failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /audio/toggle:
+    post:
+      summary: Toggle audio streaming
+      description: |
+        Mute or unmute audio playback dynamically (no reconnection required).
+        Audio stream is always connected, this just controls playback.
+      tags:
+        - Audio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - enable
+              properties:
+                enable:
+                  type: boolean
+                  description: Enable (unmute) or disable (mute) audio
+                  example: true
+      responses:
+        '200':
+          description: Audio toggle successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  audio_enabled:
+                    type: boolean
+                    example: true
+        '500':
+          description: Audio toggle failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /audio/test:
+    post:
+      summary: Test audio playback
+      description: Play a test tone to verify audio is working
+      tags:
+        - Audio
+      responses:
+        '200':
+          description: Test audio played
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Test audio played
+        '500':
+          description: Test audio failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /gamepad/enable:
+    post:
+      summary: Enable/disable gamepad control
+      description: Enable or disable gamepad control mode
+      tags:
+        - Control
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - enable
+              properties:
+                enable:
+                  type: boolean
+                  description: Enable or disable gamepad
+                  example: true
+      responses:
+        '200':
+          description: Gamepad state updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  gamepad_enabled:
+                    type: boolean
+                    example: true
+        '400':
+          description: Robot not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Failed to update gamepad state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /keyboard_mouse/enable:
+    post:
+      summary: Enable/disable keyboard/mouse control
+      description: Enable or disable keyboard/mouse control mode
+      tags:
+        - Control
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - enable
+              properties:
+                enable:
+                  type: boolean
+                  description: Enable or disable keyboard/mouse
+                  example: true
+      responses:
+        '200':
+          description: Keyboard/mouse state updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  keyboard_mouse_enabled:
+                    type: boolean
+                    example: true
+        '400':
+          description: Robot not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Failed to update keyboard/mouse state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+

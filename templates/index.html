@@ -1214,7 +1214,7 @@
 
                 // Enable gamepad on server
                 try {
-                    const response = await fetch('/gamepad/enable', {
+                    const response = await fetch('/control/gamepad/enable', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({enable: true})
@@ -1238,7 +1238,7 @@
 
                 // Disable gamepad on server
                 try {
-                    await fetch('/gamepad/enable', {
+                    await fetch('/control/gamepad/enable', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({enable: false})
@@ -1286,7 +1286,7 @@
 
         async function clearEmergencyStop() {
             try {
-                const response = await fetch('/gamepad/action', {
+                const response = await fetch('/control/action', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({action: 'clear_emergency'})
@@ -1372,11 +1372,11 @@
                     // ========== WEBSOCKET PATH (LOW LATENCY) ==========
                     // Track start time for latency measurement
                     currentCommandStartTime = performance.now();
-                    socket.emit('gamepad_command', {lx, ly, rx, ry});
+                    socket.emit('control_command', {lx, ly, rx, ry});
                     commandInFlight = false; // Don't block on WebSocket
                 } else {
                     // ========== HTTP FALLBACK PATH ==========
-                    fetch('/gamepad/command', {
+                    fetch('/control/command', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({lx, ly, rx, ry})
@@ -1423,7 +1423,7 @@
                 // LB just pressed - enable walk mode (ContinuousGait)
                 console.log('Enabling walk mode (ContinuousGait)');
                 try {
-                    await fetch('/gamepad/action', {
+                    await fetch('/control/action', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({action: 'enable_walk_mode'})
@@ -1435,7 +1435,7 @@
                 // LB just released - return to pose mode
                 console.log('Disabling walk mode (returning to pose)');
                 try {
-                    await fetch('/gamepad/action', {
+                    await fetch('/control/action', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({action: 'disable_walk_mode'})
@@ -1472,7 +1472,7 @@
             // Send camera control if triggers are pressed
             if (Math.abs(camera_yaw) > 0.1) {
                 try {
-                    await fetch('/gamepad/camera', {
+                    await fetch('/control/camera', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({yaw: camera_yaw})
@@ -1492,7 +1492,7 @@
                 console.log('Button pressed:', action);
 
                 try {
-                    const response = await fetch('/gamepad/action', {
+                    const response = await fetch('/control/action', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({action})
@@ -1576,7 +1576,7 @@
 
                 // Enable keyboard/mouse control on backend
                 try {
-                    const response = await fetch('/keyboard_mouse/enable', {
+                    const response = await fetch('/control/keyboard_mouse/enable', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({enable: true})
@@ -1607,7 +1607,7 @@
             } else {
                 // Disable keyboard/mouse control on backend
                 try {
-                    await fetch('/keyboard_mouse/enable', {
+                    await fetch('/control/keyboard_mouse/enable', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({enable: false})
@@ -1954,7 +1954,7 @@
 
         async function handleKeyboardAction(action) {
             try {
-                const response = await fetch('/gamepad/action', {
+                const response = await fetch('/control/action', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({action})
@@ -2117,11 +2117,11 @@
                 if (useWebSocket && socketConnected) {
                     // ========== WEBSOCKET PATH (LOW LATENCY) ==========
                     currentCommandStartTime = performance.now();
-                    socket.emit('gamepad_command', commandData);
+                    socket.emit('control_command', commandData);
                     commandInFlight = false;
                 } else {
                     // ========== HTTP FALLBACK PATH ==========
-                    fetch('/gamepad/command', {
+                    fetch('/control/command', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify(commandData)
@@ -2285,7 +2285,7 @@
 
         async function loadSettings() {
             try {
-                const response = await fetch('/gamepad/settings');
+                const response = await fetch('/control/settings');
                 const data = await response.json();
 
                 if (data.status === 'success') {
@@ -2329,7 +2329,7 @@
 
             // Send update to server
             try {
-                const response = await fetch('/gamepad/settings', {
+                const response = await fetch('/control/settings', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({[settingName]: parseFloat(value)})
@@ -2349,7 +2349,7 @@
 
         async function applyPreset(presetName) {
             try {
-                const response = await fetch('/gamepad/settings/preset', {
+                const response = await fetch('/control/settings/preset', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({preset: presetName})
@@ -2424,7 +2424,7 @@
 
                 const startTime = performance.now();
 
-                const response = await fetch('/gamepad/command', {
+                const response = await fetch('/control/command', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(testCommand)
@@ -2439,7 +2439,7 @@
 
                     // Stop robot after 0.5 seconds
                     setTimeout(async () => {
-                        await fetch('/gamepad/command', {
+                        await fetch('/control/command', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({lx: 0, ly: 0, rx: 0, ry: 0})
@@ -2471,7 +2471,7 @@
                 const startTime = performance.now();
 
                 // Send via WebSocket
-                socket.emit('gamepad_command', testCommand);
+                socket.emit('control_command', testCommand);
 
                 const latency = performance.now() - startTime;
 
@@ -2481,7 +2481,7 @@
 
                 // Stop robot after 0.5 seconds
                 setTimeout(() => {
-                    socket.emit('gamepad_command', {lx: 0, ly: 0, rx: 0, ry: 0});
+                    socket.emit('control_command', {lx: 0, ly: 0, rx: 0, ry: 0});
                 }, 500);
 
             } catch (error) {
