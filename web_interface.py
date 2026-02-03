@@ -93,11 +93,13 @@ last_sent_velocities = {'vx': 0.0, 'vy': 0.0, 'vyaw': 0.0}
 zero_velocity_sent = False  # Track if we've sent zero velocity after movement
 
 # Audio streaming variables
-audio_enabled = False
+audio_streaming_enabled = False  # User toggle for audio playback (mute/unmute)
+audio_initialized = False  # Track if audio stream is initialized
 audio_lock = threading.Lock()
 push_to_talk_active = False
 microphone_audio_track = None
 pyaudio_instance = None
+audio_muted = True  # Audio is muted by default (stream connected but no playback)
 pyaudio_stream = None
 audio_output_queue = Queue(maxsize=100)  # Queue for robot audio to play through speakers
 
@@ -148,10 +150,19 @@ class MicrophoneAudioTrack(AudioStreamTrack):
         """
         Generate audio frames from PC microphone for WebRTC transmission.
         Sends silence when not transmitting (push-to-talk).
+
+        CRITICAL: Uses asyncio.to_thread() to prevent blocking the event loop.
+        PyAudio's read() is a synchronous blocking operation that would otherwise
+        block video frame processing.
         """
         try:
             # Always read from microphone to prevent buffer overflow
-            mic_data = self.mic_stream.read(self.samples_per_frame, exception_on_overflow=False)
+            # Run the blocking PyAudio read in a separate thread
+            mic_data = await asyncio.to_thread(
+                self.mic_stream.read,
+                self.samples_per_frame,
+                exception_on_overflow=False
+            )
 
             # If not transmitting, send silence instead
             if not self.is_transmitting:
@@ -300,18 +311,31 @@ async def recv_audio_stream(frame):
     """
     Receive audio frames from the robot and play them through speakers.
     This callback is triggered when audio frames are received from the robot.
+
+    CRITICAL: Uses asyncio.to_thread() to prevent blocking the event loop.
+    PyAudio's write() is a synchronous blocking operation that would otherwise
+    block video frame processing, causing latency and artifacts.
+
+    Audio stream is always connected, but playback is controlled by audio_muted flag.
+    This allows instant mute/unmute without reconnecting.
     """
-    global pyaudio_stream, audio_enabled
+    global pyaudio_stream, audio_initialized, audio_muted
 
     try:
-        if not audio_enabled or pyaudio_stream is None:
+        if not audio_initialized or pyaudio_stream is None:
+            return
+
+        # Check if audio is muted - if so, discard the frame without playing
+        if audio_muted:
             return
 
         # Convert the frame to audio data (16-bit PCM)
         audio_data = np.frombuffer(frame.to_ndarray(), dtype=np.int16)
+        audio_bytes = audio_data.tobytes()
 
-        # Play the audio data by writing it to the PyAudio stream
-        pyaudio_stream.write(audio_data.tobytes())
+        # Run the blocking PyAudio write in a separate thread to avoid blocking the event loop
+        # This prevents audio from interfering with video frame processing
+        await asyncio.to_thread(pyaudio_stream.write, audio_bytes)
 
     except Exception as e:
         logging.error(f"Error playing audio frame: {e}")
@@ -419,14 +443,16 @@ def connect():
         
         # Connect asynchronously
         async def setup_connection():
-            global connection, is_connected, microphone_audio_track, pyaudio_instance, pyaudio_stream, audio_enabled
+            global connection, is_connected, microphone_audio_track, pyaudio_instance, pyaudio_stream, audio_initialized, audio_muted
             try:
                 await conn.connect()
 
-                # Setup video
+                # Setup video (always enabled)
                 conn.video.switchVideoChannel(True)
                 conn.video.add_track_callback(recv_camera_stream)
+                logging.info("📹 Video streaming enabled")
 
+                # Setup audio (ALWAYS initialize, but muted by default)
                 # Initialize PyAudio for audio reception
                 pyaudio_instance = pyaudio.PyAudio()
                 pyaudio_stream = pyaudio_instance.open(
@@ -448,10 +474,12 @@ def connect():
                 conn.audio.add_track_callback(recv_audio_stream)
                 logging.info("🎤 Audio reception enabled")
 
-                audio_enabled = True
+                audio_initialized = True
+                # Audio is muted by default (audio_muted = True)
+                logging.info("Successfully connected to robot (video + audio stream initialized, audio muted by default)")
+
                 connection = conn
                 is_connected = True
-                logging.info("Successfully connected to robot (video + audio)")
             except Exception as e:
                 logging.error(f"Error connecting to robot: {e}")
                 raise
@@ -477,7 +505,7 @@ def connect():
 @app.route('/disconnect', methods=['POST'])
 def disconnect():
     """Disconnect from the robot"""
-    global connection, is_connected, latest_frame, frame_queue
+    global connection, is_connected, latest_frame, frame_queue, pyaudio_stream, pyaudio_instance, audio_initialized, microphone_audio_track, audio_muted
 
     try:
         if connection:
@@ -491,6 +519,27 @@ def disconnect():
                 future.result(timeout=10)
 
             connection = None
+
+        # Clean up audio resources
+        with audio_lock:
+            if pyaudio_stream:
+                try:
+                    pyaudio_stream.stop_stream()
+                    pyaudio_stream.close()
+                except Exception as e:
+                    logging.error(f"Error closing PyAudio stream: {e}")
+                pyaudio_stream = None
+
+            if pyaudio_instance:
+                try:
+                    pyaudio_instance.terminate()
+                except Exception as e:
+                    logging.error(f"Error terminating PyAudio: {e}")
+                pyaudio_instance = None
+
+            microphone_audio_track = None
+            audio_initialized = False
+            audio_muted = True  # Reset to muted on disconnect
 
         # Clear video buffers
         with frame_lock:
@@ -579,6 +628,42 @@ def enable_keyboard_mouse():
         logging.error(f"Enable keyboard/mouse error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/audio/toggle', methods=['POST'])
+def toggle_audio_streaming():
+    """
+    Mute or unmute audio playback dynamically (no reconnection required).
+    Audio stream is always connected, this just controls playback.
+    """
+    global audio_muted, audio_streaming_enabled
+
+    try:
+        data = request.json
+        enable = data.get('enable', False)
+
+        with audio_lock:
+            audio_streaming_enabled = enable
+            audio_muted = not enable  # Muted when disabled, unmuted when enabled
+
+            if enable:
+                logging.info("=" * 50)
+                logging.info("AUDIO UNMUTED - Playback enabled")
+                logging.info("=" * 50)
+            else:
+                logging.info("=" * 50)
+                logging.info("AUDIO MUTED - Playback disabled")
+                logging.info("=" * 50)
+
+        return jsonify({
+            'status': 'success',
+            'enabled': audio_streaming_enabled,
+            'muted': audio_muted,
+            'message': 'Audio ' + ('unmuted (playing)' if enable else 'muted (silent)')
+        })
+
+    except Exception as e:
+        logging.error(f"Toggle audio error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 @app.route('/audio/test', methods=['POST'])
 def test_audio():
     """Test audio playback with a simple beep/tone"""
@@ -654,113 +739,8 @@ def test_audio():
         logging.error(f"Test audio error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-@app.route('/audio/enable', methods=['POST'])
-def enable_audio():
-    """Enable or disable audio streaming"""
-    global audio_enabled, pyaudio_instance, pyaudio_stream, microphone_audio_track
-
-    try:
-        data = request.json
-        enable = data.get('enable', False)
-
-        if not is_connected:
-            return jsonify({'status': 'error', 'message': 'Robot not connected'}), 400
-
-        with audio_lock:
-            if enable and not audio_enabled:
-                # Initialize PyAudio for receiving robot audio
-                pyaudio_instance = pyaudio.PyAudio()
-                pyaudio_stream = pyaudio_instance.open(
-                    format=AUDIO_FORMAT,
-                    channels=AUDIO_CHANNELS,
-                    rate=AUDIO_SAMPLE_RATE,
-                    output=True,
-                    frames_per_buffer=AUDIO_FRAMES_PER_BUFFER
-                )
-
-                # Enable audio channel and add callback for receiving audio
-                async def setup_audio():
-                    global microphone_audio_track
-                    try:
-                        # Create microphone track first
-                        microphone_audio_track = MicrophoneAudioTrack()
-
-                        # Get the audio transceiver that was created during connection
-                        # The WebRTCAudioChannel already created a transceiver with direction="sendrecv"
-                        transceivers = connection.pc.getTransceivers()
-                        audio_transceiver = None
-                        for transceiver in transceivers:
-                            if transceiver.kind == "audio":
-                                audio_transceiver = transceiver
-                                break
-
-                        if audio_transceiver:
-                            # Check if sender already has a track
-                            current_track = audio_transceiver.sender.track
-                            logging.info(f"🎤 Found audio transceiver, current sender track: {current_track}")
-                            logging.info(f"🎤 Transceiver direction: {audio_transceiver.direction}")
-
-                            # Replace the track (works even if current_track is None)
-                            logging.info(f"🎤 Replacing sender track with microphone track...")
-                            audio_transceiver.sender.replaceTrack(microphone_audio_track)
-
-                            # Verify the track was set
-                            new_track = audio_transceiver.sender.track
-                            logging.info(f"✅ Sender track after replace: {new_track}")
-                            logging.info(f"✅ Track is our microphone: {new_track is microphone_audio_track}")
-                        else:
-                            # Fallback: add track directly (this will create a new transceiver)
-                            logging.warning("⚠️ No audio transceiver found, adding track directly")
-                            connection.pc.addTrack(microphone_audio_track)
-
-                        # Enable audio channel and add callback for receiving audio
-                        connection.audio.switchAudioChannel(True)
-                        connection.audio.add_track_callback(recv_audio_stream)
-
-                        logging.info("Audio streaming enabled")
-                    except Exception as e:
-                        logging.error(f"Error setting up audio: {e}")
-                        import traceback
-                        logging.error(traceback.format_exc())
-                        raise
-
-                if event_loop and event_loop.is_running():
-                    future = asyncio.run_coroutine_threadsafe(setup_audio(), event_loop)
-                    future.result(timeout=10)
-
-                audio_enabled = True
-                logging.info("Audio enabled - receiving from robot and ready to transmit")
-
-            elif not enable and audio_enabled:
-                # Disable audio
-                async def stop_audio():
-                    try:
-                        connection.audio.switchAudioChannel(False)
-                        logging.info("Audio streaming disabled")
-                    except Exception as e:
-                        logging.error(f"Error stopping audio: {e}")
-
-                if event_loop and event_loop.is_running():
-                    asyncio.run_coroutine_threadsafe(stop_audio(), event_loop)
-
-                # Stop and close PyAudio stream
-                if pyaudio_stream:
-                    pyaudio_stream.stop_stream()
-                    pyaudio_stream.close()
-                    pyaudio_stream = None
-
-                if pyaudio_instance:
-                    pyaudio_instance.terminate()
-                    pyaudio_instance = None
-
-                audio_enabled = False
-                logging.info("Audio disabled")
-
-        return jsonify({'status': 'success', 'enabled': audio_enabled})
-
-    except Exception as e:
-        logging.error(f"Enable audio error: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+# Old /audio/enable endpoint removed - replaced by /audio/toggle
+# Audio is now initialized during connection setup based on audio_streaming_enabled flag
 
 @app.route('/gamepad/command', methods=['POST'])
 def gamepad_command():

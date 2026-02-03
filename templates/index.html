@@ -664,21 +664,36 @@
                         <h3>🔊 Audio Streaming</h3>
                     </div>
 
-                    <div class="gamepad-status active" id="audioStatus">
-                        🟢 Audio Active (Bidirectional)
+                    <!-- Audio Streaming Toggle -->
+                    <div style="padding: 15px; border-bottom: 1px solid #ddd;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>Enable Audio Playback</strong><br>
+                                <small style="color: #666;">Mute/unmute audio instantly (no reconnection needed)</small>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="audioStreamingToggle" onchange="toggleAudioStreaming()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="gamepad-status" id="audioStatus" style="background: #6c757d;">
+                        ⚪ Audio Muted
                     </div>
 
                     <div class="gamepad-info">
                         <strong>Audio Features:</strong><br>
                         <small>
                         • <strong>Bidirectional audio</strong>: Hear robot and speak to robot<br>
-                        • <strong>Reception</strong>: Robot's microphones stream to your speakers (always-on)<br>
+                        • <strong>Reception</strong>: Robot's microphones stream to your speakers<br>
                         • <strong>Transmission</strong>: Server PC microphone streams to robot's speaker (push-to-talk)<br>
-                        • <strong>Push-to-Talk</strong>: Hold 'C' key or click button below to transmit
+                        • <strong>Push-to-Talk</strong>: Hold 'C' key or click button below to transmit<br>
+                        • <strong>Instant toggle</strong>: No reconnection required - audio stream always connected
                         </small>
                     </div>
 
-                    <div style="padding: 15px; text-align: center;">
+                    <div id="audioControls" style="padding: 15px; text-align: center; display: none;">
                         <button id="pushToTalkBtn" class="btn btn-primary"
                                 onmousedown="startMicrophone()"
                                 onmouseup="stopMicrophone()"
@@ -973,8 +988,17 @@
                         console.log('Saved IP address to localStorage:', ip);
                     }
 
-                    // Enable push-to-talk button
-                    await initializeAudio();
+                    // Audio is always initialized on connection (but muted by default)
+                    // Show push-to-talk controls if audio is enabled
+                    const audioControls = document.getElementById('audioControls');
+                    if (audioStreamingEnabled) {
+                        await initializeAudio();
+                        audioControls.style.display = 'block';
+                        console.log('✅ Audio connected and unmuted - push-to-talk available');
+                    } else {
+                        audioControls.style.display = 'none';
+                        console.log('ℹ️ Audio connected but muted - toggle to enable playback');
+                    }
                 } else {
                     showMessage('Connection failed: ' + data.message, 'error');
                     connectBtn.disabled = false;
@@ -1003,6 +1027,12 @@
                     isConnected = false;
                     updateUI();
 
+                    // Hide audio controls
+                    const audioControls = document.getElementById('audioControls');
+                    if (audioControls) {
+                        audioControls.style.display = 'none';
+                    }
+
                     // Disable push-to-talk button
                     const pushToTalkBtn = document.getElementById('pushToTalkBtn');
                     if (pushToTalkBtn) {
@@ -1015,6 +1045,17 @@
                     if (statusText) {
                         statusText.textContent = 'Not transmitting';
                         statusText.style.color = '#666';
+                    }
+
+                    // Reset audio status based on toggle state
+                    const audioStatus = document.getElementById('audioStatus');
+                    if (audioStreamingEnabled) {
+                        audioStatus.className = 'gamepad-status active';
+                        audioStatus.textContent = '🟢 Audio Unmuted (Connect to activate)';
+                    } else {
+                        audioStatus.className = 'gamepad-status';
+                        audioStatus.style.background = '#6c757d';
+                        audioStatus.textContent = '⚪ Audio Muted';
                     }
 
                     showMessage('Disconnected from robot', 'success');
@@ -1533,40 +1574,6 @@
                     return;
                 }
 
-                // Request microphone permission for push-to-talk
-                try {
-                    mediaStream = await navigator.mediaDevices.getUserMedia({
-                        audio: {
-                            sampleRate: 48000,
-                            channelCount: 2,
-                            echoCancellation: true,
-                            noiseSuppression: true
-                        }
-                    });
-
-                    // Initialize Web Audio API for push-to-talk
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                        sampleRate: 48000
-                    });
-                    microphoneSource = audioContext.createMediaStreamSource(mediaStream);
-
-                    // Create script processor
-                    audioProcessor = audioContext.createScriptProcessor(4096, 2, 2);
-                    audioProcessor.onaudioprocess = handleAudioProcess;
-
-                    microphoneSource.connect(audioProcessor);
-                    audioProcessor.connect(audioContext.destination);
-
-                    audioEnabled = true;
-                    document.getElementById('audioPermissionWarning').style.display = 'none';
-                    console.log('✅ Microphone access granted for push-to-talk');
-
-                } catch (error) {
-                    console.error('Microphone permission denied:', error);
-                    document.getElementById('audioPermissionWarning').style.display = 'block';
-                    // Continue anyway - keyboard/mouse will work, just not push-to-talk
-                }
-
                 // Enable keyboard/mouse control on backend
                 try {
                     const response = await fetch('/keyboard_mouse/enable', {
@@ -1654,11 +1661,67 @@
         // Browser only controls push-to-talk state via SocketIO.
 
         let isTransmitting = false;
+        let audioStreamingEnabled = false;  // Track if user has enabled audio
+
+        async function toggleAudioStreaming() {
+            /**
+             * Mute or unmute audio playback instantly (no reconnection required).
+             * Audio stream is always connected, this just controls playback.
+             */
+            const toggle = document.getElementById('audioStreamingToggle');
+            const enable = toggle.checked;
+
+            try {
+                const response = await fetch('/audio/toggle', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({enable: enable})
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    audioStreamingEnabled = enable;
+
+                    // Update UI
+                    const audioStatus = document.getElementById('audioStatus');
+                    const audioControls = document.getElementById('audioControls');
+
+                    if (enable) {
+                        audioStatus.className = 'gamepad-status active';
+                        audioStatus.textContent = '🟢 Audio Unmuted (Playing)';
+                        // Show push-to-talk controls only if connected
+                        if (isConnected) {
+                            audioControls.style.display = 'block';
+                        }
+                        console.log('✅ Audio unmuted - playback enabled instantly');
+                    } else {
+                        audioStatus.className = 'gamepad-status';
+                        audioStatus.style.background = '#6c757d';
+                        audioStatus.textContent = '⚪ Audio Muted';
+                        audioControls.style.display = 'none';
+                        console.log('ℹ️ Audio muted - playback disabled instantly');
+                    }
+
+                    // Save preference to localStorage
+                    localStorage.setItem('audioStreamingEnabled', enable);
+
+                } else {
+                    console.error('Failed to toggle audio:', result.message);
+                    toggle.checked = !enable;  // Revert toggle
+                }
+
+            } catch (error) {
+                console.error('Error toggling audio streaming:', error);
+                toggle.checked = !enable;  // Revert toggle
+            }
+        }
 
         async function initializeAudio() {
             /**
              * Enable push-to-talk button after connection.
              * Audio is captured server-side, no browser microphone needed.
+             * Only called if audio streaming is enabled.
              */
             try {
                 // Enable push-to-talk button
@@ -1666,6 +1729,11 @@
                 if (pushToTalkBtn) {
                     pushToTalkBtn.disabled = false;
                 }
+
+                // Update status
+                const audioStatus = document.getElementById('audioStatus');
+                audioStatus.className = 'gamepad-status active';
+                audioStatus.textContent = '🟢 Audio Active (Bidirectional)';
 
                 console.log('✅ Push-to-talk enabled (server-side microphone)');
 
@@ -2084,6 +2152,39 @@
         if (savedIP) {
             document.getElementById('ip').value = savedIP;
             console.log('Loaded saved IP address:', savedIP);
+        }
+
+        // Load saved audio streaming preference from localStorage
+        const savedAudioEnabled = localStorage.getItem('audioStreamingEnabled');
+        if (savedAudioEnabled !== null) {
+            const audioToggle = document.getElementById('audioStreamingToggle');
+            const enable = savedAudioEnabled === 'true';
+            audioToggle.checked = enable;
+            audioStreamingEnabled = enable;
+
+            // Update UI to match saved preference
+            const audioStatus = document.getElementById('audioStatus');
+            const audioControls = document.getElementById('audioControls');
+
+            if (enable) {
+                audioStatus.className = 'gamepad-status active';
+                audioStatus.textContent = '🟢 Audio Enabled (Connect to activate)';
+                audioControls.style.display = 'block';
+                console.log('✅ Loaded audio preference: ENABLED');
+            } else {
+                audioStatus.className = 'gamepad-status';
+                audioStatus.style.background = '#6c757d';
+                audioStatus.textContent = '⚪ Audio Disabled';
+                audioControls.style.display = 'none';
+                console.log('ℹ️ Loaded audio preference: DISABLED');
+            }
+
+            // Send preference to backend
+            fetch('/audio/toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enable: enable})
+            }).catch(err => console.error('Error setting audio preference:', err));
         }
 
         // ========== Keyboard/Mouse Settings Functions ==========
