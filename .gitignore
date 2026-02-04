@@ -40,3 +40,43 @@ coverage.xml
 
 # Ignore pytest cache
 .pytest_cache/
+
+# Ignore environment variables and configuration files
+.env
+.env.*
+*.env
+config.local.*
+
+# Ignore log files
+*.log
+logs/
+
+# Ignore database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Ignore temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Ignore mypy cache
+.mypy_cache/
+
+# Ignore local development files
+ROI.html
+*.local.html
+local_*
+
+# Ignore macOS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Ignore Windows metadata
+Thumbs.db
+ehthumbs.db
+Desktop.ini

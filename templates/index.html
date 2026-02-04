@@ -961,13 +961,13 @@
             connectBtn.textContent = 'Connecting...';
 
             try {
-                const response = await fetch('/connect', {
+                const response = await fetch('/api/connect', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        method: method,
+                        connection_method: method,
                         ip: ip,
                         serial_number: serialNumber,
                         username: username,
@@ -1017,7 +1017,7 @@
             disconnectBtn.textContent = 'Disconnecting...';
 
             try {
-                const response = await fetch('/disconnect', {
+                const response = await fetch('/api/disconnect', {
                     method: 'POST'
                 });
 
@@ -1093,7 +1093,7 @@
         // Check connection status periodically
         setInterval(async () => {
             try {
-                const response = await fetch('/status');
+                const response = await fetch('/api/status');
                 const data = await response.json();
                 if (data.connected !== isConnected) {
                     isConnected = data.connected;
@@ -1214,7 +1214,7 @@
 
                 // Enable gamepad on server
                 try {
-                    const response = await fetch('/control/gamepad/enable', {
+                    const response = await fetch('/api/control/gamepad/enable', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({enable: true})
@@ -1238,7 +1238,7 @@
 
                 // Disable gamepad on server
                 try {
-                    await fetch('/control/gamepad/enable', {
+                    await fetch('/api/control/gamepad/enable', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({enable: false})
@@ -1286,7 +1286,7 @@
 
         async function clearEmergencyStop() {
             try {
-                const response = await fetch('/control/action', {
+                const response = await fetch('/api/control/action', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({action: 'clear_emergency'})
@@ -1376,7 +1376,7 @@
                     commandInFlight = false; // Don't block on WebSocket
                 } else {
                     // ========== HTTP FALLBACK PATH ==========
-                    fetch('/control/command', {
+                    fetch('/api/control/command', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({lx, ly, rx, ry})
@@ -1423,7 +1423,7 @@
                 // LB just pressed - enable walk mode (ContinuousGait)
                 console.log('Enabling walk mode (ContinuousGait)');
                 try {
-                    await fetch('/control/action', {
+                    await fetch('/api/control/action', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({action: 'enable_walk_mode'})
@@ -1435,7 +1435,7 @@
                 // LB just released - return to pose mode
                 console.log('Disabling walk mode (returning to pose)');
                 try {
-                    await fetch('/control/action', {
+                    await fetch('/api/control/action', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({action: 'disable_walk_mode'})
@@ -1472,7 +1472,7 @@
             // Send camera control if triggers are pressed
             if (Math.abs(camera_yaw) > 0.1) {
                 try {
-                    await fetch('/control/camera', {
+                    await fetch('/api/control/camera', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({yaw: camera_yaw})
@@ -1492,7 +1492,7 @@
                 console.log('Button pressed:', action);
 
                 try {
-                    const response = await fetch('/control/action', {
+                    const response = await fetch('/api/control/action', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({action})
@@ -1576,7 +1576,7 @@
 
                 // Enable keyboard/mouse control on backend
                 try {
-                    const response = await fetch('/control/keyboard_mouse/enable', {
+                    const response = await fetch('/api/control/keyboard_mouse/enable', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({enable: true})
@@ -1607,7 +1607,7 @@
             } else {
                 // Disable keyboard/mouse control on backend
                 try {
-                    await fetch('/control/keyboard_mouse/enable', {
+                    await fetch('/api/control/keyboard_mouse/enable', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({enable: false})
@@ -1672,7 +1672,7 @@
             const enable = toggle.checked;
 
             try {
-                const response = await fetch('/audio/toggle', {
+                const response = await fetch('/api/audio/toggle', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({enable: enable})
@@ -1810,7 +1810,7 @@
 
             try {
                 console.log('🔊 Testing robot speaker...');
-                const response = await fetch('/audio/test', {
+                const response = await fetch('/api/audio/test', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'}
                 });
@@ -1954,7 +1954,7 @@
 
         async function handleKeyboardAction(action) {
             try {
-                const response = await fetch('/control/action', {
+                const response = await fetch('/api/control/action', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({action})
@@ -2121,7 +2121,7 @@
                     commandInFlight = false;
                 } else {
                     // ========== HTTP FALLBACK PATH ==========
-                    fetch('/control/command', {
+                    fetch('/api/control/command', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify(commandData)
@@ -2180,7 +2180,7 @@
             }
 
             // Send preference to backend
-            fetch('/audio/toggle', {
+            fetch('/api/audio/toggle', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({enable: enable})
@@ -2285,7 +2285,7 @@
 
         async function loadSettings() {
             try {
-                const response = await fetch('/control/settings');
+                const response = await fetch('/api/control/settings');
                 const data = await response.json();
 
                 if (data.status === 'success') {
@@ -2329,7 +2329,7 @@
 
             // Send update to server
             try {
-                const response = await fetch('/control/settings', {
+                const response = await fetch('/api/control/settings', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({[settingName]: parseFloat(value)})
@@ -2349,7 +2349,7 @@
 
         async function applyPreset(presetName) {
             try {
-                const response = await fetch('/control/settings/preset', {
+                const response = await fetch('/api/control/settings/preset', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({preset: presetName})
@@ -2424,7 +2424,7 @@
 
                 const startTime = performance.now();
 
-                const response = await fetch('/control/command', {
+                const response = await fetch('/api/control/command', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(testCommand)
@@ -2439,7 +2439,7 @@
 
                     // Stop robot after 0.5 seconds
                     setTimeout(async () => {
-                        await fetch('/control/command', {
+                        await fetch('/api/control/command', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({lx: 0, ly: 0, rx: 0, ry: 0})
@@ -2500,7 +2500,7 @@
 
                 const startTime = performance.now();
 
-                const response = await fetch('/webrtc/test_direct_command', {
+                const response = await fetch('/api/webrtc/test_direct_command', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(testCommand)
@@ -2518,7 +2518,7 @@
 
                     // Stop robot after 0.5 seconds
                     setTimeout(async () => {
-                        await fetch('/webrtc/test_direct_command', {
+                        await fetch('/api/webrtc/test_direct_command', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({vx: 0, vy: 0, vyaw: 0})

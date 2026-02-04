@@ -542,6 +542,132 @@ Adopt **API-first documentation approach** with OpenAPI/Swagger specification as
 
 ---
 
+## DEC-010: Vanilla JavaScript + Tailwind CSS for Frontend
+
+**Date:** 2026-02-03
+**Status:** ✅ Accepted
+**Deciders:** Product Owner, Technical Team
+**Related Spec:** @.agent-os/specs/2026-02-03-frontend-ui-overhaul/
+
+### Context
+
+The frontend UI overhaul requires choosing between modern JavaScript frameworks (React/Vue with Shadcn UI) or enhanced vanilla JavaScript with a CSS framework (Tailwind CSS). The current implementation uses vanilla JavaScript successfully, but the UI needs modernization.
+
+### Decision
+
+Use **Enhanced Vanilla JavaScript + Tailwind CSS** instead of modern frameworks (React/Vue).
+
+### Rationale
+
+**Why Vanilla JS + Tailwind:**
+- **Simpler Flask Integration:** No build step required, just serve static files
+- **Maintains Current Patterns:** Current codebase uses vanilla JS successfully for WebRTC/WebSocket
+- **Easier Incremental Migration:** Can migrate piece by piece without framework overhead
+- **No Framework Lock-in:** Flexibility to adopt framework later if needed
+- **Faster Initial Development:** No framework learning curve or build tooling setup
+- **Better for Phase 5:** Server-side rendering with Flask templates aligns with planned login/auth
+
+**Tailwind CSS Benefits:**
+- Utility-first approach enables rapid UI development
+- CDN delivery (no build step)
+- Comprehensive design system out of the box
+- Excellent documentation and community support
+
+### Consequences
+
+**Positive:**
+- ✅ Faster development without build complexity
+- ✅ Simpler deployment (no webpack/vite configuration)
+- ✅ Easier to understand for developers unfamiliar with React/Vue
+- ✅ Smaller bundle size (no framework overhead)
+- ✅ Direct DOM manipulation maintains control over WebRTC/WebSocket integration
+
+**Negative:**
+- ❌ More manual DOM manipulation code
+- ❌ Less structured state management (no Redux/Vuex)
+- ❌ More boilerplate for complex UI interactions
+- ❌ Harder to scale to very complex UIs (mitigated by modular JS organization)
+
+### Alternatives Considered
+
+**React + Shadcn UI:**
+- ✅ Component-based architecture, rich UI library, better state management
+- ❌ Requires build tooling, more complex Flask integration, steeper learning curve
+
+**Vue + Shadcn:**
+- ✅ Similar benefits to React, gentler learning curve
+- ❌ Still requires build step, adds framework dependency
+
+### Related Decisions
+
+- DEC-011: Multi-page architecture (complements vanilla JS approach)
+- DEC-001: Commercial fleet management (enterprise quality without framework complexity)
+
+---
+
+## DEC-011: Multi-Page Architecture with Enhanced Templates
+
+**Date:** 2026-02-03
+**Status:** ✅ Accepted
+**Deciders:** Product Owner, Technical Team
+**Related Spec:** @.agent-os/specs/2026-02-03-frontend-ui-overhaul/
+
+### Context
+
+The UI overhaul requires choosing between a Single Page Application (SPA) architecture with client-side routing or a multi-page architecture with server-side routing and enhanced templates.
+
+### Decision
+
+Use **Multi-Page Architecture** with separate landing (`/`) and control (`/control`) pages, leveraging Flask's server-side routing and Jinja2 templates.
+
+### Rationale
+
+**Why Multi-Page:**
+- **Easier Incremental Migration:** Can create new pages alongside existing monolithic UI
+- **Maintains Flask Strengths:** Leverages server-side rendering and template inheritance
+- **Simpler Deployment:** No client-side routing complexity
+- **Better for Phase 5:** Server-side session management aligns with planned login/auth
+- **Lower Migration Risk:** Existing interface remains functional during transition
+- **Can Evolve Later:** Can migrate to SPA in future if requirements change
+
+**Architecture:**
+- Landing page (`/`) - Robot management dashboard with settings
+- Control page (`/control`) - Fullscreen video with status HUD
+- Shared base template (`base.html`) with Tailwind CSS
+- Server-side routing via Flask blueprints
+
+### Consequences
+
+**Positive:**
+- ✅ Low-risk incremental migration strategy
+- ✅ Simpler architecture (no client-side router)
+- ✅ Better SEO (server-rendered pages)
+- ✅ Easier integration with Flask session management
+- ✅ Maintains existing WebSocket/WebRTC patterns
+
+**Negative:**
+- ❌ Full page reload when navigating between landing and control
+- ❌ Less "app-like" feel compared to SPA
+- ❌ Duplicate code if shared components needed across pages (mitigated by template inheritance)
+
+### Alternatives Considered
+
+**Single Page Application (SPA):**
+- ✅ No page reloads, better UX, more "app-like" feel
+- ❌ Requires client-side routing, API-first backend, more complex state management
+- ❌ Higher migration risk (bigger architectural change)
+
+**Hybrid Approach (SPA with server-side initial render):**
+- ✅ Best of both worlds
+- ❌ Most complex to implement, requires framework like Next.js or Nuxt.js
+
+### Related Decisions
+
+- DEC-010: Vanilla JS + Tailwind (complements multi-page approach)
+- DEC-001: Commercial fleet management (prioritizes reliability over "app-like" UX)
+
+---
+
 ## Decision Template
 
 Use this template for future architectural decisions:
@@ -598,5 +724,7 @@ What other options did we evaluate and why were they rejected?
 - **DEC-007**: TDD testing philosophy (accepted)
 - **DEC-008**: Cloud deployment target (accepted)
 - **DEC-009**: API-first documentation approach (accepted)
+- **DEC-010**: Vanilla JavaScript + Tailwind CSS for frontend (accepted)
+- **DEC-011**: Multi-page architecture with enhanced templates (accepted)
 
 

@@ -110,7 +110,15 @@ class VideoService:
                     )
             
             except Exception as e:
-                self.logger.error(f"Error receiving video frame: {e}")
+                # During disconnect, track.recv() will raise MediaStreamError or similar
+                # This is expected behavior when closing WebRTC connection
+                # Only log at DEBUG level to avoid cluttering console
+                if self.state.is_connected:
+                    # Unexpected error while connected - log as ERROR
+                    self.logger.error(f"Error receiving video frame: {e}")
+                else:
+                    # Expected error during disconnect - log at DEBUG
+                    self.logger.debug(f"Video stream closed (expected during disconnect): {e}")
                 break
     
     def _encode_jpeg(self, frame: np.ndarray, quality: Optional[int] = None) -> Optional[bytes]:

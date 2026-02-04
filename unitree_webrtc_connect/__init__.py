@@ -22,7 +22,60 @@ aioice.Connection = Connection  # type: ignore
 
 
 import aiortc
+import logging
 from packaging.version import Version
+
+
+# ============================================================================
+# CRITICAL WORKAROUND: aiortc Race Condition Fix
+# ============================================================================
+# DO NOT REMOVE THIS MONKEY-PATCH WITHOUT TESTING!
+#
+# This monkey-patch fixes a critical race condition in aiortc that causes
+# Remote WebRTC connections to fail with:
+#   AttributeError: 'NoneType' object has no attribute 'media'
+#
+# Root cause: setRemoteDescription() triggers __connect() task before
+# internal state is fully initialized, causing __remoteRtp() to access
+# None values.
+#
+# This is part 1 of a 2-part fix. Part 2 is in webrtc_driver.py.
+#
+# For full documentation, see: .agent-os/product/aiortc-race-condition-fix.md
+#
+# Affected versions: aiortc 1.9.0, 1.10.0, 1.11.0+
+# Date added: 2026-02-04
+# ============================================================================
+
+from aiortc import RTCPeerConnection
+
+_original_remoteRtp = RTCPeerConnection._RTCPeerConnection__remoteRtp  # type: ignore
+
+
+def __remoteRtp_with_null_check(self, transceiver):
+    """
+    Patched version of __remoteRtp that adds null checking for __remoteDescription().
+    This prevents the race condition where __connect() task tries to access
+    __remoteDescription().media before the remote description is fully set.
+    """
+    try:
+        # Check if remote description is set before accessing it
+        remote_desc = self._RTCPeerConnection__remoteDescription()  # type: ignore
+        if remote_desc is None:
+            logging.debug(f"__remoteRtp called but remote description is None, skipping for now")
+            return
+
+        # Call the original method
+        return _original_remoteRtp(self, transceiver)
+
+    except AttributeError as e:
+        # If we still get an AttributeError, log it but don't crash
+        logging.debug(f"Race condition in __remoteRtp: {e}")
+        return
+
+
+# Apply the monkey patch
+RTCPeerConnection._RTCPeerConnection__remoteRtp = __remoteRtp_with_null_check  # type: ignore
 
 
 if Version(aiortc.__version__) == Version("1.10.0"):

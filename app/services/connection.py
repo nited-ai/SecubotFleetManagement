@@ -45,12 +45,13 @@ class ConnectionService:
     def __init__(self, state_service):
         """
         Initialize ConnectionService.
-        
+
         Args:
             state_service: StateService instance for state management
         """
         self.state = state_service
         self.logger = logging.getLogger(__name__)
+        self._status_polling_task = None  # Background task for status polling
     
     def _run_event_loop(self, loop: asyncio.AbstractEventLoop):
         """
@@ -196,9 +197,148 @@ class ConnectionService:
             self.state.connection = conn
             self.state.is_connected = True
 
+            # Subscribe to LOW_STATE for battery data
+            self.subscribe_to_robot_status()
+
+            # Start periodic status polling for mode and ping
+            self.start_status_polling()
+
         except Exception as e:
             self.logger.error(f"Error connecting to robot: {e}")
             raise
+
+    def subscribe_to_robot_status(self):
+        """
+        Subscribe to robot status topics for real-time telemetry.
+
+        Subscribes to:
+        - LOW_STATE: Battery data (BMS SOC percentage)
+        - LF_SPORT_MOD_STATE: Motion mode and gait type
+        """
+        try:
+            from unitree_webrtc_connect.constants import RTC_TOPIC
+            import time
+
+            def lowstate_callback(message):
+                """Process LOW_STATE data for battery level."""
+                try:
+                    data = message['data']
+                    bms_state = data.get('bms_state', {})
+                    battery_soc = bms_state.get('soc', None)
+
+                    if battery_soc is not None:
+                        self.state.battery_level = battery_soc
+                        self.state.last_status_update = time.time()
+                        self.logger.debug(f"Battery level updated: {battery_soc}%")
+                except Exception as e:
+                    self.logger.error(f"Error processing LOW_STATE data: {e}")
+
+            def sportmode_callback(message):
+                """Process LF_SPORT_MOD_STATE data for mode and gait type."""
+                try:
+                    data = message['data']
+
+                    # Extract gait type (0=idle, 1=trot, 2=climb stairs, 3=trot obstacle)
+                    gait_type = data.get('gait_type', 0)
+
+                    # Map gait type to user-friendly names
+                    gait_names = {
+                        0: 'idle',
+                        1: 'trot',
+                        2: 'climb_stairs',
+                        3: 'trot_obstacle'
+                    }
+
+                    gait_name = gait_names.get(gait_type, f'gait_{gait_type}')
+
+                    # Only log and update if gait changed
+                    if gait_name != self.state.current_mode:
+                        self.logger.info(f"Gait type changed: {self.state.current_mode} → {gait_name}")
+                        self.state.current_mode = gait_name
+
+                except Exception as e:
+                    self.logger.error(f"Error processing LF_SPORT_MOD_STATE data: {e}")
+
+            # Subscribe to LOW_STATE topic
+            self.state.connection.datachannel.pub_sub.subscribe(
+                RTC_TOPIC['LOW_STATE'],
+                lowstate_callback
+            )
+            self.logger.info("✓ Subscribed to LOW_STATE for battery telemetry")
+
+            # Subscribe to LF_SPORT_MOD_STATE topic
+            self.state.connection.datachannel.pub_sub.subscribe(
+                RTC_TOPIC['LF_SPORT_MOD_STATE'],
+                sportmode_callback
+            )
+            self.logger.info("✓ Subscribed to LF_SPORT_MOD_STATE for mode/gait telemetry")
+
+        except Exception as e:
+            self.logger.error(f"Error subscribing to robot status: {e}")
+
+    def start_status_polling(self):
+        """
+        Start periodic polling for ping measurement.
+
+        Polls every 3 seconds to measure network round-trip time.
+        Note: Mode/gait is now obtained via LF_SPORT_MOD_STATE subscription.
+        """
+        if self.state.event_loop and self.state.is_connected:
+            # Schedule the polling task in the event loop
+            self._status_polling_task = asyncio.run_coroutine_threadsafe(
+                self._poll_robot_status(),
+                self.state.event_loop
+            )
+            self.logger.info("✓ Started periodic ping measurement")
+
+    async def _poll_robot_status(self):
+        """
+        Periodic task to measure network ping.
+
+        Runs continuously while connected, polling every 3 seconds.
+        Uses a lightweight query to measure round-trip time.
+        """
+        import time
+
+        while self.state.is_connected:
+            try:
+                # Measure ping by timing a lightweight MOTION_SWITCHER query
+                start_time = time.time()
+
+                response = await self.state.connection.datachannel.pub_sub.publish_request_new(
+                    RTC_TOPIC["MOTION_SWITCHER"],
+                    {"api_id": 1001}
+                )
+
+                # Calculate round-trip time
+                end_time = time.time()
+                ping_ms = int((end_time - start_time) * 1000)
+                self.state.ping_ms = ping_ms
+
+                self.logger.debug(f"Ping: {ping_ms}ms")
+
+            except Exception as e:
+                self.logger.error(f"Error measuring ping: {e}")
+
+            # Wait 3 seconds before next poll
+            await asyncio.sleep(3)
+
+    def stop_status_polling(self):
+        """
+        Stop the periodic status polling task.
+
+        Note: The actual async task will exit on its own when it checks
+        self.state.is_connected and finds it False. This method just
+        cancels the Future wrapper to prevent any pending results.
+        """
+        if self._status_polling_task:
+            try:
+                self._status_polling_task.cancel()
+            except Exception as e:
+                self.logger.error(f"Error cancelling status polling task: {e}")
+            finally:
+                self._status_polling_task = None
+                self.logger.info("✓ Status polling task cancelled")
 
     async def initialize_robot(self):
         """
@@ -230,6 +370,9 @@ class ConnectionService:
                     current_mode = data.get('name', 'unknown')
                     self.logger.info(f"Current motion mode: {current_mode}")
 
+                    # Store current mode in state
+                    self.state.current_mode = current_mode
+
                     # Switch to AI mode if not already
                     # AI mode uses Move command for speed control, not wireless controller
                     if current_mode != "ai":
@@ -243,6 +386,8 @@ class ConnectionService:
                         )
                         await asyncio.sleep(5)  # Wait for mode switch (AI mode takes longer)
                         self.logger.info("Switched to AI mode")
+                        # Update mode in state
+                        self.state.current_mode = "ai"
 
             # Send FreeWalk command to enter Agile Mode (AI mode with obstacle avoidance)
             self.logger.info("Sending FreeWalk command to enter Agile Mode...")
@@ -261,14 +406,77 @@ class ConnectionService:
         """
         Disconnect from robot and clean up resources.
 
-        This async function:
-        1. Disconnects WebRTC connection
-        2. Updates connection state
+        This async function performs cleanup in the correct order:
+        1. Update connection state to stop all background tasks
+        2. Disable all control modes
+        3. Stop heartbeat mechanism
+        4. Unsubscribe from robot status topics
+        5. Close WebRTC peer connection
         """
-        if self.state.connection:
-            await self.state.connection.disconnect()
+        if not self.state.connection:
+            self.logger.warning("No active connection to disconnect")
+            return
+
+        try:
+            # STEP 1: Update state FIRST to stop all polling loops
+            self.logger.info("=" * 60)
+            self.logger.info("DISCONNECTING FROM ROBOT")
+            self.logger.info("=" * 60)
+
             self.state.is_connected = False
-            self.logger.info("WebRTC connection closed")
+            self.logger.info("✓ Connection state set to disconnected")
+
+            # STEP 2: Disable all control modes
+            self.state.keyboard_mouse_enabled = False
+            self.state.gamepad_enabled = False
+            self.state.emergency_stop_active = False
+            self.logger.info("✓ All control modes disabled")
+
+            # STEP 3: Wait for polling loop to exit (it checks is_connected)
+            await asyncio.sleep(0.5)
+            self.logger.info("✓ Background tasks stopped")
+
+            # STEP 4: Stop heartbeat mechanism
+            try:
+                if hasattr(self.state.connection.datachannel, 'heartbeat'):
+                    self.state.connection.datachannel.heartbeat.stop_heartbeat()
+                    self.logger.info("✓ Heartbeat stopped")
+            except Exception as e:
+                self.logger.error(f"Error stopping heartbeat: {e}")
+
+            # STEP 5: Unsubscribe from all topics
+            try:
+                from unitree_webrtc_connect.constants import RTC_TOPIC
+
+                # Unsubscribe from LOW_STATE topic
+                self.state.connection.datachannel.pub_sub.unsubscribe(RTC_TOPIC['LOW_STATE'])
+                self.logger.info("✓ Unsubscribed from LOW_STATE")
+
+                # Unsubscribe from LF_SPORT_MOD_STATE topic
+                self.state.connection.datachannel.pub_sub.unsubscribe(RTC_TOPIC['LF_SPORT_MOD_STATE'])
+                self.logger.info("✓ Unsubscribed from LF_SPORT_MOD_STATE")
+
+                # Give a brief moment for unsubscribe messages to be sent
+                await asyncio.sleep(0.2)
+
+            except Exception as e:
+                self.logger.error(f"Error unsubscribing from topics: {e}")
+
+            # STEP 6: Close WebRTC peer connection
+            try:
+                await self.state.connection.disconnect()
+                self.logger.info("✓ WebRTC peer connection closed")
+            except Exception as e:
+                self.logger.error(f"Error closing WebRTC connection: {e}")
+
+            self.logger.info("=" * 60)
+            self.logger.info("DISCONNECT COMPLETE")
+            self.logger.info("=" * 60)
+
+        except Exception as e:
+            self.logger.error(f"Error during disconnect: {e}", exc_info=True)
+            # Ensure state is set to disconnected even if errors occur
+            self.state.is_connected = False
 
     def cleanup_audio_resources(self):
         """
@@ -305,12 +513,28 @@ class ConnectionService:
         Clean up connection resources.
 
         This function:
-        1. Resets connection object
+        1. Stops status polling (if still running)
         2. Cleans up audio resources
+        3. Resets connection object
+        4. Resets all state variables
         """
-        self.state.connection = None
+        # Stop status polling (if still running)
+        self.stop_status_polling()
+
+        # Clean up audio resources
         self.cleanup_audio_resources()
-        self.logger.info("Connection resources cleaned up")
+
+        # Reset connection object
+        self.state.connection = None
+
+        # Reset all state variables
+        self.state.battery_level = 0
+        self.state.ping_ms = 0
+        self.state.current_mode = 'unknown'
+        self.state.lidar_state = False
+        self.state.free_bound_active = False
+
+        self.logger.info("✓ All connection resources cleaned up")
 
     def connect_sync(
         self,

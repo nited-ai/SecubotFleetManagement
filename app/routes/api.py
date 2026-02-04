@@ -23,7 +23,7 @@ def connect():
         audio_service = current_app.config['AUDIO_SERVICE']
         
         data = request.json
-        connection_method = data.get('method')
+        connection_method = data.get('connection_method')
         ip = data.get('ip', '')
         serial_number = data.get('serial_number', '')
         username = data.get('username', '')
@@ -58,14 +58,29 @@ def connect():
         })
 
     except Exception as e:
-        logging.error(f"Connection error: {e}")
+        logging.error(f"Connection error: {e}", exc_info=True)
         error_msg = str(e)
-        
-        # Provide user-friendly error messages
+
+        # Provide user-friendly error messages based on error type
         if "already connected" in error_msg.lower() or "busy" in error_msg.lower():
             error_msg = "Robot is already connected to another client. Close the Unitree mobile app and try again."
         elif "unreachable" in error_msg.lower() or "timeout" in error_msg.lower():
-            error_msg = f"Cannot reach robot at the specified address. Check IP and network connection. Error: {error_msg}"
+            error_msg = f"Cannot reach robot. Check IP address and network connection."
+        elif "invalid username or password" in error_msg.lower() or "authentication failed" in error_msg.lower():
+            # Authentication errors - pass through the detailed message
+            pass
+        elif "error 567" in error_msg.lower() or "temporarily unavailable" in error_msg.lower():
+            # HTTP 567 / service unavailable errors - pass through the detailed message
+            pass
+        elif "rate limit" in error_msg.lower() or "too many" in error_msg.lower():
+            # Rate limiting errors - pass through the detailed message
+            pass
+        elif "cannot connect to unitree cloud" in error_msg.lower() or "connection to unitree" in error_msg.lower():
+            # Network/cloud service errors - pass through the detailed message
+            pass
+        elif "invalid json" in error_msg.lower() or "expecting value" in error_msg.lower():
+            error_msg = "Unitree cloud service returned an invalid response. The service may be temporarily unavailable. Please try again later."
+
         return jsonify({'status': 'error', 'message': error_msg}), 500
 
 
@@ -73,24 +88,36 @@ def connect():
 def disconnect():
     """Disconnect from the robot"""
     try:
+        logging.info("=" * 60)
+        logging.info("DISCONNECT API ENDPOINT CALLED")
+        logging.info("=" * 60)
+
         # Get services from app config
         state = current_app.config['STATE_SERVICE']
         connection_service = current_app.config['CONNECTION_SERVICE']
-        audio_service = current_app.config['AUDIO_SERVICE']
-        
+
+        logging.info(f"Current connection state: is_connected={state.is_connected}")
+
         # Use ConnectionService to disconnect
+        # Note: This handles ALL cleanup including audio resources
+        logging.info("Calling connection_service.disconnect_sync()...")
         connection_service.disconnect_sync(timeout=10)
-        
-        # Clean up audio resources
-        audio_service.cleanup()
-        
+        logging.info("✓ disconnect_sync() completed")
+
+        logging.info("=" * 60)
+        logging.info("DISCONNECT API ENDPOINT COMPLETED SUCCESSFULLY")
+        logging.info("=" * 60)
+
         return jsonify({
             'status': 'success',
             'message': 'Disconnected from robot'
         })
 
     except Exception as e:
-        logging.error(f"Disconnect error: {e}")
+        logging.error("=" * 60)
+        logging.error(f"DISCONNECT API ENDPOINT ERROR: {e}")
+        logging.error("=" * 60)
+        logging.error(f"Full traceback:", exc_info=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
@@ -368,6 +395,119 @@ def status():
 def ping():
     """Lightweight ping endpoint for network latency testing"""
     return jsonify({'pong': time.time()})
+
+
+@api_bp.route('/robot/status')
+def robot_status():
+    """Get current robot status for HUD display"""
+    try:
+        state = current_app.config['STATE_SERVICE']
+
+        if not state.is_connected:
+            return jsonify({'status': 'error', 'message': 'Robot not connected'}), 400
+
+        # Get real battery level from LOW_STATE subscription
+        battery = state.battery_level if state.battery_level is not None else 0
+
+        # Get real ping from periodic MOTION_SWITCHER query round-trip time
+        ping = state.ping_ms if state.ping_ms is not None else 999
+
+        # Mode display temporarily disabled - investigating LF_SPORT_MOD_STATE subscription
+        # gait = state.current_mode if state.current_mode else 'unknown'
+        # gait_display_names = {
+        #     'idle': 'Idle',
+        #     'trot': 'Trot',
+        #     'climb_stairs': 'Climb Stairs',
+        #     'trot_obstacle': 'Trot Obstacle',
+        #     'unknown': 'Unknown'
+        # }
+        # mode_display = gait_display_names.get(gait, gait.replace('_', ' ').title())
+
+        status_data = {
+            'battery': battery,
+            'ping': ping,
+            # 'mode': mode_display,  # Temporarily disabled
+            'connected': True
+        }
+
+        return jsonify(status_data)
+
+    except Exception as e:
+        logging.error(f"Robot status error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@api_bp.route('/robot/light', methods=['POST'])
+def set_light_level():
+    """
+    Set robot LED brightness level.
+
+    Request body:
+        {
+            "level": 5  // 0-10 discrete brightness level
+        }
+
+    Returns:
+        {
+            "success": true,
+            "level": 5
+        }
+    """
+    try:
+        state = current_app.config['STATE_SERVICE']
+
+        if not state.is_connected:
+            return jsonify({'success': False, 'message': 'Robot not connected'}), 400
+
+        data = request.get_json()
+        brightness = data.get('level', 0)
+
+        # Validate brightness level (0-10)
+        if not isinstance(brightness, int) or brightness < 0 or brightness > 10:
+            return jsonify({'success': False, 'message': 'Brightness must be between 0 and 10'}), 400
+
+        # Schedule the async VUI command in the event loop
+        from unitree_webrtc_connect.constants import RTC_TOPIC
+        import asyncio
+
+        async def set_brightness():
+            """Send VUI brightness command to robot."""
+            try:
+                response = await state.connection.datachannel.pub_sub.publish_request_new(
+                    RTC_TOPIC["VUI"],
+                    {
+                        "api_id": 1005,
+                        "parameter": {"brightness": brightness}
+                    }
+                )
+
+                # Check if command was successful
+                if response and 'data' in response:
+                    if 'header' in response['data']:
+                        status_code = response['data']['header'].get('status', {}).get('code', -1)
+                        if status_code == 0:
+                            logging.info(f"✓ LED brightness set to {brightness}/10")
+                            return True
+
+                logging.warning(f"LED brightness command may have failed: {response}")
+                return False
+
+            except Exception as e:
+                logging.error(f"Error setting LED brightness: {e}")
+                return False
+
+        # Execute the async function in the event loop
+        future = asyncio.run_coroutine_threadsafe(set_brightness(), state.event_loop)
+        success = future.result(timeout=5)
+
+        if success:
+            return jsonify({'success': True, 'level': brightness})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to set brightness'}), 500
+
+    except Exception as e:
+        logging.error(f"Light level error: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @api_bp.route('/webrtc/test_direct_command', methods=['POST'])

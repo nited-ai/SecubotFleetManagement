@@ -16,6 +16,12 @@ from app.routes import views_bp, api_bp, register_websocket_handlers
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
+# Reduce Werkzeug HTTP request logging verbosity
+# This suppresses routine GET/POST request logs like "/api/robot/status"
+# while keeping ERROR and WARNING logs visible
+werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger.setLevel(logging.WARNING)
+
 # Create Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'unitree_webrtc_secret_key'
@@ -49,7 +55,7 @@ app.config['CONTROL_SERVICE'] = control_service
 
 # Register blueprints
 app.register_blueprint(views_bp)
-app.register_blueprint(api_bp)
+app.register_blueprint(api_bp, url_prefix='/api')
 
 # Register WebSocket handlers
 register_websocket_handlers(socketio)

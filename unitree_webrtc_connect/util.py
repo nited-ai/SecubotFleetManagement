@@ -44,14 +44,40 @@ def fetch_token(email: str, password: str) -> str:
         'email': email,
         'password': _generate_md5(password)
     }
-    response = make_remote_request(path, body, token="", method="POST")
-    if response.get("code") == 100:
-        data = response.get("data")
-        access_token = data.get("accessToken")
-        return access_token
-    else:
-        logging.error("Failed to receive token")
-        return None
+
+    try:
+        response = make_remote_request(path, body, token="", method="POST")
+
+        if response.get("code") == 100:
+            data = response.get("data")
+            access_token = data.get("accessToken")
+            if access_token:
+                logging.info("✓ Token obtained successfully")
+                return access_token
+            else:
+                logging.error("Token response missing accessToken field")
+                logging.error(f"Response data: {data}")
+                raise ValueError("Invalid token response: missing accessToken")
+        else:
+            # Log the error code and message from Unitree API
+            error_code = response.get("code")
+            error_msg = response.get("msg", "Unknown error")
+            logging.error(f"Failed to receive token - Code: {error_code}, Message: {error_msg}")
+
+            # Provide user-friendly error messages
+            if error_code == 401 or "password" in error_msg.lower() or "credential" in error_msg.lower():
+                raise ValueError("Invalid username or password. Please check your Unitree account credentials.")
+            elif error_code == 404 or "not found" in error_msg.lower():
+                raise ValueError("Account not found. Please check your email address.")
+            else:
+                raise ValueError(f"Authentication failed: {error_msg} (Code: {error_code})")
+
+    except ValueError:
+        # Re-raise ValueError exceptions (these are our custom error messages)
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error during token fetch: {e}")
+        raise ValueError(f"Failed to authenticate with Unitree cloud service: {str(e)}")
 
 
 # Function to obtain a public key

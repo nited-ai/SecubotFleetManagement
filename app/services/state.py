@@ -109,7 +109,13 @@ class StateService:
         self._free_bound_active = False
         self._free_jump_active = False
         self._free_avoid_active = False
-        
+
+        # Robot status data (for HUD display)
+        self._battery_level = None  # Battery SOC percentage (0-100)
+        self._current_mode = None  # Current motion mode (ai, normal, sport)
+        self._last_status_update = 0  # Timestamp of last status update
+        self._ping_ms = None  # Network round-trip time in milliseconds
+
         # Gamepad settings
         self._gamepad_settings = {
             'deadzone_left_stick': 0.15,
@@ -394,6 +400,48 @@ class StateService:
         """Set FreeAvoid active state."""
         self._free_avoid_active = value
 
+    # ========== Robot Status Data ==========
+
+    @property
+    def battery_level(self) -> Optional[int]:
+        """Get battery level (SOC percentage 0-100)."""
+        return self._battery_level
+
+    @battery_level.setter
+    def battery_level(self, value: Optional[int]):
+        """Set battery level."""
+        self._battery_level = value
+
+    @property
+    def current_mode(self) -> Optional[str]:
+        """Get current motion mode (ai, normal, sport)."""
+        return self._current_mode
+
+    @current_mode.setter
+    def current_mode(self, value: Optional[str]):
+        """Set current motion mode."""
+        self._current_mode = value
+
+    @property
+    def last_status_update(self) -> float:
+        """Get timestamp of last status update."""
+        return self._last_status_update
+
+    @last_status_update.setter
+    def last_status_update(self, value: float):
+        """Set timestamp of last status update."""
+        self._last_status_update = value
+
+    @property
+    def ping_ms(self) -> Optional[int]:
+        """Get network ping in milliseconds."""
+        return self._ping_ms
+
+    @ping_ms.setter
+    def ping_ms(self, value: Optional[int]):
+        """Set network ping in milliseconds."""
+        self._ping_ms = value
+
     # ========== Gamepad Settings ==========
 
     @property
@@ -496,4 +544,10 @@ class StateService:
         self._free_avoid_active = False
         self._current_body_height = 1
         self._lidar_state = False
+
+        # Reset robot status data
+        self._battery_level = None
+        self._current_mode = None
+        self._last_status_update = 0
+        self._ping_ms = None
 

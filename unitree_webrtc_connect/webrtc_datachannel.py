@@ -60,7 +60,8 @@ class WebRTCDataChannel:
         # Event handler for data channel messages
         @self.channel.on("message")
         async def on_message(message):
-            logging.info("Received message on data channel: %s", message)
+            # Changed from INFO to DEBUG to reduce console spam from high-frequency telemetry
+            logging.debug("Received message on data channel: %s", message)
             try:
             
                 # Check if the message is not empty

@@ -10,8 +10,20 @@ views_bp = Blueprint('views', __name__)
 
 
 @views_bp.route('/')
-def index():
-    """Render the main page"""
+def landing():
+    """Render the landing page with robot management dashboard"""
+    return render_template('landing.html')
+
+
+@views_bp.route('/control')
+def control():
+    """Render the fullscreen control interface"""
+    return render_template('control.html')
+
+
+@views_bp.route('/test')
+def test_interface():
+    """Temporary route for old interface during migration (will be removed in Phase 4)"""
     return render_template('index.html')
 
 

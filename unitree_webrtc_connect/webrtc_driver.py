@@ -187,9 +187,72 @@ class UnitreeWebRTCConnection:
             print("Go2 is connected by another WebRTC client. Close your mobile APP and try again.")
             sys.exit(1)
 
-        remote_sdp = RTCSessionDescription(sdp=peer_answer['sdp'], type=peer_answer['type']) 
-        await self.pc.setRemoteDescription(remote_sdp)
-   
+        # ====================================================================
+        # CRITICAL WORKAROUND: aiortc Race Condition Fix (Part 2 of 2)
+        # ====================================================================
+        # DO NOT REMOVE THIS SYNCHRONIZATION LOGIC WITHOUT TESTING!
+        #
+        # This is part 2 of the aiortc race condition fix. Part 1 is the
+        # monkey-patch in __init__.py.
+        #
+        # This synchronization logic ensures setRemoteDescription() completes
+        # and internal state is fully initialized before proceeding.
+        #
+        # For full documentation, see:
+        #   .agent-os/product/aiortc-race-condition-fix.md
+        #
+        # Date added: 2026-02-04
+        # ====================================================================
+
+        remote_sdp = RTCSessionDescription(sdp=peer_answer['sdp'], type=peer_answer['type'])
+
+        logging.info("Setting remote description...")
+
+        # WORKAROUND: The issue is that setRemoteDescription() triggers __connect() task
+        # which immediately tries to access __remoteDescription().media before it's set.
+        # We need to ensure the peer connection is in a stable state first.
+
+        # Wait for signaling state to be stable or have-remote-offer
+        max_wait = 5.0  # Maximum 5 seconds
+        wait_interval = 0.1
+        elapsed = 0.0
+
+        while self.pc.signalingState not in ['stable', 'have-remote-offer'] and elapsed < max_wait:
+            await asyncio.sleep(wait_interval)
+            elapsed += wait_interval
+
+        if elapsed >= max_wait:
+            logging.warning(f"Signaling state did not stabilize (current: {self.pc.signalingState})")
+
+        # Now set the remote description
+        try:
+            await self.pc.setRemoteDescription(remote_sdp)
+        except Exception as e:
+            logging.error(f"Error in setRemoteDescription: {e}")
+            raise RuntimeError(f"Failed to set remote description: {e}")
+
+        # Wait for the remote description to be fully set
+        # This is critical to prevent the race condition
+        max_wait = 5.0
+        elapsed = 0.0
+
+        while self.pc.remoteDescription is None and elapsed < max_wait:
+            await asyncio.sleep(wait_interval)
+            elapsed += wait_interval
+
+        if self.pc.remoteDescription is None:
+            logging.error("Remote description is still None after waiting")
+            raise RuntimeError(
+                "Failed to set remote description: remoteDescription is None. "
+                "This may indicate a network or timing issue. Please try again."
+            )
+
+        logging.info("✓ Remote description set successfully")
+
+        # Additional wait to ensure internal state is fully synchronized
+        # This prevents the __connect() task from accessing incomplete state
+        await asyncio.sleep(0.5)
+
         await self.datachannel.wait_datachannel_open()
 
     

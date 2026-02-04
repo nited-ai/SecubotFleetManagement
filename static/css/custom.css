@@ -1,0 +1,411 @@
+/* Custom styles beyond Tailwind CSS */
+
+/* Smooth transitions for interactive elements */
+* {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #00E8DA;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #00B8AD;
+}
+
+/* Gradient backgrounds */
+.gradient-primary {
+    background: linear-gradient(135deg, #00E8DA 0%, #00B8AD 100%);
+}
+
+.gradient-primary-hover:hover {
+    background: linear-gradient(135deg, #1AEEE0 0%, #1AC8BD 100%);
+}
+
+/* Button styles */
+.btn-primary {
+    @apply bg-gradient-to-r from-unitree-primary to-unitree-secondary text-white font-semibold py-2 px-4 rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5;
+}
+
+.btn-secondary {
+    @apply bg-unitree-dark-lighter text-white font-semibold py-2 px-4 rounded-lg border border-gray-600 hover:border-unitree-primary hover:bg-gray-800;
+}
+
+.btn-danger {
+    @apply bg-unitree-danger text-white font-semibold py-2 px-4 rounded-lg shadow-lg hover:bg-red-600 transform hover:-translate-y-0.5;
+}
+
+.btn-success {
+    @apply bg-unitree-success text-white font-semibold py-2 px-4 rounded-lg shadow-lg hover:bg-green-600 transform hover:-translate-y-0.5;
+}
+
+/* Icon button styles */
+.btn-icon-secondary {
+    @apply bg-gray-700 text-gray-300 p-2 rounded-lg hover:bg-gray-600 hover:text-white transition-colors duration-200;
+}
+
+.btn-icon-danger {
+    @apply bg-red-900 bg-opacity-30 text-red-400 p-2 rounded-lg hover:bg-red-800 hover:bg-opacity-50 hover:text-red-300 transition-colors duration-200;
+}
+
+/* Card styles with glass-morphism */
+.card {
+    background: rgba(45, 45, 45, 0.9);
+    border: 1px solid rgba(0, 232, 218, 0.15);
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.25),
+                0 0 0 1px rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+    border-color: rgba(0, 232, 218, 0.5);
+    box-shadow: 0 8px 24px 0 rgba(0, 232, 218, 0.2),
+                0 0 0 1px rgba(0, 232, 218, 0.3);
+    transform: translateY(-4px);
+}
+
+/* Input styles with improved focus states */
+.input-field {
+    background: rgba(30, 30, 30, 1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.input-field:focus {
+    outline: none;
+    border-color: #00E8DA;
+    box-shadow: 0 0 0 3px rgba(0, 232, 218, 0.1);
+}
+
+/* Modal styles with glass-morphism */
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    transition: opacity 0.3s ease;
+}
+
+.modal-content {
+    position: relative;
+    width: 100%;
+    max-width: 42rem;
+    margin: 0 1rem;
+    max-height: 90vh;
+    overflow-y: auto;
+    background: rgba(45, 45, 45, 0.95);
+    border: 1px solid rgba(0, 232, 218, 0.2);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37),
+                0 0 0 1px rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-close-btn {
+    color: #9ca3af;
+    transition: color 0.3s ease;
+}
+
+.modal-close-btn:hover {
+    color: white;
+}
+
+.modal-body {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Form group styles */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #d1d5db;
+}
+
+.form-help {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
+/* Badge styles */
+.badge {
+    @apply inline-block px-3 py-1 rounded-full text-sm font-semibold;
+}
+
+.badge-success {
+    @apply bg-unitree-success bg-opacity-20 text-unitree-success border border-unitree-success;
+}
+
+.badge-warning {
+    @apply bg-unitree-warning bg-opacity-20 text-unitree-warning border border-unitree-warning;
+}
+
+.badge-danger {
+    @apply bg-unitree-danger bg-opacity-20 text-unitree-danger border border-unitree-danger;
+}
+
+.badge-info {
+    @apply bg-unitree-info bg-opacity-20 text-unitree-info border border-unitree-info;
+}
+
+/* Status HUD overlay styles */
+.status-hud {
+    @apply fixed top-5 left-5 bg-black bg-opacity-70 rounded-lg p-4 border border-gray-600 backdrop-blur-sm;
+}
+
+/* Slider styles */
+input[type="range"] {
+    @apply w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    @apply appearance-none w-4 h-4 rounded-full cursor-pointer;
+    background: #00E8DA;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+    background: #00B8AD;
+}
+
+input[type="range"]::-moz-range-thumb {
+    @apply w-4 h-4 rounded-full cursor-pointer border-0;
+    background: #00E8DA;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+    background: #00B8AD;
+}
+
+/* Floating button styles */
+.floating-btn {
+    @apply fixed p-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 cursor-pointer;
+}
+
+/* Animation utilities */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+.slide-in {
+    animation: slideIn 0.3s ease-out;
+}
+
+/* Fullscreen video container */
+.fullscreen-video {
+    @apply w-screen h-screen object-cover;
+}
+
+/* Progress bar */
+.progress-bar {
+    @apply w-full h-2 bg-gray-700 rounded-full overflow-hidden;
+}
+
+.progress-fill {
+    @apply h-full bg-gradient-to-r from-unitree-primary to-unitree-secondary transition-all duration-300;
+}
+
+/* Preset buttons */
+.preset-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: rgba(45, 45, 45, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: #ffffff;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.preset-btn:hover {
+    background: rgba(45, 45, 45, 0.95);
+    border-color: rgba(0, 232, 218, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.preset-btn-active {
+    background: linear-gradient(135deg, rgba(0, 232, 218, 0.2) 0%, rgba(0, 184, 173, 0.2) 100%);
+    border-color: #00E8DA;
+    box-shadow: 0 0 0 3px rgba(0, 232, 218, 0.1);
+}
+
+.preset-btn-active:hover {
+    background: linear-gradient(135deg, rgba(0, 232, 218, 0.25) 0%, rgba(0, 184, 173, 0.25) 100%);
+    transform: translateY(-2px);
+}
+
+.preset-btn svg {
+    flex-shrink: 0;
+}
+
+/* Range slider styles */
+.slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    background: rgba(30, 30, 30, 1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.slider:hover {
+    border-color: rgba(0, 232, 218, 0.3);
+}
+
+.slider:focus {
+    border-color: #00E8DA;
+    box-shadow: 0 0 0 3px rgba(0, 232, 218, 0.1);
+}
+
+/* Webkit (Chrome, Safari, Edge) */
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(135deg, #00E8DA 0%, #00B8AD 100%);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 232, 218, 0.3);
+}
+
+.slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 232, 218, 0.5);
+}
+
+/* Firefox */
+.slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(135deg, #00E8DA 0%, #00B8AD 100%);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 232, 218, 0.3);
+}
+
+.slider::-moz-range-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 232, 218, 0.5);
+}
+
+/* Firefox track */
+.slider::-moz-range-track {
+    background: rgba(30, 30, 30, 1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    height: 8px;
+}
+
+/* Speed Indicator Overlay (Mouse Wheel Speed Adjustment) */
+.speed-indicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 30px 50px;
+    border-radius: 15px;
+    font-size: 2.5em;
+    font-weight: bold;
+    z-index: 10000;
+    display: none;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    animation: fadeIn 0.2s ease-in-out;
+    text-align: center;
+    min-width: 250px;
+}
+
+.speed-indicator .speed-label {
+    font-size: 0.5em;
+    color: #aaa;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.speed-indicator .speed-value {
+    color: #00E8DA;  /* Updated to match new teal/cyan color scheme */
+    font-size: 1.2em;
+}
+
