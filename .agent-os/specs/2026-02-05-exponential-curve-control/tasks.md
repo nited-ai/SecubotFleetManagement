@@ -306,6 +306,49 @@ User discovered 4 critical issues after testing the Phase 8 fixes:
     - Logs cleanup actions to console for debugging
   - **Result:** Obsolete settings are automatically removed on next page load
 
+### Phase 10: Critical Backend Bug - Robot Speed Not Increasing (2026-02-05)
+
+User discovered that despite Phase 9 fixes, robot was NOT moving faster with higher max velocity settings.
+
+- [x] 30. **CRITICAL: Robot speed unchanged despite higher max velocity settings** - FIXED ✅
+  - **Problem:**
+    - Before fix: Max Linear Velocity = 5.0 m/s → Robot speed = X
+    - After fix: Max Linear Velocity = 10.0 m/s → Robot speed = X (SAME!)
+    - Before fix: Max Rotation Velocity = 3.0 rad/s → Robot speed = Y
+    - After fix: Max Rotation Velocity = 9.0 rad/s → Robot speed = Y (SAME!)
+  - **Root Cause:** Backend was applying GAMEPAD multipliers to KEYBOARD/MOUSE inputs!
+    - `app/services/control.py` lines 222-231 applied gamepad sensitivity/speed multipliers to ALL inputs
+    - Frontend sends normalized values (0-1): `ly = vx / maxLinear`
+    - Backend multiplied by gamepad sensitivity (1.5) and speed multiplier (1.5)
+    - Example: vx=9.0 m/s → ly=1.0 → ly*=1.5*1.5=2.25 → vx=2.25 m/s (4x slower!)
+  - **Investigation Process:**
+    - Traced complete data flow from settings → robot commands
+    - Examined `poll()` method: Curves applied correctly ✅
+    - Examined `sendCommand()`: Normalization correct ✅
+    - Examined backend `process_movement_command()`: Found gamepad multipliers applied to all inputs ❌
+    - Backend was NOT checking `source` field to differentiate keyboard/mouse from gamepad
+  - **Fix Applied:**
+    - Added `source` field check in `app/services/control.py`
+    - Only apply gamepad sensitivity/speed multipliers to gamepad inputs
+    - Keyboard/mouse inputs skip multipliers (already have curves applied)
+    - Added debug logging to trace values through pipeline
+  - **Code Changes:**
+    ```python
+    # app/services/control.py lines 222-244
+    source = data.get('source', 'gamepad')
+    is_keyboard_mouse = (source == 'keyboard_mouse')
+
+    if not is_keyboard_mouse:
+        # Apply gamepad multipliers only to gamepad inputs
+        ly *= self.state.gamepad_settings['sensitivity_linear']
+        # ... etc
+    ```
+  - **Debug Logging Added:**
+    - Frontend: `applyCurve()` output for linear and rotation
+    - Frontend: `sendCommand()` normalized values and max velocities
+    - Backend: Final velocities sent to robot with max velocity values
+  - **Result:** Robot now uses full configured velocity range (9.0 rad/s, 10.0 m/s)
+
 ### Phase 5: Advanced Features
 
 - [ ] 11. Add reference table (like Streamlit example)

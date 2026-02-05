@@ -219,16 +219,24 @@ class ControlService:
             if abs(ry) < deadzone_right:
                 ry = 0.0
 
-            # Apply sensitivity multipliers
-            ly *= self.state.gamepad_settings['sensitivity_linear']
-            lx *= self.state.gamepad_settings['sensitivity_strafe']
-            rx *= self.state.gamepad_settings['sensitivity_rotation']
+            # Check if this is keyboard/mouse input (already has curves applied)
+            # or gamepad input (needs sensitivity/speed multipliers)
+            source = data.get('source', 'gamepad')
+            is_keyboard_mouse = (source == 'keyboard_mouse')
 
-            # Apply speed multiplier
-            speed_mult = self.state.gamepad_settings['speed_multiplier']
-            ly *= speed_mult
-            lx *= speed_mult
-            rx *= speed_mult
+            # Only apply gamepad sensitivity/speed multipliers to gamepad inputs
+            # Keyboard/mouse inputs already have exponential curves applied in frontend
+            if not is_keyboard_mouse:
+                # Apply sensitivity multipliers (gamepad only)
+                ly *= self.state.gamepad_settings['sensitivity_linear']
+                lx *= self.state.gamepad_settings['sensitivity_strafe']
+                rx *= self.state.gamepad_settings['sensitivity_rotation']
+
+                # Apply speed multiplier (gamepad only)
+                speed_mult = self.state.gamepad_settings['speed_multiplier']
+                ly *= speed_mult
+                lx *= speed_mult
+                rx *= speed_mult
 
             # Use velocity limits from command data if provided (keyboard/mouse), otherwise use gamepad settings
             max_linear = data.get('max_linear', self.state.gamepad_settings['max_linear_velocity'])
@@ -239,6 +247,10 @@ class ControlService:
             vx = max(-max_linear, min(max_linear, ly))      # Forward/back from left stick Y
             vy = max(-max_strafe, min(max_strafe, -lx))     # Strafe from left stick X (inverted)
             vyaw = max(-max_rotation, min(max_rotation, -rx))  # Yaw from right stick X (inverted)
+
+            # Debug logging for keyboard/mouse commands
+            if is_keyboard_mouse and (abs(vx) > 0.01 or abs(vy) > 0.01 or abs(vyaw) > 0.01):
+                self.logger.info(f"[KB/Mouse Backend] ly={ly:.3f}, lx={lx:.3f}, rx={rx:.3f} → vx={vx:.3f}, vy={vy:.3f}, vyaw={vyaw:.3f} | max_linear={max_linear}, max_rotation={max_rotation}")
 
             # Check if all velocities are zero
             is_zero_velocity = (abs(vx) < 0.01 and abs(vy) < 0.01 and abs(vyaw) < 0.01)

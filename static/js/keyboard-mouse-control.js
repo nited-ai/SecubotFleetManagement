@@ -403,6 +403,11 @@ class KeyboardMouseControl {
             ? applyLinearCurve(linearInput, linearAlpha, linearDeadzone, maxLinear) * Math.sign(forward)
             : 0;
         const targetLinear = curvedLinear;
+
+        // Debug logging for curve output
+        if (linearInput > 0.01) {
+            console.log(`[applyCurve Linear] input=${linearInput.toFixed(3)}, curved=${curvedLinear.toFixed(3)}, maxLinear=${maxLinear}, alpha=${linearAlpha}, deadzone=${linearDeadzone}`);
+        }
         if (Math.abs(targetLinear) > 0.01) {
             this.currentVelocities.linear += (targetLinear - this.currentVelocities.linear) * acceleration;
         } else {
@@ -427,6 +432,11 @@ class KeyboardMouseControl {
             ? applyRotationCurve(rotationInput, rotationAlpha, rotationDeadzone, maxRotation) * Math.sign(rotation)
             : 0;
         const targetRotation = curvedRotation;
+
+        // Debug logging for curve output
+        if (rotationInput > 0.01) {
+            console.log(`[applyCurve Rotation] input=${rotationInput.toFixed(3)}, curved=${curvedRotation.toFixed(3)}, maxRotation=${maxRotation}, alpha=${rotationAlpha}, deadzone=${rotationDeadzone}`);
+        }
         if (Math.abs(targetRotation) > 0.01) {
             this.currentVelocities.rotation += (targetRotation - this.currentVelocities.rotation) * acceleration;
         } else {
@@ -476,7 +486,10 @@ class KeyboardMouseControl {
                 source: 'keyboard_mouse'
             };
 
-            console.log(`[KB/Mouse] Sending command: lx=${lx.toFixed(2)}, ly=${ly.toFixed(2)}, rx=${rx.toFixed(2)}, ry=${ry.toFixed(2)}`);
+            // Enhanced debug logging
+            if (Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01 || Math.abs(vyaw) > 0.01) {
+                console.log(`[sendCommand] vx=${vx.toFixed(3)}, vy=${vy.toFixed(3)}, vyaw=${vyaw.toFixed(3)} → Normalized: ly=${ly.toFixed(3)}, lx=${lx.toFixed(3)}, rx=${rx.toFixed(3)} | max_linear=${maxLinear}, max_rotation=${maxRotation}`);
+            }
             this.onCommandSend(commandData);
 
             // CRITICAL: Don't block on WebSocket - reset flag immediately (matches old interface)
