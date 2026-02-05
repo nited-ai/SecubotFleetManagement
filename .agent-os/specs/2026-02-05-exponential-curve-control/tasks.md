@@ -151,36 +151,41 @@ Implement adjustable exponential response curves for linear, strafe, and rotatio
 
 ### Phase 7: Critical Bug Fixes (2026-02-05)
 
-- [x] 16. Fix preset application bugs
-  - [x] 16.1 **Issue 2: Presets not applying alpha/deadzone values** - FIXED ✅
+- [ ] 16. Fix preset application bugs
+  - [ ] 16.1 **Issue 2: Presets not applying alpha/deadzone values**
     - Root cause: `updateAllKeyboardMouseSliders()` doesn't update alpha/deadzone sliders
-    - Fix: Added alpha slider updates (linear_alpha, strafe_alpha, rotation_alpha)
-    - Fix: Added deadzone slider updates (linear_deadzone, strafe_deadzone, rotation_deadzone)
-    - Fix: Added chart updates when presets are applied (updateCurveChart for all 3 axes)
+    - Fix: Add alpha and deadzone slider updates to the function
+    - Fix: Add chart updates when presets are applied
   - [ ] 16.2 Verify all sliders update when preset is selected
   - [ ] 16.3 Verify graphs update when preset is selected
   - [ ] 16.4 Test all four presets (Beginner/Normal/Advanced/Sport)
 
 - [ ] 17. Fix speed slider range
-  - [ ] 17.1 **Issue 3: Speed slider range is 10-200%**
-    - Current: min="10" max="200" (0.1x to 2.0x)
-    - Recommendation needed: What should the range be?
-    - Consider: Most users won't need >100% speed
-    - Proposal: Change to min="10" max="100" (10% to 100%)
-  - [ ] 17.2 Update speed slider in templates/control.html
-  - [ ] 17.3 Update keyboard-mouse-control.js MAX_SPEED constant if needed
+  - [x] 17.1 **Issue 3: Speed slider range is 10-200%** - USER CLARIFIED ✅
+    - User clarification: Speed slider should represent % along curve (0-100%), NOT a multiplier
+    - Graphs go from 0-100%, controls should match the curve at that % value
+    - Hardware limits prevent going above 100%
+    - Changed: min="0" max="100" step="5" (was min="10" max="200" step="10")
+  - [x] 17.2 Update speed slider in templates/control.html - DONE ✅
+  - [ ] 17.3 Update speed slider handler to use speed as input % to curve
   - [ ] 17.4 Test speed slider at various positions
 
-- [ ] 18. Verify settings are applied to robot control
-  - [ ] 18.1 **Issue 4: Settings may not be applied to robot**
-    - Verify curve-utils.js is loaded in control.html ✅ (already confirmed)
-    - Verify loadSettings() reads curve parameters ✅ (already confirmed)
-    - Verify poll() calls applyCurve() functions ✅ (already confirmed)
-    - Test actual robot movement with different alpha values
-    - Test actual robot movement with different deadzone values
-  - [ ] 18.2 Add console logging to verify curve parameters are loaded
-  - [ ] 18.3 Add console logging to verify curves are applied in poll()
-  - [ ] 18.4 Test with robot to verify movement feels correct
+- [ ] 18. **Issue 4: Settings not applied to robot control** - CRITICAL BUG FOUND
+  - [x] 18.1 Investigate why settings aren't being applied - ROOT CAUSE FOUND ✅
+    - **CRITICAL BUG:** Three different localStorage keys are being used:
+      - `'unitree_settings'` - Landing page (settings-manager.js) ✅ CORRECT
+      - `'keyboardMouseSettings'` - Mouse wheel handler ❌ OLD FORMAT
+      - `'settings'` - Speed slider in control.js ❌ WRONG KEY
+    - Mouse wheel handler writes to old key and sets `keyboard_linear_speed` (multiplier, e.g., 1.2)
+    - When `loadSettings()` runs, fallback reads `keyboard_linear_speed` as `maxLinear`
+    - This is why console shows `max_linear: 1.2` instead of `5.0` (configured value)
+  - [x] 18.2 Add debug logging to loadSettings() method - DONE ✅
+  - [x] 18.3 Fix loadSettings() fallback to use `kb_max_linear_velocity` not `keyboard_linear_speed` - DONE ✅
+  - [ ] 18.4 Fix mouse wheel handler to NOT modify max velocity settings
+    - Speed slider should represent % along curve (0-100%), not modify max velocity
+    - Mouse wheel should update speed slider value, not settings
+  - [ ] 18.5 Fix speed slider handler in control.js to use correct localStorage key
+  - [ ] 18.6 Test with robot to verify settings are now applied correctly
 
 - [ ] 19. Fix deadzone reset on disconnect
   - [ ] 19.1 **Issue 5: Deadzone sliders reset to 10% on disconnect**

@@ -40,16 +40,22 @@ class KeyboardMouseControl {
      * Load settings from localStorage
      */
     loadSettings() {
+        console.log('🔧 [loadSettings] Loading settings from localStorage...');
+
         // Try new settings format first (from landing page settings-manager.js)
         const newSettings = localStorage.getItem('unitree_settings');
+        console.log('🔧 [loadSettings] Raw unitree_settings:', newSettings);
+
         if (newSettings) {
             try {
                 const parsed = JSON.parse(newSettings);
+                console.log('🔧 [loadSettings] Parsed unitree_settings:', parsed);
+
                 if (parsed.keyboard_mouse) {
                     const km = parsed.keyboard_mouse;
-                    return {
+                    const settings = {
                         maxLinear: parseFloat(km.kb_max_linear_velocity || 1.5),
-                        maxStrafe: parseFloat(km.kb_max_strafe_velocity || 1.2),
+                        maxStrafe: parseFloat(km.kb_max_strafe_velocity || 0.6),
                         maxRotation: parseFloat(km.kb_max_rotation_velocity || 3.0),
                         acceleration: parseFloat(km.acceleration || 0.15),
                         deceleration: parseFloat(km.deceleration || 0.2),
@@ -62,39 +68,52 @@ class KeyboardMouseControl {
                         rotationAlpha: parseFloat(km.rotation_alpha || 2.5),
                         rotationDeadzone: parseFloat(km.rotation_deadzone || 0.10)
                     };
+                    console.log('✅ [loadSettings] Loaded settings from unitree_settings:', settings);
+                    return settings;
                 }
             } catch (e) {
-                console.error('Error parsing unitree_settings:', e);
+                console.error('❌ [loadSettings] Error parsing unitree_settings:', e);
             }
         }
 
         // Fallback to old format (from old index.html)
+        console.log('⚠️ [loadSettings] unitree_settings not found, trying old format...');
         const oldSettings = localStorage.getItem('keyboardMouseSettings');
+        console.log('🔧 [loadSettings] Raw keyboardMouseSettings:', oldSettings);
+
         if (oldSettings) {
             try {
                 const settings = JSON.parse(oldSettings);
+                console.log('🔧 [loadSettings] Parsed keyboardMouseSettings:', settings);
 
-                // Check if keyboard_rotation_speed exists (from speed slider/mouse wheel adjustment)
-                // If it exists, use it; otherwise use default maxRotation
-                const rotationSpeed = settings.keyboard_rotation_speed !== undefined
-                    ? parseFloat(settings.keyboard_rotation_speed)
-                    : parseFloat(settings.kb_max_rotation_velocity || settings.maxRotation || 3.0);
-
-                return {
-                    maxLinear: parseFloat(settings.keyboard_linear_speed || settings.kb_max_linear_velocity || settings.maxLinear || 1.5),
-                    maxStrafe: parseFloat(settings.keyboard_strafe_speed || settings.kb_max_strafe_velocity || settings.maxStrafe || 1.2),
-                    maxRotation: rotationSpeed,
+                // IMPORTANT: Don't use keyboard_linear_speed as maxLinear!
+                // keyboard_linear_speed is the keyboard multiplier (0.2), not max velocity
+                // Use kb_max_linear_velocity instead
+                const fallbackSettings = {
+                    maxLinear: parseFloat(settings.kb_max_linear_velocity || settings.maxLinear || 1.5),
+                    maxStrafe: parseFloat(settings.kb_max_strafe_velocity || settings.maxStrafe || 0.6),
+                    maxRotation: parseFloat(settings.kb_max_rotation_velocity || settings.maxRotation || 3.0),
                     acceleration: parseFloat(settings.acceleration || 0.15),
                     deceleration: parseFloat(settings.deceleration || 0.2),
-                    mouseSensitivity: parseFloat(settings.mouse_yaw_sensitivity || settings.mouseSensitivity || 0.5)
+                    mouseSensitivity: parseFloat(settings.mouse_yaw_sensitivity || settings.mouseSensitivity || 0.5),
+                    // Default curve parameters (not in old format)
+                    linearAlpha: 1.5,
+                    linearDeadzone: 0.10,
+                    strafeAlpha: 1.2,
+                    strafeDeadzone: 0.10,
+                    rotationAlpha: 2.5,
+                    rotationDeadzone: 0.10
                 };
+                console.log('✅ [loadSettings] Loaded settings from keyboardMouseSettings:', fallbackSettings);
+                return fallbackSettings;
             } catch (e) {
-                console.error('Error parsing keyboardMouseSettings:', e);
+                console.error('❌ [loadSettings] Error parsing keyboardMouseSettings:', e);
             }
         }
 
         // Default settings (match "normal" preset from settings-manager.js)
-        return {
+        console.log('⚠️ [loadSettings] No settings found, using defaults');
+        const defaultSettings = {
             maxLinear: 1.5,
             maxStrafe: 0.6,  // Fixed: hardware limit
             maxRotation: 3.0,
@@ -109,6 +128,8 @@ class KeyboardMouseControl {
             rotationAlpha: 2.5,
             rotationDeadzone: 0.10
         };
+        console.log('✅ [loadSettings] Using default settings:', defaultSettings);
+        return defaultSettings;
     }
 
     /**
