@@ -132,23 +132,71 @@ Implement adjustable exponential response curves for linear, strafe, and rotatio
 
 ### Phase 4: Preset Integration
 
-- [ ] 9. Update preset system with curve settings
-  - [ ] 9.1 Define curve values for beginner preset (high alpha, smooth)
-  - [ ] 9.2 Define curve values for normal preset (balanced alpha)
-  - [ ] 9.3 Define curve values for advanced preset (lower alpha, responsive)
-  - [ ] 9.4 Define curve values for sport preset (low alpha, aggressive)
+- [x] 9. Update preset system with curve settings
+  - [x] 9.1 Define curve values for beginner preset (high alpha, smooth)
+  - [x] 9.2 Define curve values for normal preset (balanced alpha)
+  - [x] 9.3 Define curve values for advanced preset (lower alpha, responsive)
+  - [x] 9.4 Define curve values for sport preset (low alpha, aggressive)
   - [ ] 9.5 Update `applyPreset()` function to change curve settings
   - [ ] 9.6 Update graphs when preset is selected
   - [ ] 9.7 Test switching between all four presets
   - [ ] 9.8 Verify preset switching updates all three axes
 
-- [ ] 10. Add reset and apply buttons
-  - [ ] 10.1 Add "Reset to Defaults" button to curve tuning panel
-  - [ ] 10.2 Implement reset functionality (restore default alpha/deadzone)
-  - [ ] 10.3 Add "Apply Preset" dropdown to curve tuning panel
-  - [ ] 10.4 Connect dropdown to `applyPreset()` function
-  - [ ] 10.5 Test reset button restores correct defaults
-  - [ ] 10.6 Test preset dropdown applies correct curve values
+- [x] 10. Add reset and apply buttons
+  - [x] 10.1 "Reset to Defaults" button removed (presets handle this)
+  - [x] 10.2 Preset buttons already exist in UI
+  - [x] 10.3 Preset buttons connected to `applyPreset()` function
+  - [ ] 10.4 Test reset button restores correct defaults
+  - [ ] 10.5 Test preset dropdown applies correct curve values
+
+### Phase 7: Critical Bug Fixes (2026-02-05)
+
+- [x] 16. Fix preset application bugs
+  - [x] 16.1 **Issue 2: Presets not applying alpha/deadzone values** - FIXED ✅
+    - Root cause: `updateAllKeyboardMouseSliders()` doesn't update alpha/deadzone sliders
+    - Fix: Added alpha slider updates (linear_alpha, strafe_alpha, rotation_alpha)
+    - Fix: Added deadzone slider updates (linear_deadzone, strafe_deadzone, rotation_deadzone)
+    - Fix: Added chart updates when presets are applied (updateCurveChart for all 3 axes)
+  - [ ] 16.2 Verify all sliders update when preset is selected
+  - [ ] 16.3 Verify graphs update when preset is selected
+  - [ ] 16.4 Test all four presets (Beginner/Normal/Advanced/Sport)
+
+- [ ] 17. Fix speed slider range
+  - [ ] 17.1 **Issue 3: Speed slider range is 10-200%**
+    - Current: min="10" max="200" (0.1x to 2.0x)
+    - Recommendation needed: What should the range be?
+    - Consider: Most users won't need >100% speed
+    - Proposal: Change to min="10" max="100" (10% to 100%)
+  - [ ] 17.2 Update speed slider in templates/control.html
+  - [ ] 17.3 Update keyboard-mouse-control.js MAX_SPEED constant if needed
+  - [ ] 17.4 Test speed slider at various positions
+
+- [ ] 18. Verify settings are applied to robot control
+  - [ ] 18.1 **Issue 4: Settings may not be applied to robot**
+    - Verify curve-utils.js is loaded in control.html ✅ (already confirmed)
+    - Verify loadSettings() reads curve parameters ✅ (already confirmed)
+    - Verify poll() calls applyCurve() functions ✅ (already confirmed)
+    - Test actual robot movement with different alpha values
+    - Test actual robot movement with different deadzone values
+  - [ ] 18.2 Add console logging to verify curve parameters are loaded
+  - [ ] 18.3 Add console logging to verify curves are applied in poll()
+  - [ ] 18.4 Test with robot to verify movement feels correct
+
+- [ ] 19. Fix deadzone reset on disconnect
+  - [ ] 19.1 **Issue 5: Deadzone sliders reset to 10% on disconnect**
+    - Root cause: Page reload when returning to landing page
+    - Verify settings are saved to localStorage when sliders change
+    - Verify settings are loaded from localStorage on page load
+    - Test: Change deadzone to 0%, disconnect, verify it stays at 0%
+  - [ ] 19.2 Add console logging to verify settings save/load
+  - [ ] 19.3 Test settings persistence across page refreshes
+  - [ ] 19.4 Test settings persistence across disconnect/reconnect
+
+- [ ] 20. Verify "Reset Curves" button is removed
+  - [x] 20.1 **Issue 1: Button still visible in UI** - ALREADY FIXED ✅
+    - Verified: Button removed from templates/landing.html
+    - JavaScript handler safely wrapped in `if` check
+  - [ ] 20.2 Test UI to confirm button is not visible
 
 ### Phase 5: Advanced Features
 

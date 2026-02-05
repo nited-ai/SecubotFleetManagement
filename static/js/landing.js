@@ -140,14 +140,50 @@ function initializeSettingsSliders() {
 
     initializeSlider('kb-max-linear-velocity', 'kb-max-linear-value', settings.keyboard_mouse.kb_max_linear_velocity, (value) => {
         updateSetting('keyboard_mouse', 'kb_max_linear_velocity', parseFloat(value));
+        // Update linear curve chart if it exists
+        if (charts && charts.linear) {
+            const fresh = loadSettings().keyboard_mouse;
+            updateCurveChart(
+                charts.linear,
+                'Linear',
+                fresh.linear_alpha !== undefined ? fresh.linear_alpha : 1.5,
+                fresh.linear_deadzone !== undefined ? fresh.linear_deadzone : 0.10,
+                parseFloat(value),
+                HARDWARE_LIMITS.linear
+            );
+        }
     }, ' m/s');
 
     initializeSlider('kb-max-strafe-velocity', 'kb-max-strafe-value', settings.keyboard_mouse.kb_max_strafe_velocity, (value) => {
         updateSetting('keyboard_mouse', 'kb_max_strafe_velocity', parseFloat(value));
+        // Update strafe curve chart if it exists
+        if (charts && charts.strafe) {
+            const fresh = loadSettings().keyboard_mouse;
+            updateCurveChart(
+                charts.strafe,
+                'Strafe',
+                fresh.strafe_alpha !== undefined ? fresh.strafe_alpha : 1.2,
+                fresh.strafe_deadzone !== undefined ? fresh.strafe_deadzone : 0.10,
+                parseFloat(value),
+                HARDWARE_LIMITS.strafe
+            );
+        }
     }, ' m/s');
 
     initializeSlider('kb-max-rotation-velocity', 'kb-max-rotation-value', settings.keyboard_mouse.kb_max_rotation_velocity, (value) => {
         updateSetting('keyboard_mouse', 'kb_max_rotation_velocity', parseFloat(value));
+        // Update rotation curve chart if it exists
+        if (charts && charts.rotation) {
+            const fresh = loadSettings().keyboard_mouse;
+            updateCurveChart(
+                charts.rotation,
+                'Rotation',
+                fresh.rotation_alpha !== undefined ? fresh.rotation_alpha : 2.5,
+                fresh.rotation_deadzone !== undefined ? fresh.rotation_deadzone : 0.10,
+                parseFloat(value),
+                HARDWARE_LIMITS.rotation
+            );
+        }
     }, ' rad/s');
 
     // Initialize gamepad sliders
@@ -261,10 +297,10 @@ function updateAllKeyboardMouseSliders(kbMouseSettings) {
     document.getElementById('mouse-pitch-value').textContent = kbMouseSettings.mouse_pitch_sensitivity.toFixed(2);
 
     document.getElementById('keyboard-linear-speed').value = kbMouseSettings.keyboard_linear_speed;
-    document.getElementById('keyboard-linear-value').textContent = kbMouseSettings.keyboard_linear_speed.toFixed(2);
+    document.getElementById('keyboard-linear-value').textContent = kbMouseSettings.keyboard_linear_speed.toFixed(1);
 
     document.getElementById('keyboard-strafe-speed').value = kbMouseSettings.keyboard_strafe_speed;
-    document.getElementById('keyboard-strafe-value').textContent = kbMouseSettings.keyboard_strafe_speed.toFixed(2);
+    document.getElementById('keyboard-strafe-value').textContent = kbMouseSettings.keyboard_strafe_speed.toFixed(1);
 
     document.getElementById('kb-max-linear-velocity').value = kbMouseSettings.kb_max_linear_velocity;
     document.getElementById('kb-max-linear-value').textContent = kbMouseSettings.kb_max_linear_velocity.toFixed(2) + ' m/s';
@@ -274,6 +310,59 @@ function updateAllKeyboardMouseSliders(kbMouseSettings) {
 
     document.getElementById('kb-max-rotation-velocity').value = kbMouseSettings.kb_max_rotation_velocity;
     document.getElementById('kb-max-rotation-value').textContent = kbMouseSettings.kb_max_rotation_velocity.toFixed(2) + ' rad/s';
+
+    // Update alpha sliders
+    document.getElementById('linear-alpha').value = kbMouseSettings.linear_alpha;
+    document.getElementById('linear-alpha-value').textContent = kbMouseSettings.linear_alpha.toFixed(1);
+
+    document.getElementById('strafe-alpha').value = kbMouseSettings.strafe_alpha;
+    document.getElementById('strafe-alpha-value').textContent = kbMouseSettings.strafe_alpha.toFixed(1);
+
+    document.getElementById('rotation-alpha').value = kbMouseSettings.rotation_alpha;
+    document.getElementById('rotation-alpha-value').textContent = kbMouseSettings.rotation_alpha.toFixed(1);
+
+    // Update deadzone sliders
+    const linearDeadzonePercent = Math.round(kbMouseSettings.linear_deadzone * 100);
+    document.getElementById('linear-deadzone').value = linearDeadzonePercent;
+    document.getElementById('linear-deadzone-value').textContent = linearDeadzonePercent + '%';
+
+    const strafeDeadzonePercent = Math.round(kbMouseSettings.strafe_deadzone * 100);
+    document.getElementById('strafe-deadzone').value = strafeDeadzonePercent;
+    document.getElementById('strafe-deadzone-value').textContent = strafeDeadzonePercent + '%';
+
+    const rotationDeadzonePercent = Math.round(kbMouseSettings.rotation_deadzone * 100);
+    document.getElementById('rotation-deadzone').value = rotationDeadzonePercent;
+    document.getElementById('rotation-deadzone-value').textContent = rotationDeadzonePercent + '%';
+
+    // Update curve graphs
+    if (typeof charts !== 'undefined' && charts.linear && charts.strafe && charts.rotation) {
+        updateCurveChart(
+            charts.linear,
+            'Linear',
+            kbMouseSettings.linear_alpha,
+            kbMouseSettings.linear_deadzone,
+            kbMouseSettings.kb_max_linear_velocity,
+            HARDWARE_LIMITS.linear
+        );
+
+        updateCurveChart(
+            charts.strafe,
+            'Strafe',
+            kbMouseSettings.strafe_alpha,
+            kbMouseSettings.strafe_deadzone,
+            kbMouseSettings.kb_max_strafe_velocity,
+            HARDWARE_LIMITS.strafe
+        );
+
+        updateCurveChart(
+            charts.rotation,
+            'Rotation',
+            kbMouseSettings.rotation_alpha,
+            kbMouseSettings.rotation_deadzone,
+            kbMouseSettings.kb_max_rotation_velocity,
+            HARDWARE_LIMITS.rotation
+        );
+    }
 }
 
 /**
@@ -951,8 +1040,8 @@ function initializeCurveSliders() {
                 charts.linear,
                 'Linear',
                 alpha,
-                fresh.linear_deadzone || 0.10,
-                fresh.kb_max_linear_velocity || 1.5,
+                fresh.linear_deadzone !== undefined ? fresh.linear_deadzone : 0.10,
+                fresh.kb_max_linear_velocity !== undefined ? fresh.kb_max_linear_velocity : 1.5,
                 HARDWARE_LIMITS.linear
             );
         });
@@ -977,9 +1066,9 @@ function initializeCurveSliders() {
             updateCurveChart(
                 charts.linear,
                 'Linear',
-                fresh.linear_alpha || 1.5,
+                fresh.linear_alpha !== undefined ? fresh.linear_alpha : 1.5,
                 deadzone,
-                fresh.kb_max_linear_velocity || 1.5,
+                fresh.kb_max_linear_velocity !== undefined ? fresh.kb_max_linear_velocity : 1.5,
                 HARDWARE_LIMITS.linear
             );
         });
@@ -1003,8 +1092,8 @@ function initializeCurveSliders() {
                 charts.strafe,
                 'Strafe',
                 alpha,
-                fresh.strafe_deadzone || 0.10,
-                fresh.kb_max_strafe_velocity || 0.6,
+                fresh.strafe_deadzone !== undefined ? fresh.strafe_deadzone : 0.10,
+                fresh.kb_max_strafe_velocity !== undefined ? fresh.kb_max_strafe_velocity : 0.6,
                 HARDWARE_LIMITS.strafe
             );
         });
@@ -1029,9 +1118,9 @@ function initializeCurveSliders() {
             updateCurveChart(
                 charts.strafe,
                 'Strafe',
-                fresh.strafe_alpha || 1.2,
+                fresh.strafe_alpha !== undefined ? fresh.strafe_alpha : 1.2,
                 deadzone,
-                fresh.kb_max_strafe_velocity || 0.6,
+                fresh.kb_max_strafe_velocity !== undefined ? fresh.kb_max_strafe_velocity : 0.6,
                 HARDWARE_LIMITS.strafe
             );
         });
@@ -1055,8 +1144,8 @@ function initializeCurveSliders() {
                 charts.rotation,
                 'Rotation',
                 alpha,
-                fresh.rotation_deadzone || 0.10,
-                fresh.kb_max_rotation_velocity || 3.0,
+                fresh.rotation_deadzone !== undefined ? fresh.rotation_deadzone : 0.10,
+                fresh.kb_max_rotation_velocity !== undefined ? fresh.kb_max_rotation_velocity : 3.0,
                 HARDWARE_LIMITS.rotation
             );
         });
@@ -1081,9 +1170,9 @@ function initializeCurveSliders() {
             updateCurveChart(
                 charts.rotation,
                 'Rotation',
-                fresh.rotation_alpha || 2.5,
+                fresh.rotation_alpha !== undefined ? fresh.rotation_alpha : 2.5,
                 deadzone,
-                fresh.kb_max_rotation_velocity || 3.0,
+                fresh.kb_max_rotation_velocity !== undefined ? fresh.kb_max_rotation_velocity : 3.0,
                 HARDWARE_LIMITS.rotation
             );
         });
