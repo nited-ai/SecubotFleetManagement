@@ -34,6 +34,21 @@ class ControlService:
         """Initialize ControlService."""
         self.state = state_service
         self.logger = logging.getLogger(__name__)
+
+        # Slew Rate Limiter State (prevents jerky "freaking out" movements)
+        # Tracks current velocity and time to implement smooth acceleration ramps
+        self.last_cmd_time = time.time()
+        self.current_vx = 0.0      # Current linear velocity (m/s)
+        self.current_vy = 0.0      # Current strafe velocity (m/s)
+        self.current_vyaw = 0.0    # Current rotation velocity (rad/s)
+
+        # Acceleration Limits (units per second squared)
+        # These control how fast the robot can change velocity
+        # Lower values = smoother/slower ramp-up, Higher values = snappier response
+        # Example: MAX_YAW_ACCEL = 10.0 means it takes 0.9s to reach 9.0 rad/s from rest
+        self.MAX_LINEAR_ACCEL = 5.0   # m/s² (tune for linear movement smoothness)
+        self.MAX_STRAFE_ACCEL = 3.0   # m/s² (tune for strafe movement smoothness)
+        self.MAX_YAW_ACCEL = 10.0     # rad/s² (tune for rotation smoothness)
         
         # Preset configurations
         self.presets = {
@@ -123,6 +138,7 @@ class ControlService:
                 # Initialize robot asynchronously
                 connection_service.initialize_robot_sync()
             else:
+                self.reset_slew_rate_limiter()  # Reset velocity state when disabling control
                 self.logger.info("Keyboard/mouse control disabled")
             
             return {'status': 'success', 'enabled': self.state.keyboard_mouse_enabled}
@@ -131,6 +147,20 @@ class ControlService:
             self.logger.error(f"Enable keyboard/mouse error: {e}")
             return {'status': 'error', 'message': str(e)}
     
+    def reset_slew_rate_limiter(self):
+        """
+        Reset slew rate limiter state to zero.
+        Call this when:
+        - Emergency stop is triggered
+        - Control is disabled
+        - Robot is commanded to stop
+        """
+        self.current_vx = 0.0
+        self.current_vy = 0.0
+        self.current_vyaw = 0.0
+        self.last_cmd_time = time.time()
+        self.logger.debug("Slew rate limiter reset to zero")
+
     def get_settings(self) -> dict:
         """Get current gamepad settings."""
         return {'status': 'success', 'settings': self.state.gamepad_settings}
@@ -247,22 +277,62 @@ class ControlService:
             # Frontend sends normalized values (0.0-1.0), backend must multiply by max velocity
             # to get actual physical velocity (e.g., 0.81 * 9.0 = 7.29 rad/s)
 
-            # Step 1: Scale normalized input by max velocity
-            raw_vx = ly * max_linear          # Forward/back from left stick Y
-            raw_vy = -lx * max_strafe         # Strafe from left stick X (inverted)
-            raw_vyaw = -rx * max_rotation     # Yaw from right stick X (inverted)
+            # Step 1: Calculate Target Velocities (scale normalized input by max velocity)
+            raw_target_vx = ly * max_linear          # Forward/back from left stick Y
+            raw_target_vy = -lx * max_strafe         # Strafe from left stick X (inverted)
+            raw_target_vyaw = -rx * max_rotation     # Yaw from right stick X (inverted)
 
-            # Step 2: Clamp to ensure we don't exceed limits (safety check)
-            vx = max(-max_linear, min(max_linear, raw_vx))
-            vy = max(-max_strafe, min(max_strafe, raw_vy))
-            vyaw = max(-max_rotation, min(max_rotation, raw_vyaw))
+            # Step 2: Apply Slew Rate Limiter (prevents jerky "freaking out" movements)
+            # This smoothly ramps velocity changes over time instead of allowing instant jumps
 
-            # Debug logging for keyboard/mouse commands
+            # Calculate time delta since last command
+            now = time.time()
+            dt = now - self.last_cmd_time
+            self.last_cmd_time = now
+
+            # Edge case: If connection dropped for a while (>100ms), reset dt to avoid huge jumps
+            if dt > 0.1:
+                dt = 0.033  # Use typical 30Hz polling rate as fallback
+
+            # Apply slew rate limiter to each axis
+            # Formula: new_velocity = current_velocity + clamp(delta_velocity, -max_step, +max_step)
+            # where max_step = MAX_ACCEL * dt
+
+            # Linear (Forward/Back)
+            delta_vx = raw_target_vx - self.current_vx
+            max_step_vx = self.MAX_LINEAR_ACCEL * dt
+            safe_delta_vx = max(-max_step_vx, min(max_step_vx, delta_vx))
+            self.current_vx += safe_delta_vx
+
+            # Strafe (Left/Right)
+            delta_vy = raw_target_vy - self.current_vy
+            max_step_vy = self.MAX_STRAFE_ACCEL * dt
+            safe_delta_vy = max(-max_step_vy, min(max_step_vy, delta_vy))
+            self.current_vy += safe_delta_vy
+
+            # Rotation (Yaw)
+            delta_vyaw = raw_target_vyaw - self.current_vyaw
+            max_step_vyaw = self.MAX_YAW_ACCEL * dt
+            safe_delta_vyaw = max(-max_step_vyaw, min(max_step_vyaw, delta_vyaw))
+            self.current_vyaw += safe_delta_vyaw
+
+            # Step 3: Final Safety Clamp (absolute limits - should rarely trigger now)
+            vx = max(-max_linear, min(max_linear, self.current_vx))
+            vy = max(-max_strafe, min(max_strafe, self.current_vy))
+            vyaw = max(-max_rotation, min(max_rotation, self.current_vyaw))
+
+            # Debug logging for keyboard/mouse commands (shows slew rate limiter in action)
             if is_keyboard_mouse and (abs(vx) > 0.01 or abs(vy) > 0.01 or abs(vyaw) > 0.01):
-                self.logger.info(f"[KB/Mouse Backend] ly={ly:.3f}, lx={lx:.3f}, rx={rx:.3f} → raw: vx={raw_vx:.3f}, vy={raw_vy:.3f}, vyaw={raw_vyaw:.3f} → clamped: vx={vx:.3f}, vy={vy:.3f}, vyaw={vyaw:.3f} | max_linear={max_linear}, max_rotation={max_rotation}")
+                self.logger.info(f"[KB/Mouse Backend] rx={rx:.3f} → target={raw_target_vyaw:.3f} → ramped={vyaw:.3f} (dt={dt*1000:.1f}ms) | max_rotation={max_rotation}")
 
             # Check if all velocities are zero
             is_zero_velocity = (abs(vx) < 0.01 and abs(vy) < 0.01 and abs(vyaw) < 0.01)
+
+            # Reset slew rate limiter state when robot stops (prevents drift)
+            if is_zero_velocity:
+                self.current_vx = 0.0
+                self.current_vy = 0.0
+                self.current_vyaw = 0.0
 
             # Determine if we should send the command
             should_send = True
