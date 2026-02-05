@@ -453,3 +453,39 @@ User discovered that despite Phase 9 fixes, robot was NOT moving faster with hig
 - More flexible and user-friendly than fixed dampening factors
 - Industry-standard approach used in gamepad/joystick controllers
 
+---
+
+## Phase 11: Precision-Flick Tuning (2026-02-05)
+
+**Issue 32: Mouse Rotation Speed Regression - Precision-Flick Tuning**
+
+**Root Cause Analysis:**
+Developer identified a "precision-flick" tuning problem:
+1. Mouse sensitivity too low (0.3-1.2) preventing fast swipes from reaching 100% input signal
+2. Alpha values already correct (1.5-3.0 exponential range)
+3. Need to increase sensitivity to allow full-speed rotation with fast mouse flicks
+
+**Solution Implemented:**
+- ✅ Increased mouse yaw sensitivity slider max from 5.0 to **50.0**
+- ✅ Increased mouse pitch sensitivity slider max from 5.0 to **25.0**
+- ✅ Updated default mouse sensitivity values in all presets:
+  - Beginner: yaw=3.0, pitch=1.5 (conservative for new users)
+  - Normal: yaw=5.0, pitch=2.5 (balanced precision-flick)
+  - Advanced: yaw=8.0, pitch=4.0 (higher for experienced users)
+  - Sport: yaw=12.0, pitch=6.0 (maximum for competitive use)
+- ✅ Kept `MOUSE_SCALE_FACTOR = 0.08` as constant (no need to expose)
+- ✅ Kept rotation_alpha values as-is (1.5-3.0 range already optimal)
+- ✅ Updated UI tooltips with new recommended ranges
+
+**Expected Behavior:**
+- Small mouse movements → Precise micro-adjustments (exponential curve suppresses jitter)
+- Fast mouse swipes → Full 360° rotation in one motion (high sensitivity reaches 1.0 input)
+- No need to lift and reposition mouse multiple times
+
+**Files Modified:**
+- `templates/landing.html` - Updated slider ranges and default values
+- `static/js/settings-manager.js` - Updated all preset sensitivity values
+- `templates/control.html` - Bumped version to v1.2.0
+
+**Status:** ✅ COMPLETE - Ready for testing
+

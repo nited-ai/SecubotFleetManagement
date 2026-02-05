@@ -12,8 +12,8 @@ const SETTINGS_STORAGE_KEY = 'unitree_settings';
 function getDefaultSettings() {
     return {
         keyboard_mouse: {
-            mouse_yaw_sensitivity: 0.5,
-            mouse_pitch_sensitivity: 0.25,
+            mouse_yaw_sensitivity: 5.0,  // Increased for precision-flick control
+            mouse_pitch_sensitivity: 2.5,  // Increased proportionally
             kb_max_linear_velocity: 1.5,
             kb_max_strafe_velocity: 0.6,  // Fixed: hardware limit
             kb_max_rotation_velocity: 3.0,
@@ -154,8 +154,8 @@ function applyPreset(preset) {
     const presets = {
         beginner: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 0.3,
-                mouse_pitch_sensitivity: 0.15,
+                mouse_yaw_sensitivity: 3.0,  // Lower for beginners, but still allows fast flicks
+                mouse_pitch_sensitivity: 1.5,  // Proportionally lower
                 kb_max_linear_velocity: 1.0,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 0.8, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 2.0,
@@ -164,7 +164,7 @@ function applyPreset(preset) {
                 linear_deadzone: 0.15,
                 strafe_alpha: 1.5,
                 strafe_deadzone: 0.15,
-                rotation_alpha: 3.0,
+                rotation_alpha: 3.0,  // High exponential suppresses jitter from sensitivity
                 rotation_deadzone: 0.15
             },
             gamepad: {
@@ -181,8 +181,8 @@ function applyPreset(preset) {
         },
         normal: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 0.5,
-                mouse_pitch_sensitivity: 0.25,
+                mouse_yaw_sensitivity: 5.0,  // Balanced for precision-flick control
+                mouse_pitch_sensitivity: 2.5,  // Proportional to yaw
                 kb_max_linear_velocity: 1.5,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 1.2, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 3.0,
@@ -191,7 +191,7 @@ function applyPreset(preset) {
                 linear_deadzone: 0.10,
                 strafe_alpha: 1.2,
                 strafe_deadzone: 0.10,
-                rotation_alpha: 2.5,
+                rotation_alpha: 2.5,  // Exponential curve for smooth precision-flick
                 rotation_deadzone: 0.10
             },
             gamepad: {
@@ -208,8 +208,8 @@ function applyPreset(preset) {
         },
         advanced: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 0.8,
-                mouse_pitch_sensitivity: 0.4,
+                mouse_yaw_sensitivity: 8.0,  // Higher for advanced users
+                mouse_pitch_sensitivity: 4.0,  // Proportional to yaw
                 kb_max_linear_velocity: 1.8,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 1.5, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 3.0,  // Fixed: was 3.5, exceeds 3.0 rad/s hardware limit
@@ -218,7 +218,7 @@ function applyPreset(preset) {
                 linear_deadzone: 0.05,
                 strafe_alpha: 1.0,
                 strafe_deadzone: 0.05,
-                rotation_alpha: 2.0,
+                rotation_alpha: 2.0,  // Lower exponential for more linear response
                 rotation_deadzone: 0.05
             },
             gamepad: {
@@ -235,8 +235,8 @@ function applyPreset(preset) {
         },
         sport: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 1.2,
-                mouse_pitch_sensitivity: 0.6,
+                mouse_yaw_sensitivity: 12.0,  // Highest for sport/competitive use
+                mouse_pitch_sensitivity: 6.0,  // Proportional to yaw
                 kb_max_linear_velocity: 2.0,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 1.8, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 3.0,  // Fixed: was 4.0, exceeds 3.0 rad/s hardware limit
@@ -245,7 +245,7 @@ function applyPreset(preset) {
                 linear_deadzone: 0.05,
                 strafe_alpha: 0.8,
                 strafe_deadzone: 0.05,
-                rotation_alpha: 1.5,
+                rotation_alpha: 1.5,  // Lower exponential for near-linear response
                 rotation_deadzone: 0.05
             },
             gamepad: {
