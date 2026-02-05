@@ -35,11 +35,12 @@ class KeyboardMouseControl {
 
         // Mouse scale factor to convert raw pixel movement to normalized input (0-1 range)
         // This matches the old interface behavior (templates/index.html line 2004)
+        // Old interface used 0.08, which worked well for instant response
         // Typical mouse movement: 1-50 pixels per interval for normal movement
         // Fast swipes: 100-200 pixels per interval
-        // With 0.001 scale: 100px * 0.001 * 5.0 sens = 0.5 (50% input to curve)
-        //                   200px * 0.001 * 5.0 sens = 1.0 (100% input to curve, max rotation)
-        this.MOUSE_SCALE_FACTOR = 0.001;  // Scale raw pixels to 0-1 range for curve input
+        // With 0.08 scale: 50px * 0.08 * 0.5 sens = 2.0 → clamped to 1.0 (max rotation)
+        //                  100px * 0.08 * 0.5 sens = 4.0 → clamped to 1.0 (max rotation)
+        this.MOUSE_SCALE_FACTOR = 0.08;  // Scale raw pixels to 0-1 range for curve input
 
         // Speed indicator timeout
         this.speedIndicatorTimeout = null;
@@ -387,10 +388,10 @@ class KeyboardMouseControl {
         // Calculate rotation from mouse
         let rotation = 0;
         if (this.pointerLocked && this.mouseMovement.x !== 0) {
-            // CRITICAL: Scale raw pixel movement to normalized 0-1 range for curve input
-            // This prevents the curve from clamping large pixel values to 1.0
-            // Example: 100 pixels * 0.001 * 5.0 sensitivity = 0.5 (50% input to curve)
-            //          200 pixels * 0.001 * 5.0 sensitivity = 1.0 (100% input to curve)
+            // CRITICAL: Scale raw pixel movement to normalized range for curve input
+            // Old interface used 0.08 scale factor for instant responsive rotation
+            // Example: 50 pixels * 0.08 * 0.5 sensitivity = 2.0 → clamped to 1.0 (max rotation)
+            //          100 pixels * 0.08 * 0.5 sensitivity = 4.0 → clamped to 1.0 (max rotation)
             // Mouse movement is NOT inverted here - will be inverted when sending to backend
             rotation = this.mouseMovement.x * this.MOUSE_SCALE_FACTOR * this.settings.mouseSensitivity;
             this.mouseMovement.x = 0; // Reset after reading
@@ -449,11 +450,11 @@ class KeyboardMouseControl {
         if (rotationInput > 0.01) {
             console.log(`[applyCurve Rotation] input=${rotationInput.toFixed(3)}, curved=${curvedRotation.toFixed(3)}, maxRotation=${maxRotation}, alpha=${rotationAlpha}, deadzone=${rotationDeadzone}`);
         }
-        if (Math.abs(targetRotation) > 0.01) {
-            this.currentVelocities.rotation += (targetRotation - this.currentVelocities.rotation) * acceleration;
-        } else {
-            this.currentVelocities.rotation *= (1 - deceleration);
-        }
+
+        // CRITICAL: Mouse rotation uses INSTANT response (no ramping) for responsive feel
+        // This matches the old interface behavior (templates/index.html line 2061)
+        // Keyboard rotation would use ramping, but we only have mouse rotation here
+        this.currentVelocities.rotation = targetRotation;
 
         // Apply deadzone and invert axes to match backend expectations
         // (matching old interface behavior from templates/index.html lines 2064-2066)

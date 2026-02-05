@@ -374,6 +374,16 @@ User discovered that despite Phase 9 fixes, robot was NOT moving faster with hig
     - Example: 200 pixels * 0.001 * 5.0 = 1.0 (100% input to curve)
     - This allows proportional rotation based on mouse speed
   - **Result:** Smooth continuous rotation without lifting mouse, matches this morning's behavior
+  - **SECOND FIX ATTEMPT (FAILED):** Added MOUSE_SCALE_FACTOR = 0.001, but robot still slow
+  - **ROOT CAUSE IDENTIFIED:** Velocity ramping was slowing down mouse rotation!
+    - Old interface (line 2061): `currentVelocities.rotation = targetRotation;` (INSTANT!)
+    - New code (line 453): `currentVelocities.rotation += (targetRotation - currentVelocities.rotation) * 0.15;` (RAMPING!)
+    - Ramping caused slow acceleration, making rotation feel sluggish
+  - **FINAL FIX:**
+    - Removed velocity ramping for mouse rotation (instant response like old interface)
+    - Changed MOUSE_SCALE_FACTOR from 0.001 to 0.08 (matches old interface)
+    - Updated version to v1.1.0 to force cache refresh
+  - **Result:** Instant responsive mouse rotation matching old interface behavior
 
 ### Phase 5: Advanced Features
 
