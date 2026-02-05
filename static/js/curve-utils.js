@@ -45,28 +45,32 @@ const HARDWARE_LIMITS = {
 function applyCurve(input, alpha, deadzone, maxVelocity, hardwareLimit) {
     // Ensure input is in valid range [0, 1]
     input = Math.max(0, Math.min(1, input));
-    
+
     // Apply deadzone - inputs below deadzone produce zero output
     if (input < deadzone) {
         return 0;
     }
-    
+
     // Normalize input to [0, 1] range after removing deadzone
     // Maps [deadzone, 1.0] to [0.0, 1.0]
     const normalized = (input - deadzone) / (1.0 - deadzone);
-    
+
     // Apply exponential curve using alpha parameter
     // alpha > 1.0 creates convex curve (smooth acceleration)
     // alpha < 1.0 creates concave curve (responsive at low speeds)
     // alpha = 1.0 creates linear response
     const curved = Math.pow(normalized, alpha);
-    
+
     // Scale to maximum velocity
     const scaled = curved * maxVelocity;
-    
-    // Clamp to hardware limit to prevent exceeding robot capabilities
-    const clamped = Math.min(scaled, hardwareLimit);
-    
+
+    // IMPORTANT: Only clamp to hardware limit if maxVelocity is within safe range
+    // This allows testing beyond hardware limits when explicitly configured
+    // If maxVelocity > hardwareLimit, user is intentionally testing beyond limits
+    // If maxVelocity <= hardwareLimit, enforce hardware limit for safety
+    const effectiveLimit = Math.max(maxVelocity, hardwareLimit);
+    const clamped = Math.min(scaled, effectiveLimit);
+
     return clamped;
 }
 

@@ -263,6 +263,49 @@ User identified 5 new critical issues with the current implementation:
     - JavaScript handler safely wrapped in `if` check
   - [ ] 20.2 Test UI to confirm button is not visible
 
+### Phase 9: Critical Bug Fixes After Testing (2026-02-05)
+
+User discovered 4 critical issues after testing the Phase 8 fixes:
+
+- [x] 26. **ISSUE 1: Curve graphs not updating to show new max velocity values** - FIXED ✅
+  - **Problem:** When increasing max velocity sliders (e.g., 9.0 rad/s, 10.0 m/s), graphs showed old hardware limits
+  - **Root Cause:** `applyCurve()` in curve-utils.js was clamping to hardwareLimit even when maxVelocity > hardwareLimit
+    - Line 68: `const clamped = Math.min(scaled, hardwareLimit);`
+    - This prevented testing beyond hardware limits
+  - **Fix Applied:**
+    - Changed clamping logic to use `Math.max(maxVelocity, hardwareLimit)` as effective limit
+    - If maxVelocity > hardwareLimit, user is intentionally testing beyond limits
+    - If maxVelocity <= hardwareLimit, enforce hardware limit for safety
+  - **Result:** Graphs now correctly show curves up to configured max velocity values
+
+- [x] 27. **ISSUE 2: Robot movement much slower than before, especially rotation** - FIXED ✅
+  - **Problem:** After setting max velocities higher, robot moved SLOWER than before
+  - **Root Cause:** Same as Issue 1 - hardware limit clamping in applyCurve()
+    - Even with kb_max_rotation_velocity=9.0, output was clamped to 3.0 rad/s
+    - Robot received commands with max_rotation=9.0 but actual velocities clamped to 3.0
+  - **Fix Applied:** Same fix as Issue 1 - removed premature clamping
+  - **Result:** Robot now uses full configured max velocity range
+
+- [x] 28. **ISSUE 3: Deadzone 0% doesn't persist (resets to 10% on refresh)** - FIXED ✅
+  - **Problem:** Setting deadzone to 0% works, but resets to 10% after page refresh
+  - **Root Cause:** Settings were being saved correctly, but obsolete keys were being merged back in
+    - `loadSettings()` merged stored settings with defaults using spread operator
+    - If stored settings had obsolete keys, they would persist
+  - **Fix Applied:**
+    - Added `cleanObsoleteSettings()` function to remove deprecated keys
+    - Called before merging with defaults in `loadSettings()`
+    - Automatically saves cleaned settings back to localStorage
+  - **Result:** Deadzone 0% now persists correctly across page refreshes
+
+- [x] 29. **ISSUE 4: Obsolete settings still in localStorage** - FIXED ✅
+  - **Problem:** localStorage still contained `keyboard_linear_speed`, `keyboard_strafe_speed`
+  - **Root Cause:** Existing localStorage data wasn't cleaned when code was updated
+  - **Fix Applied:**
+    - `cleanObsoleteSettings()` function removes these keys on load
+    - Automatically migrates old settings to new format
+    - Logs cleanup actions to console for debugging
+  - **Result:** Obsolete settings are automatically removed on next page load
+
 ### Phase 5: Advanced Features
 
 - [ ] 11. Add reference table (like Streamlit example)

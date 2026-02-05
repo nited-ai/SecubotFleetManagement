@@ -43,6 +43,34 @@ function getDefaultSettings() {
 }
 
 /**
+ * Clean obsolete settings from a settings object
+ * Removes deprecated keys that are no longer used
+ * @param {Object} settings - Settings object to clean
+ * @returns {Object} Cleaned settings object
+ */
+function cleanObsoleteSettings(settings) {
+    if (!settings) return settings;
+
+    // List of obsolete keys to remove
+    const obsoleteKeys = [
+        'keyboard_linear_speed',   // Removed: Replaced by speed slider (0-100%)
+        'keyboard_strafe_speed'    // Removed: Replaced by speed slider (0-100%)
+    ];
+
+    // Clean keyboard_mouse section
+    if (settings.keyboard_mouse) {
+        obsoleteKeys.forEach(key => {
+            if (key in settings.keyboard_mouse) {
+                console.log(`🧹 [cleanObsoleteSettings] Removing obsolete key: keyboard_mouse.${key}`);
+                delete settings.keyboard_mouse[key];
+            }
+        });
+    }
+
+    return settings;
+}
+
+/**
  * Load settings from LocalStorage
  * @returns {Object} Settings object (defaults if not found)
  */
@@ -50,14 +78,23 @@ function loadSettings() {
     try {
         const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
         if (stored) {
-            const settings = JSON.parse(stored);
+            let settings = JSON.parse(stored);
+
+            // Clean obsolete settings before merging
+            settings = cleanObsoleteSettings(settings);
+
             // Merge with defaults to ensure all keys exist
             const defaults = getDefaultSettings();
-            return {
+            const merged = {
                 keyboard_mouse: { ...defaults.keyboard_mouse, ...settings.keyboard_mouse },
                 gamepad: { ...defaults.gamepad, ...settings.gamepad },
                 audio: { ...defaults.audio, ...settings.audio }
             };
+
+            // Save cleaned settings back to localStorage
+            saveSettings(merged);
+
+            return merged;
         }
     } catch (error) {
         console.error('Error loading settings:', error);
