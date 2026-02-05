@@ -110,6 +110,26 @@ Implement adjustable exponential response curves for linear, strafe, and rotatio
     - Changed from "Maximum forward/backward speed (hardware limit: 5.0 m/s)" to "Hardware limit: 5.0 m/s"
     - Maintains consistency across all three axes
 
+- [x] 8c. Complete UI Reorganization (2026-02-05)
+  - [x] 8c.1 Moved keyboard/mouse settings to curve tuning sections
+    - Removed standalone "Keyboard & Mouse" section
+    - Moved "Keyboard Linear Speed" to Linear section (between graph and max velocity)
+    - Moved "Keyboard Strafe Speed" to Strafe section (between graph and max velocity)
+    - Moved "Mouse Yaw Sensitivity" and "Mouse Pitch Sensitivity" to Rotation section
+    - Each axis now has: Graph → Speed Multiplier(s) → Max Velocity → Alpha → Deadzone
+  - [x] 8c.2 Added tooltips to all sliders
+    - Speed multipliers: Explain how they affect keyboard/mouse input
+    - Max velocity: Explain Y-axis maximum and hardware limits
+    - Alpha: Explain curve shape and responsiveness
+    - Deadzone: Explain drift prevention and red line on graph
+  - [x] 8c.3 Removed "Reset Curves to Defaults" button
+    - Preset buttons (Beginner/Normal/Advanced/Sport) already handle resetting
+    - Reduces UI clutter
+  - [x] 8c.4 Hidden Gamepad section
+    - Used `style="display: none;"` to hide section
+    - Preserved HTML for future use
+    - Can be shown later if needed
+
 ### Phase 4: Preset Integration
 
 - [ ] 9. Update preset system with curve settings

@@ -84,52 +84,7 @@
                     <p class="text-sm text-gray-400 mt-2">Select a preset to apply settings to both keyboard/mouse and gamepad controls. Custom is automatically selected when you adjust individual sliders.</p>
                 </div>
 
-                <!-- Keyboard/Mouse Settings -->
-                <div class="mb-8">
-                    <h3 class="text-xl font-semibold mb-4 text-unitree-primary">Keyboard & Mouse</h3>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- Mouse Yaw Sensitivity -->
-                        <div class="form-group">
-                            <label for="mouse-yaw-sensitivity" class="form-label flex justify-between">
-                                <span>Mouse Yaw Sensitivity</span>
-                                <span id="mouse-yaw-value" class="text-unitree-primary font-mono">0.5</span>
-                            </label>
-                            <input type="range" id="mouse-yaw-sensitivity" class="slider" min="0.1" max="2.0" step="0.1" value="0.5">
-                            <p class="form-help">Horizontal mouse movement sensitivity</p>
-                        </div>
-
-                        <!-- Mouse Pitch Sensitivity -->
-                        <div class="form-group">
-                            <label for="mouse-pitch-sensitivity" class="form-label flex justify-between">
-                                <span>Mouse Pitch Sensitivity</span>
-                                <span id="mouse-pitch-value" class="text-unitree-primary font-mono">0.25</span>
-                            </label>
-                            <input type="range" id="mouse-pitch-sensitivity" class="slider" min="0.1" max="2.0" step="0.1" value="0.25">
-                            <p class="form-help">Vertical mouse movement sensitivity</p>
-                        </div>
-
-                        <!-- Keyboard Linear Speed -->
-                        <div class="form-group">
-                            <label for="keyboard-linear-speed" class="form-label flex justify-between">
-                                <span>Keyboard Linear Speed</span>
-                                <span id="keyboard-linear-value" class="text-unitree-primary font-mono">0.2</span>
-                            </label>
-                            <input type="range" id="keyboard-linear-speed" class="slider" min="0.1" max="1.0" step="0.1" value="0.2">
-                            <p class="form-help">Forward/backward movement speed</p>
-                        </div>
-
-                        <!-- Keyboard Strafe Speed -->
-                        <div class="form-group">
-                            <label for="keyboard-strafe-speed" class="form-label flex justify-between">
-                                <span>Keyboard Strafe Speed</span>
-                                <span id="keyboard-strafe-value" class="text-unitree-primary font-mono">0.2</span>
-                            </label>
-                            <input type="range" id="keyboard-strafe-speed" class="slider" min="0.1" max="1.0" step="0.1" value="0.2">
-                            <p class="form-help">Left/right movement speed</p>
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Response Curve Tuning -->
                 <div class="mb-8">
@@ -147,13 +102,25 @@
                                 <canvas id="linear-curve-chart" height="200"></canvas>
                             </div>
 
+                            <!-- Keyboard Linear Speed -->
+                            <div class="form-group">
+                                <label for="keyboard-linear-speed" class="form-label flex justify-between">
+                                    <span>Keyboard Speed Multiplier</span>
+                                    <span id="keyboard-linear-value" class="text-unitree-primary font-mono">0.2</span>
+                                </label>
+                                <input type="range" id="keyboard-linear-speed" class="slider" min="0.1" max="1.0" step="0.1" value="0.2"
+                                       title="Controls how fast the robot moves when using W/S keys. This multiplies the input before the curve is applied. Higher = faster response to key presses.">
+                                <p class="form-help">Base speed for W/S keys (0.1-1.0)</p>
+                            </div>
+
                             <!-- Max Linear Velocity -->
                             <div class="form-group">
                                 <label for="kb-max-linear-velocity" class="form-label flex justify-between">
                                     <span>Max Velocity</span>
                                     <span id="kb-max-linear-value" class="text-unitree-primary font-mono">1.5 m/s</span>
                                 </label>
-                                <input type="range" id="kb-max-linear-velocity" class="slider" min="0.3" max="5.0" step="0.1" value="1.5">
+                                <input type="range" id="kb-max-linear-velocity" class="slider" min="0.3" max="5.0" step="0.1" value="1.5"
+                                       title="Maximum forward/backward speed the robot can reach. This is the Y-axis maximum on the graph above. Hardware limit is 5.0 m/s.">
                                 <p class="form-help">Hardware limit: 5.0 m/s</p>
                             </div>
 
@@ -163,7 +130,8 @@
                                     <span>Alpha (α)</span>
                                     <span id="linear-alpha-value" class="text-unitree-primary font-mono">1.5</span>
                                 </label>
-                                <input type="range" id="linear-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="1.5">
+                                <input type="range" id="linear-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="1.5"
+                                       title="Controls the curve shape. Lower values (0.1-1.0) = more responsive at low speeds. Higher values (2.0-4.0) = smoother, more gradual acceleration. See graph above.">
                                 <p class="form-help">Curve steepness (0.1-4.0)</p>
                             </div>
 
@@ -173,7 +141,8 @@
                                     <span>Deadzone</span>
                                     <span id="linear-deadzone-value" class="text-unitree-primary font-mono">10%</span>
                                 </label>
-                                <input type="range" id="linear-deadzone" class="slider" min="0" max="30" step="1" value="10">
+                                <input type="range" id="linear-deadzone" class="slider" min="0" max="30" step="1" value="10"
+                                       title="Ignores small inputs below this percentage to prevent drift or unintended movement. Shown as red dashed line on graph. 10% is typical.">
                                 <p class="form-help">Ignore inputs below this % (0-30%)</p>
                             </div>
                         </div>
@@ -187,13 +156,25 @@
                                 <canvas id="strafe-curve-chart" height="200"></canvas>
                             </div>
 
+                            <!-- Keyboard Strafe Speed -->
+                            <div class="form-group">
+                                <label for="keyboard-strafe-speed" class="form-label flex justify-between">
+                                    <span>Keyboard Speed Multiplier</span>
+                                    <span id="keyboard-strafe-value" class="text-unitree-primary font-mono">0.2</span>
+                                </label>
+                                <input type="range" id="keyboard-strafe-speed" class="slider" min="0.1" max="1.0" step="0.1" value="0.2"
+                                       title="Controls how fast the robot strafes when using A/D keys. This multiplies the input before the curve is applied. Higher = faster response to key presses.">
+                                <p class="form-help">Base speed for A/D keys (0.1-1.0)</p>
+                            </div>
+
                             <!-- Max Strafe Velocity -->
                             <div class="form-group">
                                 <label for="kb-max-strafe-velocity" class="form-label flex justify-between">
                                     <span>Max Velocity</span>
                                     <span id="kb-max-strafe-value" class="text-unitree-primary font-mono">0.6 m/s</span>
                                 </label>
-                                <input type="range" id="kb-max-strafe-velocity" class="slider" min="0.1" max="0.6" step="0.05" value="0.6">
+                                <input type="range" id="kb-max-strafe-velocity" class="slider" min="0.1" max="0.6" step="0.05" value="0.6"
+                                       title="Maximum left/right speed the robot can reach. This is the Y-axis maximum on the graph above. Hardware limit is 0.6 m/s.">
                                 <p class="form-help">Hardware limit: 0.6 m/s</p>
                             </div>
 
@@ -203,7 +184,8 @@
                                     <span>Alpha (α)</span>
                                     <span id="strafe-alpha-value" class="text-unitree-primary font-mono">1.2</span>
                                 </label>
-                                <input type="range" id="strafe-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="1.2">
+                                <input type="range" id="strafe-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="1.2"
+                                       title="Controls the curve shape. Lower values (0.1-1.0) = more responsive at low speeds. Higher values (2.0-4.0) = smoother, more gradual acceleration. See graph above.">
                                 <p class="form-help">Curve steepness (0.1-4.0)</p>
                             </div>
 
@@ -213,7 +195,8 @@
                                     <span>Deadzone</span>
                                     <span id="strafe-deadzone-value" class="text-unitree-primary font-mono">10%</span>
                                 </label>
-                                <input type="range" id="strafe-deadzone" class="slider" min="0" max="30" step="1" value="10">
+                                <input type="range" id="strafe-deadzone" class="slider" min="0" max="30" step="1" value="10"
+                                       title="Ignores small inputs below this percentage to prevent drift or unintended movement. Shown as red dashed line on graph. 10% is typical.">
                                 <p class="form-help">Ignore inputs below this % (0-30%)</p>
                             </div>
                         </div>
@@ -227,13 +210,36 @@
                                 <canvas id="rotation-curve-chart" height="200"></canvas>
                             </div>
 
+                            <!-- Mouse Yaw Sensitivity -->
+                            <div class="form-group">
+                                <label for="mouse-yaw-sensitivity" class="form-label flex justify-between">
+                                    <span>Mouse Yaw Sensitivity</span>
+                                    <span id="mouse-yaw-value" class="text-unitree-primary font-mono">0.5</span>
+                                </label>
+                                <input type="range" id="mouse-yaw-sensitivity" class="slider" min="0.1" max="2.0" step="0.1" value="0.5"
+                                       title="Controls how fast the robot rotates left/right when moving the mouse horizontally. Higher = faster rotation response to mouse movement.">
+                                <p class="form-help">Horizontal mouse sensitivity (0.1-2.0)</p>
+                            </div>
+
+                            <!-- Mouse Pitch Sensitivity -->
+                            <div class="form-group">
+                                <label for="mouse-pitch-sensitivity" class="form-label flex justify-between">
+                                    <span>Mouse Pitch Sensitivity</span>
+                                    <span id="mouse-pitch-value" class="text-unitree-primary font-mono">0.25</span>
+                                </label>
+                                <input type="range" id="mouse-pitch-sensitivity" class="slider" min="0.1" max="2.0" step="0.1" value="0.25"
+                                       title="Controls how fast the camera tilts up/down when moving the mouse vertically. Higher = faster pitch response to mouse movement.">
+                                <p class="form-help">Vertical mouse sensitivity (0.1-2.0)</p>
+                            </div>
+
                             <!-- Max Rotation Velocity -->
                             <div class="form-group">
                                 <label for="kb-max-rotation-velocity" class="form-label flex justify-between">
                                     <span>Max Velocity</span>
                                     <span id="kb-max-rotation-value" class="text-unitree-primary font-mono">3.0 rad/s</span>
                                 </label>
-                                <input type="range" id="kb-max-rotation-velocity" class="slider" min="0.5" max="3.0" step="0.1" value="3.0">
+                                <input type="range" id="kb-max-rotation-velocity" class="slider" min="0.5" max="3.0" step="0.1" value="3.0"
+                                       title="Maximum rotation speed the robot can reach. This is the Y-axis maximum on the graph above. Hardware limit is 3.0 rad/s.">
                                 <p class="form-help">Hardware limit: 3.0 rad/s</p>
                             </div>
 
@@ -243,7 +249,8 @@
                                     <span>Alpha (α)</span>
                                     <span id="rotation-alpha-value" class="text-unitree-primary font-mono">2.5</span>
                                 </label>
-                                <input type="range" id="rotation-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="2.5">
+                                <input type="range" id="rotation-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="2.5"
+                                       title="Controls the curve shape. Lower values (0.1-1.0) = more responsive at low speeds. Higher values (2.0-4.0) = smoother, more gradual acceleration. See graph above.">
                                 <p class="form-help">Curve steepness (0.1-4.0)</p>
                             </div>
 
@@ -253,22 +260,16 @@
                                     <span>Deadzone</span>
                                     <span id="rotation-deadzone-value" class="text-unitree-primary font-mono">10%</span>
                                 </label>
-                                <input type="range" id="rotation-deadzone" class="slider" min="0" max="30" step="1" value="10">
+                                <input type="range" id="rotation-deadzone" class="slider" min="0" max="30" step="1" value="10"
+                                       title="Ignores small inputs below this percentage to prevent drift or unintended movement. Shown as red dashed line on graph. 10% is typical.">
                                 <p class="form-help">Ignore inputs below this % (0-30%)</p>
                             </div>
                         </div>
                     </div>
-
-                    <!-- Reset Button -->
-                    <div class="mt-6 flex justify-end">
-                        <button id="reset-curves-btn" class="px-6 py-2 bg-unitree-dark-lighter hover:bg-unitree-secondary text-white rounded-lg transition-colors duration-200">
-                            Reset Curves to Defaults
-                        </button>
-                    </div>
                 </div>
 
-                <!-- Gamepad Settings -->
-                <div class="mb-8">
+                <!-- Gamepad Settings (Hidden for now) -->
+                <div class="mb-8" style="display: none;">
                     <h3 class="text-xl font-semibold mb-4 text-unitree-primary">Gamepad</h3>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
