@@ -349,6 +349,32 @@ User discovered that despite Phase 9 fixes, robot was NOT moving faster with hig
     - Backend: Final velocities sent to robot with max velocity values
   - **Result:** Robot now uses full configured velocity range (9.0 rad/s, 10.0 m/s)
 
+- [x] 31. **REGRESSION: Mouse rotation speed much slower than this morning** - FIXED ✅
+  - **Problem:**
+    - Robot rotates much slower than expected despite vyaw ≈ 8.9 rad/s being sent
+    - Need to lift and reposition mouse multiple times for 360° rotation
+    - This morning: Continuous smooth rotation without lifting mouse
+    - Console shows: `input=1855.000, curved=9.000` (input clamped to 1.0)
+  - **Root Cause:** Missing `MOUSE_SCALE_FACTOR` to normalize raw pixel values
+    - Old code (templates/index.html line 2004): `MOUSE_SCALE_FACTOR = 0.08`
+    - New code: `rotation = mouseMovement.x * mouseSensitivity` (NO scale factor!)
+    - Example: 1855 pixels * 5.0 sensitivity = 9275 → clamped to 1.0 by applyCurve()
+    - Result: Every mouse movement produces max rotation (9.0 rad/s) for only 33ms
+    - Velocity ramping then decelerates because mouseMovement.x resets to 0
+  - **Investigation Process:**
+    - Traced data flow: Mouse movement → rotation calculation → applyCurve() → velocity ramping
+    - Found applyCurve() clamps input to [0, 1] range (line 47 in curve-utils.js)
+    - Found velocity ramping working correctly (lines 441-444)
+    - Compared with old interface code (templates/index.html lines 2004-2006)
+    - Discovered missing MOUSE_SCALE_FACTOR to normalize pixel values
+  - **Fix Applied:**
+    - Added `MOUSE_SCALE_FACTOR = 0.001` constant (lines 36-42)
+    - Updated rotation calculation: `rotation = mouseMovement.x * MOUSE_SCALE_FACTOR * mouseSensitivity`
+    - Example: 100 pixels * 0.001 * 5.0 = 0.5 (50% input to curve)
+    - Example: 200 pixels * 0.001 * 5.0 = 1.0 (100% input to curve)
+    - This allows proportional rotation based on mouse speed
+  - **Result:** Smooth continuous rotation without lifting mouse, matches this morning's behavior
+
 ### Phase 5: Advanced Features
 
 - [ ] 11. Add reference table (like Streamlit example)

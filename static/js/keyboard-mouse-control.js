@@ -33,6 +33,14 @@ class KeyboardMouseControl {
         this.MIN_SPEED = 0;        // Minimum 0% speed
         this.MAX_SPEED = 100;      // Maximum 100% speed
 
+        // Mouse scale factor to convert raw pixel movement to normalized input (0-1 range)
+        // This matches the old interface behavior (templates/index.html line 2004)
+        // Typical mouse movement: 1-50 pixels per interval for normal movement
+        // Fast swipes: 100-200 pixels per interval
+        // With 0.001 scale: 100px * 0.001 * 5.0 sens = 0.5 (50% input to curve)
+        //                   200px * 0.001 * 5.0 sens = 1.0 (100% input to curve, max rotation)
+        this.MOUSE_SCALE_FACTOR = 0.001;  // Scale raw pixels to 0-1 range for curve input
+
         // Speed indicator timeout
         this.speedIndicatorTimeout = null;
 
@@ -379,8 +387,12 @@ class KeyboardMouseControl {
         // Calculate rotation from mouse
         let rotation = 0;
         if (this.pointerLocked && this.mouseMovement.x !== 0) {
+            // CRITICAL: Scale raw pixel movement to normalized 0-1 range for curve input
+            // This prevents the curve from clamping large pixel values to 1.0
+            // Example: 100 pixels * 0.001 * 5.0 sensitivity = 0.5 (50% input to curve)
+            //          200 pixels * 0.001 * 5.0 sensitivity = 1.0 (100% input to curve)
             // Mouse movement is NOT inverted here - will be inverted when sending to backend
-            rotation = this.mouseMovement.x * this.settings.mouseSensitivity;
+            rotation = this.mouseMovement.x * this.MOUSE_SCALE_FACTOR * this.settings.mouseSensitivity;
             this.mouseMovement.x = 0; // Reset after reading
         }
 
