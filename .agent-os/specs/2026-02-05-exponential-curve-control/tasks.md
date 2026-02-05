@@ -170,22 +170,29 @@ Implement adjustable exponential response curves for linear, strafe, and rotatio
   - [ ] 17.3 Update speed slider handler to use speed as input % to curve
   - [ ] 17.4 Test speed slider at various positions
 
-- [ ] 18. **Issue 4: Settings not applied to robot control** - CRITICAL BUG FOUND
+- [x] 18. **Issue 4: Settings not applied to robot control** - FIXED ✅
   - [x] 18.1 Investigate why settings aren't being applied - ROOT CAUSE FOUND ✅
-    - **CRITICAL BUG:** Three different localStorage keys are being used:
+    - **CRITICAL BUG:** Three different localStorage keys were being used:
       - `'unitree_settings'` - Landing page (settings-manager.js) ✅ CORRECT
       - `'keyboardMouseSettings'` - Mouse wheel handler ❌ OLD FORMAT
       - `'settings'` - Speed slider in control.js ❌ WRONG KEY
-    - Mouse wheel handler writes to old key and sets `keyboard_linear_speed` (multiplier, e.g., 1.2)
-    - When `loadSettings()` runs, fallback reads `keyboard_linear_speed` as `maxLinear`
-    - This is why console shows `max_linear: 1.2` instead of `5.0` (configured value)
+    - Mouse wheel handler was writing to old key and setting `keyboard_linear_speed` (multiplier, e.g., 1.2)
+    - When `loadSettings()` ran, fallback read `keyboard_linear_speed` as `maxLinear`
+    - This is why console showed `max_linear: 1.2` instead of `5.0` (configured value)
   - [x] 18.2 Add debug logging to loadSettings() method - DONE ✅
   - [x] 18.3 Fix loadSettings() fallback to use `kb_max_linear_velocity` not `keyboard_linear_speed` - DONE ✅
-  - [ ] 18.4 Fix mouse wheel handler to NOT modify max velocity settings
-    - Speed slider should represent % along curve (0-100%), not modify max velocity
-    - Mouse wheel should update speed slider value, not settings
-  - [ ] 18.5 Fix speed slider handler in control.js to use correct localStorage key
-  - [ ] 18.6 Test with robot to verify settings are now applied correctly
+  - [x] 18.4 Fix mouse wheel handler to update speed percentage, not max velocity settings - DONE ✅
+    - Speed slider now represents % along curve (0-100%)
+    - Mouse wheel updates `speedPercentage` property (0-100%)
+    - No longer modifies localStorage or max velocity settings
+  - [x] 18.5 Fix speed slider handler in control.js - DONE ✅
+    - Now calls `keyboardMouseControl.setSpeedPercentage(percentage)`
+    - No longer modifies localStorage
+  - [x] 18.6 Remove Keyboard Speed Multiplier sliders - DONE ✅
+    - Removed from templates/landing.html (linear and strafe sections)
+    - Removed from static/js/landing.js (initialization and preset updates)
+    - User decision: Remove completely (redundant with speed slider)
+  - [ ] 18.7 Test with robot to verify settings are now applied correctly
 
 - [ ] 19. Fix deadzone reset on disconnect
   - [ ] 19.1 **Issue 5: Deadzone sliders reset to 10% on disconnect**

@@ -217,43 +217,24 @@ function initializeSpeedSlider() {
      */
     speedSlider.addEventListener('input', (e) => {
         const percentage = parseInt(e.target.value);
-        const speed = percentage / 100; // Convert percentage to multiplier (e.g., 100% = 1.0x)
 
         // Update percentage display
         speedPercentage.textContent = `${percentage}%`;
 
-        // Update keyboard/mouse control speed settings
-        if (typeof keyboardMouseControl !== 'undefined') {
-            // Get current settings
-            const settings = JSON.parse(localStorage.getItem('settings') || '{}');
-            const kbMouseSettings = settings.keyboard_mouse || {};
-
-            // Update linear, strafe, and rotation speeds (curves are applied in keyboard-mouse-control.js poll() method)
-            kbMouseSettings.keyboard_linear_speed = speed;
-            kbMouseSettings.keyboard_strafe_speed = speed;
-            kbMouseSettings.keyboard_rotation_speed = speed;  // Now uses same multiplier, curves handle the dampening
-
-            // Save back to localStorage
-            settings.keyboard_mouse = kbMouseSettings;
-            localStorage.setItem('settings', JSON.stringify(settings));
-
-            // Get curve settings for logging
-            const linearAlpha = kbMouseSettings.linear_alpha || 1.5;
-            const strafeAlpha = kbMouseSettings.strafe_alpha || 1.2;
-            const rotationAlpha = kbMouseSettings.rotation_alpha || 2.5;
-
-            console.log(`🎚️ Speed slider adjusted: ${percentage}% (all axes use exponential curves with alpha: linear=${linearAlpha}, strafe=${strafeAlpha}, rotation=${rotationAlpha})`);
+        // Update keyboard/mouse control speed percentage
+        if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
+            keyboardMouseControl.setSpeedPercentage(percentage);
         }
     });
 
-    // Initialize slider to current speed from settings
-    const settings = JSON.parse(localStorage.getItem('settings') || '{}');
-    const kbMouseSettings = settings.keyboard_mouse || {};
-    const currentSpeed = parseFloat(kbMouseSettings.keyboard_linear_speed || 1.0);
-    const currentPercentage = Math.round(currentSpeed * 100);
+    // Initialize slider to 100% (default speed)
+    speedSlider.value = 100;
+    speedPercentage.textContent = '100%';
 
-    speedSlider.value = currentPercentage;
-    speedPercentage.textContent = `${currentPercentage}%`;
+    // Set initial speed in keyboard/mouse control
+    if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
+        keyboardMouseControl.setSpeedPercentage(100);
+    }
 }
 
 /**

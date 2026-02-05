@@ -130,14 +130,6 @@ function initializeSettingsSliders() {
         updateSetting('keyboard_mouse', 'mouse_pitch_sensitivity', parseFloat(value));
     });
 
-    initializeSlider('keyboard-linear-speed', 'keyboard-linear-value', settings.keyboard_mouse.keyboard_linear_speed, (value) => {
-        updateSetting('keyboard_mouse', 'keyboard_linear_speed', parseFloat(value));
-    });
-
-    initializeSlider('keyboard-strafe-speed', 'keyboard-strafe-value', settings.keyboard_mouse.keyboard_strafe_speed, (value) => {
-        updateSetting('keyboard_mouse', 'keyboard_strafe_speed', parseFloat(value));
-    });
-
     initializeSlider('kb-max-linear-velocity', 'kb-max-linear-value', settings.keyboard_mouse.kb_max_linear_velocity, (value) => {
         updateSetting('keyboard_mouse', 'kb_max_linear_velocity', parseFloat(value));
         // Update linear curve chart if it exists
@@ -295,12 +287,6 @@ function updateAllKeyboardMouseSliders(kbMouseSettings) {
 
     document.getElementById('mouse-pitch-sensitivity').value = kbMouseSettings.mouse_pitch_sensitivity;
     document.getElementById('mouse-pitch-value').textContent = kbMouseSettings.mouse_pitch_sensitivity.toFixed(2);
-
-    document.getElementById('keyboard-linear-speed').value = kbMouseSettings.keyboard_linear_speed;
-    document.getElementById('keyboard-linear-value').textContent = kbMouseSettings.keyboard_linear_speed.toFixed(1);
-
-    document.getElementById('keyboard-strafe-speed').value = kbMouseSettings.keyboard_strafe_speed;
-    document.getElementById('keyboard-strafe-value').textContent = kbMouseSettings.keyboard_strafe_speed.toFixed(1);
 
     document.getElementById('kb-max-linear-velocity').value = kbMouseSettings.kb_max_linear_velocity;
     document.getElementById('kb-max-linear-value').textContent = kbMouseSettings.kb_max_linear_velocity.toFixed(2) + ' m/s';

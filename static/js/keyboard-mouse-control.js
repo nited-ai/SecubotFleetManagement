@@ -22,12 +22,16 @@ class KeyboardMouseControl {
         // Settings (loaded from localStorage)
         this.settings = this.loadSettings();
 
+        // Speed percentage (0-100%, controlled by speed slider)
+        // This represents the percentage along the curve (0% = no movement, 100% = full curve)
+        this.speedPercentage = 100; // Default to 100%
+
         // Constants
         this.POLL_RATE = 33; // 30Hz
         this.DEADZONE = 0.1;
-        this.WHEEL_STEP = 0.2;     // Change by 0.2x per wheel notch
-        this.MIN_SPEED = 0.1;      // Minimum 0.1x (10% speed)
-        this.MAX_SPEED = 2.0;      // Maximum 2.0x (200% speed)
+        this.WHEEL_STEP = 5;       // Change by 5% per wheel notch
+        this.MIN_SPEED = 0;        // Minimum 0% speed
+        this.MAX_SPEED = 100;      // Maximum 100% speed
 
         // Speed indicator timeout
         this.speedIndicatorTimeout = null;
@@ -380,6 +384,13 @@ class KeyboardMouseControl {
             this.mouseMovement.x = 0; // Reset after reading
         }
 
+        // Apply speed percentage (0-100%) to inputs
+        // This represents the percentage along the curve
+        const speedMultiplier = this.speedPercentage / 100;
+        forward *= speedMultiplier;
+        strafe *= speedMultiplier;
+        rotation *= speedMultiplier;
+
         // Apply velocity ramping (smooth acceleration/deceleration) with exponential curves
         const { maxLinear, maxStrafe, maxRotation, acceleration, deceleration,
                 linearAlpha, linearDeadzone, strafeAlpha, strafeDeadzone,
@@ -484,52 +495,46 @@ class KeyboardMouseControl {
 
         e.preventDefault();  // Prevent page scroll
 
-        // Get current settings from localStorage
-        const kbMouseSettings = JSON.parse(localStorage.getItem('keyboardMouseSettings') || '{}');
-        let currentLinearSpeed = parseFloat(kbMouseSettings.keyboard_linear_speed || this.settings.maxLinear);
-        let currentStrafeSpeed = parseFloat(kbMouseSettings.keyboard_strafe_speed || this.settings.maxStrafe);
-
-        // Calculate new speed (wheel up = increase, wheel down = decrease)
+        // Calculate new speed percentage (wheel up = increase, wheel down = decrease)
         let newSpeed;
         if (e.deltaY < 0) {
             // Wheel up - increase speed
-            newSpeed = Math.min(this.MAX_SPEED, currentLinearSpeed + this.WHEEL_STEP);
+            newSpeed = Math.min(this.MAX_SPEED, this.speedPercentage + this.WHEEL_STEP);
         } else {
             // Wheel down - decrease speed
-            newSpeed = Math.max(this.MIN_SPEED, currentLinearSpeed - this.WHEEL_STEP);
+            newSpeed = Math.max(this.MIN_SPEED, this.speedPercentage - this.WHEEL_STEP);
         }
 
-        // Round to 1 decimal place to avoid floating point issues
-        newSpeed = Math.round(newSpeed * 10) / 10;
+        // Update internal speed percentage
+        this.speedPercentage = newSpeed;
 
-        // Update settings in localStorage (curves are applied in poll() method)
-        kbMouseSettings.keyboard_linear_speed = newSpeed;
-        kbMouseSettings.keyboard_strafe_speed = newSpeed;
-        kbMouseSettings.keyboard_rotation_speed = newSpeed;  // Now uses same multiplier, curves handle the dampening
-        localStorage.setItem('keyboardMouseSettings', JSON.stringify(kbMouseSettings));
-
-        // Update internal settings
-        this.settings.maxLinear = newSpeed;
-        this.settings.maxStrafe = newSpeed;
-        this.settings.maxRotation = newSpeed;
+        // Update speed slider UI if it exists
+        const speedSlider = document.getElementById('speed-slider');
+        const speedPercentageDisplay = document.getElementById('speed-percentage');
+        if (speedSlider) {
+            speedSlider.value = newSpeed;
+        }
+        if (speedPercentageDisplay) {
+            speedPercentageDisplay.textContent = `${newSpeed}%`;
+        }
 
         // Show visual feedback
         this.showSpeedIndicator(newSpeed);
 
-        console.log(`🎡 Mouse wheel speed adjustment: ${(newSpeed * 100).toFixed(0)}% (all axes use exponential curves with alpha: linear=${this.settings.linearAlpha}, strafe=${this.settings.strafeAlpha}, rotation=${this.settings.rotationAlpha})`);
+        console.log(`🎡 Mouse wheel speed adjustment: ${newSpeed}% (input percentage along curve)`);
     }
 
     /**
-     * Show speed indicator overlay and update speed slider
+     * Show speed indicator overlay
      */
-    showSpeedIndicator(speed) {
+    showSpeedIndicator(speedPercentage) {
         const indicator = document.getElementById('speedIndicator');
         const speedValue = document.getElementById('speedValue');
 
         if (!indicator || !speedValue) return;
 
-        // Update display
-        speedValue.textContent = `${(speed * 100).toFixed(0)}%`;
+        // Update display (speedPercentage is already 0-100)
+        speedValue.textContent = `${speedPercentage}%`;
         indicator.style.display = 'block';
 
         // Auto-hide after 2 seconds
@@ -537,23 +542,14 @@ class KeyboardMouseControl {
         this.speedIndicatorTimeout = setTimeout(() => {
             indicator.style.display = 'none';
         }, 2000);
-
-        // Update speed slider and percentage display
-        this.updateSpeedSlider(speed);
     }
 
     /**
-     * Update speed slider and percentage display
+     * Set speed percentage from external source (e.g., speed slider)
      */
-    updateSpeedSlider(speed) {
-        const speedSlider = document.getElementById('speed-slider');
-        const speedPercentage = document.getElementById('speed-percentage');
-
-        if (speedSlider && speedPercentage) {
-            const percentage = Math.round(speed * 100);
-            speedSlider.value = percentage;
-            speedPercentage.textContent = `${percentage}%`;
-        }
+    setSpeedPercentage(percentage) {
+        this.speedPercentage = Math.max(this.MIN_SPEED, Math.min(this.MAX_SPEED, percentage));
+        console.log(`🎚️ Speed set to ${this.speedPercentage}% (input percentage along curve)`);
     }
 }
 
