@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load and render robot cards
     renderRobotCards();
+
+    // Initialize curve charts
+    initializeCurveCharts();
 });
 
 /**
@@ -865,6 +868,284 @@ async function handleConnectRobot(robotId) {
                 Connect
             `;
         }
+    }
+}
+
+/**
+ * Initialize curve visualization charts
+ */
+function initializeCurveCharts() {
+    // Check if curve utilities are loaded
+    if (typeof createCurveChart !== 'function' || typeof updateCurveChart !== 'function') {
+        console.error('Curve visualizer not loaded');
+        return;
+    }
+
+    // Load current settings
+    const settings = loadSettings();
+    const km = settings.keyboard_mouse;
+
+    // Create charts
+    charts.linear = createCurveChart(
+        'linear-curve-chart',
+        'Linear',
+        'm/s',
+        km.linear_alpha || 1.5,
+        km.linear_deadzone || 0.10,
+        km.kb_max_linear_velocity || 1.5,
+        HARDWARE_LIMITS.linear
+    );
+
+    charts.strafe = createCurveChart(
+        'strafe-curve-chart',
+        'Strafe',
+        'm/s',
+        km.strafe_alpha || 1.2,
+        km.strafe_deadzone || 0.10,
+        km.kb_max_strafe_velocity || 0.6,
+        HARDWARE_LIMITS.strafe
+    );
+
+    charts.rotation = createCurveChart(
+        'rotation-curve-chart',
+        'Rotation',
+        'rad/s',
+        km.rotation_alpha || 2.5,
+        km.rotation_deadzone || 0.10,
+        km.kb_max_rotation_velocity || 3.0,
+        HARDWARE_LIMITS.rotation
+    );
+
+    // Initialize curve control sliders
+    initializeCurveSliders();
+}
+
+/**
+ * Initialize curve adjustment sliders
+ */
+function initializeCurveSliders() {
+    // Helper function to get fresh settings
+    const getFreshSettings = () => {
+        const settings = loadSettings();
+        return settings.keyboard_mouse;
+    };
+
+    const settings = loadSettings();
+    const km = settings.keyboard_mouse;
+
+    // Linear alpha slider
+    const linearAlphaSlider = document.getElementById('linear-alpha');
+    const linearAlphaValue = document.getElementById('linear-alpha-value');
+    if (linearAlphaSlider && linearAlphaValue) {
+        linearAlphaSlider.value = km.linear_alpha || 1.5;
+        linearAlphaValue.textContent = (km.linear_alpha || 1.5).toFixed(1);
+
+        linearAlphaSlider.addEventListener('input', (e) => {
+            const alpha = parseFloat(e.target.value);
+            linearAlphaValue.textContent = alpha.toFixed(1);
+            updateSetting('keyboard_mouse', 'linear_alpha', alpha);
+
+            // Get fresh settings after update
+            const fresh = getFreshSettings();
+            updateCurveChart(
+                charts.linear,
+                'Linear',
+                alpha,
+                fresh.linear_deadzone || 0.10,
+                fresh.kb_max_linear_velocity || 1.5,
+                HARDWARE_LIMITS.linear
+            );
+        });
+    }
+
+    // Linear deadzone slider
+    const linearDeadzoneSlider = document.getElementById('linear-deadzone');
+    const linearDeadzoneValue = document.getElementById('linear-deadzone-value');
+    if (linearDeadzoneSlider && linearDeadzoneValue) {
+        const deadzonePercent = Math.round((km.linear_deadzone || 0.10) * 100);
+        linearDeadzoneSlider.value = deadzonePercent;
+        linearDeadzoneValue.textContent = deadzonePercent + '%';
+
+        linearDeadzoneSlider.addEventListener('input', (e) => {
+            const deadzonePercent = parseInt(e.target.value);
+            const deadzone = deadzonePercent / 100.0;
+            linearDeadzoneValue.textContent = deadzonePercent + '%';
+            updateSetting('keyboard_mouse', 'linear_deadzone', deadzone);
+
+            // Get fresh settings after update
+            const fresh = getFreshSettings();
+            updateCurveChart(
+                charts.linear,
+                'Linear',
+                fresh.linear_alpha || 1.5,
+                deadzone,
+                fresh.kb_max_linear_velocity || 1.5,
+                HARDWARE_LIMITS.linear
+            );
+        });
+    }
+
+    // Strafe alpha slider
+    const strafeAlphaSlider = document.getElementById('strafe-alpha');
+    const strafeAlphaValue = document.getElementById('strafe-alpha-value');
+    if (strafeAlphaSlider && strafeAlphaValue) {
+        strafeAlphaSlider.value = km.strafe_alpha || 1.2;
+        strafeAlphaValue.textContent = (km.strafe_alpha || 1.2).toFixed(1);
+
+        strafeAlphaSlider.addEventListener('input', (e) => {
+            const alpha = parseFloat(e.target.value);
+            strafeAlphaValue.textContent = alpha.toFixed(1);
+            updateSetting('keyboard_mouse', 'strafe_alpha', alpha);
+
+            // Get fresh settings after update
+            const fresh = getFreshSettings();
+            updateCurveChart(
+                charts.strafe,
+                'Strafe',
+                alpha,
+                fresh.strafe_deadzone || 0.10,
+                fresh.kb_max_strafe_velocity || 0.6,
+                HARDWARE_LIMITS.strafe
+            );
+        });
+    }
+
+    // Strafe deadzone slider
+    const strafeDeadzoneSlider = document.getElementById('strafe-deadzone');
+    const strafeDeadzoneValue = document.getElementById('strafe-deadzone-value');
+    if (strafeDeadzoneSlider && strafeDeadzoneValue) {
+        const deadzonePercent = Math.round((km.strafe_deadzone || 0.10) * 100);
+        strafeDeadzoneSlider.value = deadzonePercent;
+        strafeDeadzoneValue.textContent = deadzonePercent + '%';
+
+        strafeDeadzoneSlider.addEventListener('input', (e) => {
+            const deadzonePercent = parseInt(e.target.value);
+            const deadzone = deadzonePercent / 100.0;
+            strafeDeadzoneValue.textContent = deadzonePercent + '%';
+            updateSetting('keyboard_mouse', 'strafe_deadzone', deadzone);
+
+            // Get fresh settings after update
+            const fresh = getFreshSettings();
+            updateCurveChart(
+                charts.strafe,
+                'Strafe',
+                fresh.strafe_alpha || 1.2,
+                deadzone,
+                fresh.kb_max_strafe_velocity || 0.6,
+                HARDWARE_LIMITS.strafe
+            );
+        });
+    }
+
+    // Rotation alpha slider
+    const rotationAlphaSlider = document.getElementById('rotation-alpha');
+    const rotationAlphaValue = document.getElementById('rotation-alpha-value');
+    if (rotationAlphaSlider && rotationAlphaValue) {
+        rotationAlphaSlider.value = km.rotation_alpha || 2.5;
+        rotationAlphaValue.textContent = (km.rotation_alpha || 2.5).toFixed(1);
+
+        rotationAlphaSlider.addEventListener('input', (e) => {
+            const alpha = parseFloat(e.target.value);
+            rotationAlphaValue.textContent = alpha.toFixed(1);
+            updateSetting('keyboard_mouse', 'rotation_alpha', alpha);
+
+            // Get fresh settings after update
+            const fresh = getFreshSettings();
+            updateCurveChart(
+                charts.rotation,
+                'Rotation',
+                alpha,
+                fresh.rotation_deadzone || 0.10,
+                fresh.kb_max_rotation_velocity || 3.0,
+                HARDWARE_LIMITS.rotation
+            );
+        });
+    }
+
+    // Rotation deadzone slider
+    const rotationDeadzoneSlider = document.getElementById('rotation-deadzone');
+    const rotationDeadzoneValue = document.getElementById('rotation-deadzone-value');
+    if (rotationDeadzoneSlider && rotationDeadzoneValue) {
+        const deadzonePercent = Math.round((km.rotation_deadzone || 0.10) * 100);
+        rotationDeadzoneSlider.value = deadzonePercent;
+        rotationDeadzoneValue.textContent = deadzonePercent + '%';
+
+        rotationDeadzoneSlider.addEventListener('input', (e) => {
+            const deadzonePercent = parseInt(e.target.value);
+            const deadzone = deadzonePercent / 100.0;
+            rotationDeadzoneValue.textContent = deadzonePercent + '%';
+            updateSetting('keyboard_mouse', 'rotation_deadzone', deadzone);
+
+            // Get fresh settings after update
+            const fresh = getFreshSettings();
+            updateCurveChart(
+                charts.rotation,
+                'Rotation',
+                fresh.rotation_alpha || 2.5,
+                deadzone,
+                fresh.kb_max_rotation_velocity || 3.0,
+                HARDWARE_LIMITS.rotation
+            );
+        });
+    }
+
+    // Reset curves button
+    const resetCurvesBtn = document.getElementById('reset-curves-btn');
+    if (resetCurvesBtn) {
+        resetCurvesBtn.addEventListener('click', () => {
+            const defaults = getDefaultSettings();
+            const defaultKm = defaults.keyboard_mouse;
+
+            // Reset linear
+            updateSetting('keyboard_mouse', 'linear_alpha', defaultKm.linear_alpha);
+            updateSetting('keyboard_mouse', 'linear_deadzone', defaultKm.linear_deadzone);
+            if (linearAlphaSlider) linearAlphaSlider.value = defaultKm.linear_alpha;
+            if (linearAlphaValue) linearAlphaValue.textContent = defaultKm.linear_alpha.toFixed(1);
+            if (linearDeadzoneSlider) linearDeadzoneSlider.value = Math.round(defaultKm.linear_deadzone * 100);
+            if (linearDeadzoneValue) linearDeadzoneValue.textContent = Math.round(defaultKm.linear_deadzone * 100) + '%';
+            updateCurveChart(
+                charts.linear,
+                'Linear',
+                defaultKm.linear_alpha,
+                defaultKm.linear_deadzone,
+                defaultKm.kb_max_linear_velocity,
+                HARDWARE_LIMITS.linear
+            );
+
+            // Reset strafe
+            updateSetting('keyboard_mouse', 'strafe_alpha', defaultKm.strafe_alpha);
+            updateSetting('keyboard_mouse', 'strafe_deadzone', defaultKm.strafe_deadzone);
+            if (strafeAlphaSlider) strafeAlphaSlider.value = defaultKm.strafe_alpha;
+            if (strafeAlphaValue) strafeAlphaValue.textContent = defaultKm.strafe_alpha.toFixed(1);
+            if (strafeDeadzoneSlider) strafeDeadzoneSlider.value = Math.round(defaultKm.strafe_deadzone * 100);
+            if (strafeDeadzoneValue) strafeDeadzoneValue.textContent = Math.round(defaultKm.strafe_deadzone * 100) + '%';
+            updateCurveChart(
+                charts.strafe,
+                'Strafe',
+                defaultKm.strafe_alpha,
+                defaultKm.strafe_deadzone,
+                defaultKm.kb_max_strafe_velocity,
+                HARDWARE_LIMITS.strafe
+            );
+
+            // Reset rotation
+            updateSetting('keyboard_mouse', 'rotation_alpha', defaultKm.rotation_alpha);
+            updateSetting('keyboard_mouse', 'rotation_deadzone', defaultKm.rotation_deadzone);
+            if (rotationAlphaSlider) rotationAlphaSlider.value = defaultKm.rotation_alpha;
+            if (rotationAlphaValue) rotationAlphaValue.textContent = defaultKm.rotation_alpha.toFixed(1);
+            if (rotationDeadzoneSlider) rotationDeadzoneSlider.value = Math.round(defaultKm.rotation_deadzone * 100);
+            if (rotationDeadzoneValue) rotationDeadzoneValue.textContent = Math.round(defaultKm.rotation_deadzone * 100) + '%';
+            updateCurveChart(
+                charts.rotation,
+                'Rotation',
+                defaultKm.rotation_alpha,
+                defaultKm.rotation_deadzone,
+                defaultKm.kb_max_rotation_velocity,
+                HARDWARE_LIMITS.rotation
+            );
+
+            console.log('✅ Curves reset to defaults');
+        });
     }
 }
 

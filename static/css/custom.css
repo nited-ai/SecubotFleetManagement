@@ -260,7 +260,13 @@ input[type="range"]::-moz-range-thumb:hover {
 
 /* Fullscreen video container */
 .fullscreen-video {
-    @apply w-screen h-screen object-cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    z-index: 0;
 }
 
 /* Progress bar */
@@ -407,5 +413,373 @@ input[type="range"]::-moz-range-thumb:hover {
 .speed-indicator .speed-value {
     color: #00E8DA;  /* Updated to match new teal/cyan color scheme */
     font-size: 1.2em;
+}
+
+/* ============================================================================
+   REDESIGNED HUD LAYOUT - Unitree Teal Theme
+   ============================================================================ */
+
+/* Bottom-Left HUD Group */
+.hud-bottom-left {
+    position: fixed;
+    bottom: 40px;
+    left: 250px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0px;
+    z-index: 100;
+}
+
+/* Bottom-Right HUD Group */
+.hud-bottom-right {
+    position: fixed;
+    bottom: 40px;
+    right: 250px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0px;
+    z-index: 100;
+}
+
+/* Icon Group Container */
+.hud-icon-group {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+/* Individual Icon Container */
+.hud-icon-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+}
+
+/* Battery Icon (Vertical) */
+.battery-icon-vertical {
+    width: 40px;
+    height: 60px;
+    color: #00E8DA;
+    transition: all 0.3s ease;
+    filter: drop-shadow(0px 0px 2px black);
+}
+
+/* Battery fill animation */
+.battery-fill {
+    fill: #00E8DA;
+    transition: height 0.5s ease, y 0.5s ease, fill 0.3s ease;
+}
+
+/* Battery color states */
+.battery-icon-vertical.battery-high .battery-fill {
+    fill: #10b981; /* Green */
+}
+
+.battery-icon-vertical.battery-medium .battery-fill {
+    fill: #f59e0b; /* Yellow */
+}
+
+.battery-icon-vertical.battery-low .battery-fill {
+    fill: #ef4444; /* Red */
+}
+
+/* Battery text color states */
+.hud-icon-value.battery-high {
+    color: #10b981 !important; /* Green */
+}
+
+.hud-icon-value.battery-medium {
+    color: #f59e0b !important; /* Yellow */
+}
+
+.hud-icon-value.battery-low {
+    color: #ef4444 !important; /* Red */
+}
+
+/* WiFi Icon */
+.wifi-icon {
+    width: 65px;
+    height: 42px;
+    color: #00E8DA;
+    transition: all 0.3s ease;
+    filter: drop-shadow(0px 0px 2px black);
+}
+
+/* WiFi color states based on ping */
+.wifi-icon.ping-excellent {
+    color: #10b981 !important; /* Green <100ms */
+}
+
+.wifi-icon.ping-good {
+    color: #ffee00 !important; /* Yellow <200ms */
+}
+
+.wifi-icon.ping-fair {
+    color: #fb923c !important; /* Orange <300ms */
+}
+
+.wifi-icon.ping-poor {
+    color: #ef4444 !important; /* Red ≥300ms */
+}
+
+/* Ping text color states */
+.hud-icon-value.ping-excellent {
+    color: #10b981 !important; /* Green <100ms */
+}
+
+.hud-icon-value.ping-good {
+    color: #ffee00 !important; /* Yellow <200ms */
+}
+
+.hud-icon-value.ping-fair {
+    color: #fb923c !important; /* Orange <300ms */
+}
+
+.hud-icon-value.ping-poor {
+    color: #ef4444 !important; /* Red ≥300ms */
+}
+
+/* HUD Icon Value (Text inside icons) */
+.hud-icon-value {
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0px 0px 2px rgb(0, 0, 0);
+    white-space: nowrap;
+}
+
+/* HUD Buttons (Settings, Disconnect) */
+.hud-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+    color: #00E8DA;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hud-btn svg {
+    filter: drop-shadow(0px 0px 2px black);
+}
+
+.hud-btn:hover svg {
+    filter: drop-shadow(0 0 2px rgba(0, 232, 218, 0.6));
+}
+
+.hud-btn-danger {
+    color: #ef4444;
+}
+
+.hud-btn-danger:hover svg {
+    filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.6));
+}
+
+/* Audio Icons (Microphone and Speaker) */
+.hud-audio-icon {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+}
+
+.hud-audio-icon svg {
+    width: 32px;
+    height: 32px;
+    filter: drop-shadow(0 0 2px black);
+    transition: all 0.3s ease;
+}
+
+/* Strikethrough line for inactive audio states */
+.audio-strikethrough {
+    position: absolute;
+    width: 45px;
+    height: 3px;
+    background: #ef4444;
+    transform: rotate(-45deg);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    filter: drop-shadow(0 0 2px black);
+}
+
+/* Microphone States (Clickable toggle + 'C' key / right mouse button) */
+.mic-active {
+    color: #10b981; /* Green when transmitting */
+}
+
+.mic-active .audio-strikethrough {
+    opacity: 0; /* Hide strikethrough when active */
+}
+
+.mic-inactive {
+    color: #ef4444; /* Red when not transmitting */
+}
+
+.mic-inactive .audio-strikethrough {
+    opacity: 1; /* Show strikethrough when inactive */
+}
+
+/* Hover effects for microphone icon */
+.mic-active:hover svg {
+    filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.6));
+}
+
+.mic-inactive:hover svg {
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
+}
+
+/* Speaker States */
+.speaker-active {
+    color: #10b981; /* Green when audio enabled */
+}
+
+.speaker-active .audio-strikethrough {
+    opacity: 0; /* Hide strikethrough when active */
+}
+
+.speaker-inactive {
+    color: #ef4444; /* Red when audio disabled */
+}
+
+.speaker-inactive .audio-strikethrough {
+    opacity: 1; /* Show strikethrough when inactive */
+}
+
+.speaker-active:hover svg {
+    filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.6));
+}
+
+.speaker-inactive:hover svg {
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
+}
+
+/* Horizontal Sliders */
+.slider-horizontal {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 400px;
+    height: 8px;
+    background: rgba(30, 30, 30, 0.9);
+    border: 1px solid rgba(0, 232, 218, 0.3);
+    border-radius: 12px;
+    outline: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    filter: drop-shadow(0px 0px 0px black);
+}
+
+.slider-horizontal:hover {
+    border-color: rgba(0, 232, 218, 0.5);
+}
+
+.slider-horizontal:focus {
+    border-color: #00E8DA;
+    box-shadow: 0 0 0 2px rgba(0, 232, 218, 0.2);
+}
+
+/* Webkit slider thumb */
+.slider-horizontal::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    background: linear-gradient(135deg, #00E8DA 0%, #00B8AD 100%);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 0px 2px rgba(0, 232, 218, 0.5);
+}
+
+.slider-horizontal::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 0px 2px rgba(0, 232, 218, 0.7);
+}
+
+/* Firefox slider thumb */
+.slider-horizontal::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    background: linear-gradient(135deg, #00E8DA 0%, #00B8AD 100%);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 0px 2px rgba(0, 232, 218, 0.5);
+}
+
+.slider-horizontal::-moz-range-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 0px 2px rgba(0, 232, 218, 0.7);
+}
+
+/* Speed Slider Container */
+.hud-speed-slider {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-radius: 16px;
+    padding: 0px 20px;
+}
+
+/* Speed Icon */
+.speed-icon {
+    width: 35px;
+    height: 35px;
+    color: #00E8DA;
+    filter: drop-shadow(0 0 2px black);
+}
+
+.speed-percentage {
+    font-size: 28px;
+    font-weight: 700;
+    color: #ff4400;
+    min-width: 55px;
+    text-align: right;
+    text-shadow: 0 0px 2px rgba(0, 0, 0, 1);
+}
+
+/* Light Slider Container */
+.hud-light-slider {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-radius: 16px;
+    padding: 0px 20px;
+}
+
+/* Light Icon */
+.light-icon {
+    width: 35px;
+    height: 35px;
+    color: #00E8DA;
+    filter: drop-shadow(0 0 2px black);
+}
+
+.light-level-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #ff5a20; /* Yellow for light */
+    min-width: 30px;
+    text-align: left;
+    text-shadow: 0 0px 2px rgba(0, 0, 0, 1);
 }
 

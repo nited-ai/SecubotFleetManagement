@@ -53,7 +53,14 @@ class KeyboardMouseControl {
                         maxRotation: parseFloat(km.kb_max_rotation_velocity || 3.0),
                         acceleration: parseFloat(km.acceleration || 0.15),
                         deceleration: parseFloat(km.deceleration || 0.2),
-                        mouseSensitivity: parseFloat(km.mouse_yaw_sensitivity || 0.5)
+                        mouseSensitivity: parseFloat(km.mouse_yaw_sensitivity || 0.5),
+                        // Curve parameters
+                        linearAlpha: parseFloat(km.linear_alpha || 1.5),
+                        linearDeadzone: parseFloat(km.linear_deadzone || 0.10),
+                        strafeAlpha: parseFloat(km.strafe_alpha || 1.2),
+                        strafeDeadzone: parseFloat(km.strafe_deadzone || 0.10),
+                        rotationAlpha: parseFloat(km.rotation_alpha || 2.5),
+                        rotationDeadzone: parseFloat(km.rotation_deadzone || 0.10)
                     };
                 }
             } catch (e) {
@@ -66,10 +73,17 @@ class KeyboardMouseControl {
         if (oldSettings) {
             try {
                 const settings = JSON.parse(oldSettings);
+
+                // Check if keyboard_rotation_speed exists (from speed slider/mouse wheel adjustment)
+                // If it exists, use it; otherwise use default maxRotation
+                const rotationSpeed = settings.keyboard_rotation_speed !== undefined
+                    ? parseFloat(settings.keyboard_rotation_speed)
+                    : parseFloat(settings.kb_max_rotation_velocity || settings.maxRotation || 3.0);
+
                 return {
-                    maxLinear: parseFloat(settings.kb_max_linear_velocity || settings.maxLinear || 1.5),
-                    maxStrafe: parseFloat(settings.kb_max_strafe_velocity || settings.maxStrafe || 1.2),
-                    maxRotation: parseFloat(settings.kb_max_rotation_velocity || settings.maxRotation || 3.0),
+                    maxLinear: parseFloat(settings.keyboard_linear_speed || settings.kb_max_linear_velocity || settings.maxLinear || 1.5),
+                    maxStrafe: parseFloat(settings.keyboard_strafe_speed || settings.kb_max_strafe_velocity || settings.maxStrafe || 1.2),
+                    maxRotation: rotationSpeed,
                     acceleration: parseFloat(settings.acceleration || 0.15),
                     deceleration: parseFloat(settings.deceleration || 0.2),
                     mouseSensitivity: parseFloat(settings.mouse_yaw_sensitivity || settings.mouseSensitivity || 0.5)
@@ -82,11 +96,18 @@ class KeyboardMouseControl {
         // Default settings (match "normal" preset from settings-manager.js)
         return {
             maxLinear: 1.5,
-            maxStrafe: 1.2,
+            maxStrafe: 0.6,  // Fixed: hardware limit
             maxRotation: 3.0,
             acceleration: 0.15,
             deceleration: 0.2,
-            mouseSensitivity: 0.5
+            mouseSensitivity: 0.5,
+            // Default curve parameters (Normal preset)
+            linearAlpha: 1.5,
+            linearDeadzone: 0.10,
+            strafeAlpha: 1.2,
+            strafeDeadzone: 0.10,
+            rotationAlpha: 2.5,
+            rotationDeadzone: 0.10
         };
     }
 
@@ -338,27 +359,42 @@ class KeyboardMouseControl {
             this.mouseMovement.x = 0; // Reset after reading
         }
 
-        // Apply velocity ramping (smooth acceleration/deceleration)
-        const { maxLinear, maxStrafe, maxRotation, acceleration, deceleration } = this.settings;
+        // Apply velocity ramping (smooth acceleration/deceleration) with exponential curves
+        const { maxLinear, maxStrafe, maxRotation, acceleration, deceleration,
+                linearAlpha, linearDeadzone, strafeAlpha, strafeDeadzone,
+                rotationAlpha, rotationDeadzone } = this.settings;
 
-        // Linear velocity (forward/backward)
-        const targetLinear = forward * maxLinear;
+        // Linear velocity (forward/backward) - apply exponential curve
+        // Convert input (-1 to 1) to absolute percentage (0 to 1), apply curve, then restore sign
+        const linearInput = Math.abs(forward);
+        const curvedLinear = linearInput > 0
+            ? applyLinearCurve(linearInput, linearAlpha, linearDeadzone, maxLinear) * Math.sign(forward)
+            : 0;
+        const targetLinear = curvedLinear;
         if (Math.abs(targetLinear) > 0.01) {
             this.currentVelocities.linear += (targetLinear - this.currentVelocities.linear) * acceleration;
         } else {
             this.currentVelocities.linear *= (1 - deceleration);
         }
 
-        // Strafe velocity (left/right)
-        const targetStrafe = strafe * maxStrafe;
+        // Strafe velocity (left/right) - apply exponential curve
+        const strafeInput = Math.abs(strafe);
+        const curvedStrafe = strafeInput > 0
+            ? applyStrafeCurve(strafeInput, strafeAlpha, strafeDeadzone, maxStrafe) * Math.sign(strafe)
+            : 0;
+        const targetStrafe = curvedStrafe;
         if (Math.abs(targetStrafe) > 0.01) {
             this.currentVelocities.strafe += (targetStrafe - this.currentVelocities.strafe) * acceleration;
         } else {
             this.currentVelocities.strafe *= (1 - deceleration);
         }
 
-        // Rotation velocity
-        const targetRotation = rotation * maxRotation;
+        // Rotation velocity - apply exponential curve
+        const rotationInput = Math.abs(rotation);
+        const curvedRotation = rotationInput > 0
+            ? applyRotationCurve(rotationInput, rotationAlpha, rotationDeadzone, maxRotation) * Math.sign(rotation)
+            : 0;
+        const targetRotation = curvedRotation;
         if (Math.abs(targetRotation) > 0.01) {
             this.currentVelocities.rotation += (targetRotation - this.currentVelocities.rotation) * acceleration;
         } else {
@@ -445,23 +481,25 @@ class KeyboardMouseControl {
         // Round to 1 decimal place to avoid floating point issues
         newSpeed = Math.round(newSpeed * 10) / 10;
 
-        // Update settings in localStorage
+        // Update settings in localStorage (curves are applied in poll() method)
         kbMouseSettings.keyboard_linear_speed = newSpeed;
         kbMouseSettings.keyboard_strafe_speed = newSpeed;
+        kbMouseSettings.keyboard_rotation_speed = newSpeed;  // Now uses same multiplier, curves handle the dampening
         localStorage.setItem('keyboardMouseSettings', JSON.stringify(kbMouseSettings));
 
         // Update internal settings
         this.settings.maxLinear = newSpeed;
         this.settings.maxStrafe = newSpeed;
+        this.settings.maxRotation = newSpeed;
 
         // Show visual feedback
         this.showSpeedIndicator(newSpeed);
 
-        console.log(`🎡 Mouse wheel speed adjustment: ${(newSpeed * 100).toFixed(0)}%`);
+        console.log(`🎡 Mouse wheel speed adjustment: ${(newSpeed * 100).toFixed(0)}% (all axes use exponential curves with alpha: linear=${this.settings.linearAlpha}, strafe=${this.settings.strafeAlpha}, rotation=${this.settings.rotationAlpha})`);
     }
 
     /**
-     * Show speed indicator overlay
+     * Show speed indicator overlay and update speed slider
      */
     showSpeedIndicator(speed) {
         const indicator = document.getElementById('speedIndicator');
@@ -478,6 +516,23 @@ class KeyboardMouseControl {
         this.speedIndicatorTimeout = setTimeout(() => {
             indicator.style.display = 'none';
         }, 2000);
+
+        // Update speed slider and percentage display
+        this.updateSpeedSlider(speed);
+    }
+
+    /**
+     * Update speed slider and percentage display
+     */
+    updateSpeedSlider(speed) {
+        const speedSlider = document.getElementById('speed-slider');
+        const speedPercentage = document.getElementById('speed-percentage');
+
+        if (speedSlider && speedPercentage) {
+            const percentage = Math.round(speed * 100);
+            speedSlider.value = percentage;
+            speedPercentage.textContent = `${percentage}%`;
+        }
     }
 }
 

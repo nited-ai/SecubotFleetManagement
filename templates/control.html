@@ -15,86 +15,117 @@
 <!-- Fullscreen Video Container -->
 <div class="relative w-screen h-screen bg-black">
     <!-- Video Feed -->
-    <img id="video-feed" 
-         src="{{ url_for('views.video_feed') }}" 
+    <img id="video-feed"
+         src="{{ url_for('views.video_feed') }}"
          class="fullscreen-video"
          alt="Robot Video Feed">
-    
-    <!-- Status HUD Overlay (Top-Left) -->
-    <div class="status-hud">
-        <div class="space-y-3">
-            <!-- Battery -->
-            <div class="flex items-center space-x-3">
-                <svg class="battery-icon w-5 h-5 text-green-400 transition-colors duration-300" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4V5h12v10z"></path>
+
+    <!-- Bottom-Left HUD Group -->
+    <div class="hud-bottom-left">
+        <!-- Speed Slider (Left Side) -->
+        <div class="hud-speed-slider">
+            <input type="range"
+                   id="speed-slider"
+                   min="10"
+                   max="200"
+                   step="10"
+                   value="100"
+                   class="slider-horizontal">
+            <span class="speed-percentage" id="speed-percentage">100%</span>
+            <svg class="speed-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor">
+                <!--!Font Awesome Free 6.5.1 Person Running Icon-->
+                <path d="M320 48a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zM125.7 175.5c9.9-9.9 23.4-15.5 37.5-15.5c1.9 0 3.8 .1 5.6 .3L137.6 254c-9.3 28 1.7 58.8 26.8 74.5l86.2 53.9-25.4 88.8c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l28.7-100.4c5.9-20.6-2.6-42.6-20.7-53.9L238 299l30.9-82.4 5.1 12.3C289 264.7 323.9 288 362.7 288H384c17.7 0 32-14.3 32-32s-14.3-32-32-32H362.7c-12.9 0-24.6-7.8-29.5-19.7l-6.3-15.2c-14.6-35.1-44.1-61.9-80.5-73.1l-48.7-15c-11.1-3.4-22.7-5-34.4-5c-31 0-60.8 12.3-82.7 34.3L57.4 153.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l23.1-23.1zM91.2 352H32c-17.7 0-32 14.3-32 32s14.3 32 32 32h69.6c19 0 36.2-11.2 43.9-28.5L157 361.6l-9.5-6c-17.5-10.9-30.5-26.8-37.9-44.9L91.2 352z"/>
+            </svg>
+        </div>
+
+        <!-- Battery and WiFi Icons -->
+        <div class="hud-icon-group">
+            <!-- Battery Indicator (Vertical) -->
+            <div class="hud-icon-container">
+                <svg class="battery-icon-vertical" id="battery-icon" fill="currentColor" viewBox="0 0 24 24">
+                    <!-- Vertical battery body -->
+                    <rect x="8" y="4" width="8" height="16" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                    <!-- Battery terminal (top) -->
+                    <rect x="10" y="2" width="4" height="2" rx="0.5" fill="currentColor"/>
+                    <!-- Battery fill (dynamic) -->
+                    <rect x="9" y="5" width="6" id="battery-fill" class="battery-fill" rx="0.5"/>
                 </svg>
-                <div class="flex-1">
-                    <div class="text-xs text-gray-400">Battery</div>
-                    <div class="text-sm font-semibold" id="battery-level">---%</div>
-                </div>
+                <span class="hud-icon-value" id="battery-level">--%</span>
             </div>
-            
-            <!-- Ping -->
-            <div class="flex items-center space-x-3">
-                <svg class="w-5 h-5 text-unitree-info" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path>
+
+            <!-- WiFi/Ping Indicator -->
+            <div class="hud-icon-container">
+                <svg class="wifi-icon" id="wifi-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640">
+                    <!--!Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.-->
+                    <path d="M320 160C229.1 160 146.8 196 86.3 254.6C73.6 266.9 53.3 266.6 41.1 253.9C28.9 241.2 29.1 220.9 41.8 208.7C113.7 138.9 211.9 96 320 96C428.1 96 526.3 138.9 598.3 208.7C611 221 611.3 241.3 599 253.9C586.7 266.5 566.4 266.9 553.8 254.6C493.2 196 410.9 160 320 160zM272 496C272 469.5 293.5 448 320 448C346.5 448 368 469.5 368 496C368 522.5 346.5 544 320 544C293.5 544 272 522.5 272 496zM200 390.2C188.3 403.5 168.1 404.7 154.8 393C141.5 381.3 140.3 361.1 152 347.8C193 301.4 253.1 272 320 272C386.9 272 447 301.4 488 347.8C499.7 361.1 498.4 381.3 485.2 393C472 404.7 451.7 403.4 440 390.2C410.6 356.9 367.8 336 320 336C272.2 336 229.4 356.9 200 390.2z"/>
                 </svg>
-                <div class="flex-1">
-                    <div class="text-xs text-gray-400">Ping</div>
-                    <div class="text-sm font-semibold" id="ping-value">--- ms</div>
-                </div>
-            </div>
-            
-            <!-- Mode - TEMPORARILY DISABLED: Investigating LF_SPORT_MOD_STATE subscription issues
-            <div class="flex items-center space-x-3">
-                <svg class="w-5 h-5 text-unitree-warning" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
-                </svg>
-                <div class="flex-1">
-                    <div class="text-xs text-gray-400">Mode</div>
-                    <div class="text-sm font-semibold" id="robot-mode">---</div>
-                </div>
-            </div>
-            -->
-            
-            <!-- Light Level Slider -->
-            <div class="pt-2 border-t border-gray-600">
-                <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center space-x-2">
-                        <svg class="w-5 h-5 text-yellow-400 transition-all duration-200" id="light-icon" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
-                        </svg>
-                        <span class="text-xs text-gray-400">Light <span class="text-gray-500">(←/→)</span></span>
-                    </div>
-                    <span class="text-sm font-semibold transition-all duration-200" id="light-level-value">0</span>
-                </div>
-                <input type="range"
-                       id="light-level-slider"
-                       min="0"
-                       max="10"
-                       step="1"
-                       value="0"
-                       class="w-full">
+                <span class="hud-icon-value" id="ping-value">---</span>
             </div>
         </div>
     </div>
-    
-    <!-- Exit Button (Top-Right) -->
-    <button id="exit-btn" class="floating-btn top-5 right-5 bg-unitree-danger hover:bg-red-600">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-        </svg>
-    </button>
-    
-    <!-- Quick Settings Button (Bottom-Right) -->
-    <button id="quick-settings-btn" class="floating-btn bottom-5 right-5 bg-unitree-dark-lighter hover:bg-gray-700 border border-gray-600">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-        </svg>
-    </button>
 
-    <!-- Speed Indicator Overlay (Mouse Wheel Speed Adjustment) -->
+    <!-- Bottom-Right HUD Group -->
+    <div class="hud-bottom-right">
+        <!-- Light Level Slider (Right Side) -->
+        <div class="hud-light-slider">
+            <svg class="light-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" fill="none">
+                <!-- License: Apache. Made by lawnchairlauncher: https://github.com/lawnchairlauncher/lawnicons -->
+                <g fill="none" stroke="currentColor" style="stroke-width:12;stroke-dasharray:none">
+                    <path d="M122 22H70c-4.42 0-8 3.58-8 8v30.69c0 2.12.84 4.15 2.34 5.65l11.32 11.32c1.5 1.5 2.34 3.53 2.34 5.65V162c0 4.42 3.58 8 8 8h20c4.42 0 8-3.58 8-8V83.31c0-2.12.84-4.15 2.34-5.65l11.32-11.32c1.5-1.5 2.34-3.53 2.34-5.65V30c0-4.42-3.58-8-8-8z" style="stroke-width:12;stroke-dasharray:none"/>
+                    <path d="M65 46h62" style="stroke-linecap:round;stroke-linejoin:round;stroke-width:12;stroke-dasharray:none"/>
+                    <path stroke-width="8" d="M96 84.873V105" style="stroke-width:12;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"/>
+                </g>
+            </svg>
+            <span class="light-level-value" id="light-level-value">0</span>
+            <input type="range"
+                   id="light-level-slider"
+                   min="0"
+                   max="10"
+                   step="1"
+                   value="0"
+                   class="slider-horizontal">
+        </div>
+
+        <!-- Audio and Settings Controls -->
+        <div class="hud-icon-group">
+            <!-- Microphone Icon (Transmission Toggle - Click or Press 'C' or Hold Right Mouse Button) -->
+            <button id="mic-icon" class="hud-audio-icon mic-inactive" onclick="toggleMicrophoneTransmission()" title="Microphone: Click or press 'C' to toggle ON/OFF, hold right mouse button for push-to-talk">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor">
+                    <!--!Font Awesome Free 6.5.1 Microphone Icon-->
+                    <path d="M192 0C139 0 96 43 96 96V256c0 53 43 96 96 96s96-43 96-96V96c0-53-43-96-96-96zM64 216c0-13.3-10.7-24-24-24s-24 10.7-24 24v40c0 89.1 66.2 162.7 152 174.4V464H120c-13.3 0-24 10.7-24 24s10.7 24 24 24h72 72c13.3 0 24-10.7 24-24s-10.7-24-24-24H216V430.4c85.8-11.7 152-85.3 152-174.4V216c0-13.3-10.7-24-24-24s-24 10.7-24 24v40c0 70.7-57.3 128-128 128s-128-57.3-128-128V216z"/>
+                </svg>
+                <!-- Strikethrough line for inactive state -->
+                <div class="audio-strikethrough"></div>
+            </button>
+
+            <!-- Speaker Icon (Reception Status - Click to Toggle) -->
+            <button id="speaker-icon" class="hud-audio-icon speaker-inactive" onclick="toggleAudioReception()" title="Audio Reception: Click to toggle hearing robot audio">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" fill="currentColor">
+                    <!--!Font Awesome Free 6.5.1 Volume High Icon-->
+                    <path d="M533.6 32.5C598.5 85.2 640 165.8 640 256s-41.5 170.7-106.4 223.5c-10.3 8.4-25.4 6.8-33.8-3.5s-6.8-25.4 3.5-33.8C557.5 398.2 592 331.2 592 256s-34.5-142.2-88.7-186.3c-10.3-8.4-11.8-23.5-3.5-33.8s23.5-11.8 33.8-3.5zM473.1 107c43.2 35.2 70.9 88.9 70.9 149s-27.7 113.8-70.9 149c-10.3 8.4-25.4 6.8-33.8-3.5s-6.8-25.4 3.5-33.8C475.3 341.3 496 301.1 496 256s-20.7-85.3-53.2-111.8c-10.3-8.4-11.8-23.5-3.5-33.8s23.5-11.8 33.8-3.5zm-60.5 74.5C434.1 199.1 448 225.9 448 256s-13.9 56.9-35.4 74.5c-10.3 8.4-25.4 6.8-33.8-3.5s-6.8-25.4 3.5-33.8C393.1 284.4 400 271 400 256s-6.9-28.4-17.7-37.3c-10.3-8.4-11.8-23.5-3.5-33.8s23.5-11.8 33.8-3.5zM301.1 34.8C312.6 40 320 51.4 320 64V448c0 12.6-7.4 24-18.9 29.2s-25 3.1-34.4-5.3L131.8 352H64c-35.3 0-64-28.7-64-64V224c0-35.3 28.7-64 64-64h67.8L266.7 40.1c9.4-8.4 22.9-10.4 34.4-5.3z"/>
+                </svg>
+                <!-- Strikethrough line for inactive state -->
+                <div class="audio-strikethrough"></div>
+            </button>
+
+            <!-- Settings Button -->
+            <button id="quick-settings-btn" class="hud-btn">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+            </button>
+
+            <!-- Disconnect Button -->
+            <button id="exit-btn" class="hud-btn hud-btn-danger">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Speed Indicator Overlay (Mouse Wheel Speed Adjustment) - Temporary popup -->
     <div id="speedIndicator" class="speed-indicator">
         <div class="speed-label">Movement Speed</div>
         <div class="speed-value" id="speedValue">100%</div>
@@ -107,8 +138,9 @@
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 
 <!-- Control modules -->
+<script src="{{ url_for('static', filename='js/curve-utils.js') }}?v=1.0.0"></script>
 <script src="{{ url_for('static', filename='js/websocket-client.js') }}?v=1.0.2"></script>
-<script src="{{ url_for('static', filename='js/keyboard-mouse-control.js') }}?v=1.0.7"></script>
+<script src="{{ url_for('static', filename='js/keyboard-mouse-control.js') }}?v=1.0.8"></script>
 <script src="{{ url_for('static', filename='js/gamepad-control.js') }}?v=1.0.1"></script>
 
 <!-- Main control script -->
