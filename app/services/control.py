@@ -243,14 +243,23 @@ class ControlService:
             max_strafe = data.get('max_strafe', self.state.gamepad_settings['max_strafe_velocity'])
             max_rotation = data.get('max_rotation', self.state.gamepad_settings['max_rotation_velocity'])
 
-            # Apply velocity limits and axis mapping
-            vx = max(-max_linear, min(max_linear, ly))      # Forward/back from left stick Y
-            vy = max(-max_strafe, min(max_strafe, -lx))     # Strafe from left stick X (inverted)
-            vyaw = max(-max_rotation, min(max_rotation, -rx))  # Yaw from right stick X (inverted)
+            # CRITICAL FIX: Scale normalized input (-1.0 to 1.0) by max velocity BEFORE clamping
+            # Frontend sends normalized values (0.0-1.0), backend must multiply by max velocity
+            # to get actual physical velocity (e.g., 0.81 * 9.0 = 7.29 rad/s)
+
+            # Step 1: Scale normalized input by max velocity
+            raw_vx = ly * max_linear          # Forward/back from left stick Y
+            raw_vy = -lx * max_strafe         # Strafe from left stick X (inverted)
+            raw_vyaw = -rx * max_rotation     # Yaw from right stick X (inverted)
+
+            # Step 2: Clamp to ensure we don't exceed limits (safety check)
+            vx = max(-max_linear, min(max_linear, raw_vx))
+            vy = max(-max_strafe, min(max_strafe, raw_vy))
+            vyaw = max(-max_rotation, min(max_rotation, raw_vyaw))
 
             # Debug logging for keyboard/mouse commands
             if is_keyboard_mouse and (abs(vx) > 0.01 or abs(vy) > 0.01 or abs(vyaw) > 0.01):
-                self.logger.info(f"[KB/Mouse Backend] ly={ly:.3f}, lx={lx:.3f}, rx={rx:.3f} → vx={vx:.3f}, vy={vy:.3f}, vyaw={vyaw:.3f} | max_linear={max_linear}, max_rotation={max_rotation}")
+                self.logger.info(f"[KB/Mouse Backend] ly={ly:.3f}, lx={lx:.3f}, rx={rx:.3f} → raw: vx={raw_vx:.3f}, vy={raw_vy:.3f}, vyaw={raw_vyaw:.3f} → clamped: vx={vx:.3f}, vy={vy:.3f}, vyaw={vyaw:.3f} | max_linear={max_linear}, max_rotation={max_rotation}")
 
             # Check if all velocities are zero
             is_zero_velocity = (abs(vx) < 0.01 and abs(vy) < 0.01 and abs(vyaw) < 0.01)
@@ -325,6 +334,10 @@ class ControlService:
         """
         try:
             from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD
+
+            # CRITICAL DEBUG: Log exact values being sent to robot
+            if abs(vyaw) > 0.01:
+                self.logger.info(f"🤖 [ROBOT COMMAND] Sending to robot: x={vx:.3f} m/s, y={vy:.3f} m/s, z={vyaw:.3f} rad/s")
 
             # Create task without awaiting to avoid blocking
             asyncio.create_task(

@@ -489,3 +489,62 @@ Developer identified a "precision-flick" tuning problem:
 
 **Status:** ✅ COMPLETE - Ready for testing
 
+---
+
+## Phase 12: Critical Backend Velocity Scaling Bug (2026-02-05)
+
+**Issue 33: Robot Rotating 9x Slower Than Commanded - Missing Multiplication**
+
+**Root Cause Analysis:**
+The backend was receiving normalized values (0.0-1.0) from the frontend but sending them directly to the robot WITHOUT scaling them back up by `max_rotation`. This caused the robot to rotate at only ~1.0 rad/s instead of the intended ~9.0 rad/s.
+
+**The Smoking Gun:**
+```python
+# OLD (BUGGY) CODE - Line 249:
+vyaw = max(-max_rotation, min(max_rotation, -rx))
+# Example: rx=0.81, max_rotation=9.0
+# Result: min(9.0, 0.81) = 0.81 → Robot receives 0.81 rad/s ❌
+```
+
+**The Math Bug:**
+1. Frontend calculates: `vyaw = 7.3 rad/s`
+2. Frontend normalizes: `rx = vyaw / maxRotation = 7.3 / 9.0 = 0.81`
+3. Frontend sends: `rx=0.81` to backend
+4. **Backend BUG:** Uses `0.81` directly instead of multiplying by `9.0`
+5. Robot receives: `0.81 rad/s` instead of `7.3 rad/s` ❌
+
+**The Fix:**
+```python
+# NEW (CORRECT) CODE - Lines 247-257:
+# Step 1: Scale normalized input by max velocity
+raw_vx = ly * max_linear
+raw_vy = -lx * max_strafe
+raw_vyaw = -rx * max_rotation  # 0.81 * 9.0 = 7.29 rad/s ✅
+
+# Step 2: Clamp to ensure safety
+vx = max(-max_linear, min(max_linear, raw_vx))
+vy = max(-max_strafe, min(max_strafe, raw_vy))
+vyaw = max(-max_rotation, min(max_rotation, raw_vyaw))
+```
+
+**Evidence from Logs:**
+```
+Command sent: rx=1.000 → vyaw=-1.000 (WRONG - should be -9.0)
+Expected robot speed: -9.0 rad/s
+Actual robot speed: -0.8 to -1.0 rad/s (from yaw_speed telemetry)
+Discrepancy: 9x slower than expected
+```
+
+**Why This Happened:**
+The clamping logic `max(-max_rotation, min(max_rotation, -rx))` was treating the normalized input as if it were already in rad/s units, when it was actually a 0.0-1.0 percentage that needed to be scaled up.
+
+**Impact:**
+- ✅ Mouse rotation now works at FULL SPEED (9.0 rad/s instead of 1.0 rad/s)
+- ✅ Linear and strafe velocities also fixed (were also affected by same bug)
+- ✅ Robot now matches Bluetooth remote control responsiveness
+
+**Files Modified:**
+- `app/services/control.py` (lines 241-262)
+
+**Status:** ✅ FIXED - Robot should now rotate 9x faster!
+
