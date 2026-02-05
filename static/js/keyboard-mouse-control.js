@@ -61,16 +61,16 @@ class KeyboardMouseControl {
                         maxLinear: parseFloat(km.kb_max_linear_velocity || 1.5),
                         maxStrafe: parseFloat(km.kb_max_strafe_velocity || 0.6),
                         maxRotation: parseFloat(km.kb_max_rotation_velocity || 3.0),
-                        acceleration: parseFloat(km.acceleration || 0.15),
-                        deceleration: parseFloat(km.deceleration || 0.2),
+                        acceleration: parseFloat(km.acceleration !== undefined ? km.acceleration : 0.15),
+                        deceleration: parseFloat(km.deceleration !== undefined ? km.deceleration : 0.2),
                         mouseSensitivity: parseFloat(km.mouse_yaw_sensitivity || 0.5),
-                        // Curve parameters
-                        linearAlpha: parseFloat(km.linear_alpha || 1.5),
-                        linearDeadzone: parseFloat(km.linear_deadzone || 0.10),
-                        strafeAlpha: parseFloat(km.strafe_alpha || 1.2),
-                        strafeDeadzone: parseFloat(km.strafe_deadzone || 0.10),
-                        rotationAlpha: parseFloat(km.rotation_alpha || 2.5),
-                        rotationDeadzone: parseFloat(km.rotation_deadzone || 0.10)
+                        // Curve parameters - Use !== undefined to correctly handle 0 values
+                        linearAlpha: parseFloat(km.linear_alpha !== undefined ? km.linear_alpha : 1.5),
+                        linearDeadzone: parseFloat(km.linear_deadzone !== undefined ? km.linear_deadzone : 0.10),
+                        strafeAlpha: parseFloat(km.strafe_alpha !== undefined ? km.strafe_alpha : 1.2),
+                        strafeDeadzone: parseFloat(km.strafe_deadzone !== undefined ? km.strafe_deadzone : 0.10),
+                        rotationAlpha: parseFloat(km.rotation_alpha !== undefined ? km.rotation_alpha : 2.5),
+                        rotationDeadzone: parseFloat(km.rotation_deadzone !== undefined ? km.rotation_deadzone : 0.10)
                     };
                     console.log('✅ [loadSettings] Loaded settings from unitree_settings:', settings);
                     return settings;

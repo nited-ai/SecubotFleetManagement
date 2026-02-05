@@ -194,18 +194,71 @@ Implement adjustable exponential response curves for linear, strafe, and rotatio
     - User decision: Remove completely (redundant with speed slider)
   - [ ] 18.7 Test with robot to verify settings are now applied correctly
 
-- [ ] 19. Fix deadzone reset on disconnect
-  - [ ] 19.1 **Issue 5: Deadzone sliders reset to 10% on disconnect**
-    - Root cause: Page reload when returning to landing page
+### Phase 8: Critical Bug Fixes (2026-02-05)
+
+User identified 5 new critical issues with the current implementation:
+
+- [x] 21. **Issue 1: Remove obsolete keyboard_linear_speed and keyboard_strafe_speed** - FIXED ✅
+  - [x] 21.1 Remove from getDefaultSettings() in settings-manager.js - DONE ✅
+  - [x] 21.2 Remove from all preset definitions (beginner, normal, advanced, sport) - DONE ✅
+  - [x] 21.3 Remove from old preset definitions (lines 264-331) - DONE ✅
+  - [x] 21.4 Verify not being saved anywhere else - DONE ✅
+    - Found references in templates/index.html (old file, not currently used)
+    - No references in active code (landing.html, control.js, keyboard-mouse-control.js)
+  - **Result:** Settings structure is now clean, no obsolete keyboard speed multipliers
+
+- [x] 22. **Issue 2: Fix deadzone parsing bug (0 treated as falsy)** - FIXED ✅
+  - [x] 22.1 Fix loadSettings() in keyboard-mouse-control.js - DONE ✅
+    - Changed from: `parseFloat(km.linear_deadzone || 0.10)`
+    - Changed to: `parseFloat(km.linear_deadzone !== undefined ? km.linear_deadzone : 0.10)`
+    - Applied to all curve parameters: linearAlpha, linearDeadzone, strafeAlpha, strafeDeadzone, rotationAlpha, rotationDeadzone
+    - Also fixed acceleration and deceleration parsing
+  - **Result:** Deadzone value of 0% is now correctly respected instead of falling back to 10%
+
+- [ ] 23. **Issue 3: Explain acceleration and deceleration settings**
+  - **What they control:** Velocity ramping for smooth acceleration/deceleration
+  - **Where defined:**
+    - Default: acceleration=0.15, deceleration=0.2 (in keyboard-mouse-control.js)
+    - Can be set in settings-manager.js keyboard_mouse section
+  - **How they work:** In poll() method (lines 395-423), velocities gradually ramp up/down
+    - Acceleration: How fast velocity increases when key is pressed (0.15 = 15% per frame)
+    - Deceleration: How fast velocity decreases when key is released (0.2 = 20% per frame)
+  - **Should they be exposed in UI?**
+    - Recommendation: Keep as internal constants for now
+    - Most users don't need to adjust these
+    - Can expose later if users request fine-tuning
+  - **Action needed:** Add clear code comments documenting these settings
+
+- [x] 24. **Issue 4: Increase slider max values for testing beyond hardware limits** - FIXED ✅
+  - [x] 24.1 Increase Mouse Yaw Sensitivity max from 2.0 to 5.0 - DONE ✅
+  - [x] 24.2 Increase Mouse Pitch Sensitivity max from 2.0 to 5.0 - DONE ✅
+  - [x] 24.3 Increase Max Rotation Velocity max from 3.0 to 9.0 rad/s - DONE ✅
+  - [x] 24.4 Increase Max Linear Velocity max from 5.0 to 10.0 m/s - DONE ✅
+  - [x] 24.5 Add warning tooltips to all sliders - DONE ✅
+    - "⚠️ Values above hardware limits may cause instability. Use with caution."
+    - "⚠️ Values above 2.0 may be too sensitive." (for mouse sensitivity)
+  - **Mouse Yaw Sensitivity explanation:** This is the horizontal mouse sensitivity, NOT legacy
+    - Controls how much mouse movement (in pixels) translates to rotation input
+    - Higher values = more rotation for same mouse movement
+    - Works in combination with Max Rotation Velocity and Rotation Alpha
+  - **Result:** User can now test beyond documented hardware limits to find optimal settings
+
+- [x] 25. **Issue 5: Remove gamepad settings from keyboard/mouse control** - ALREADY FIXED ✅
+  - [x] 25.1 Check if gamepad settings are loaded in keyboard-mouse-control.js - DONE ✅
+  - [x] 25.2 Verify no gamepad references in keyboard/mouse module - DONE ✅
+  - **Result:** No gamepad settings found in keyboard-mouse-control.js - already clean!
+
+- [ ] 19. Fix deadzone reset on disconnect (ORIGINAL ISSUE 5)
+  - [ ] 19.1 **Deadzone sliders reset to 10% on disconnect**
+    - Root cause: Likely fixed by Issue 2 (deadzone parsing bug)
     - Verify settings are saved to localStorage when sliders change
     - Verify settings are loaded from localStorage on page load
     - Test: Change deadzone to 0%, disconnect, verify it stays at 0%
-  - [ ] 19.2 Add console logging to verify settings save/load
-  - [ ] 19.3 Test settings persistence across page refreshes
-  - [ ] 19.4 Test settings persistence across disconnect/reconnect
+  - [ ] 19.2 Test settings persistence across page refreshes
+  - [ ] 19.3 Test settings persistence across disconnect/reconnect
 
-- [ ] 20. Verify "Reset Curves" button is removed
-  - [x] 20.1 **Issue 1: Button still visible in UI** - ALREADY FIXED ✅
+- [ ] 20. Verify "Reset Curves" button is removed (ORIGINAL ISSUE 1)
+  - [x] 20.1 **Button still visible in UI** - ALREADY FIXED ✅
     - Verified: Button removed from templates/landing.html
     - JavaScript handler safely wrapped in `if` check
   - [ ] 20.2 Test UI to confirm button is not visible

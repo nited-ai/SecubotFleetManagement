@@ -14,10 +14,8 @@ function getDefaultSettings() {
         keyboard_mouse: {
             mouse_yaw_sensitivity: 0.5,
             mouse_pitch_sensitivity: 0.25,
-            keyboard_linear_speed: 0.2,
-            keyboard_strafe_speed: 0.2,
             kb_max_linear_velocity: 1.5,
-            kb_max_strafe_velocity: 1.2,
+            kb_max_strafe_velocity: 0.6,  // Fixed: hardware limit
             kb_max_rotation_velocity: 3.0,
             // Exponential curve settings (Normal preset defaults)
             linear_alpha: 1.5,
@@ -121,8 +119,6 @@ function applyPreset(preset) {
             keyboard_mouse: {
                 mouse_yaw_sensitivity: 0.3,
                 mouse_pitch_sensitivity: 0.15,
-                keyboard_linear_speed: 0.15,
-                keyboard_strafe_speed: 0.15,
                 kb_max_linear_velocity: 1.0,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 0.8, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 2.0,
@@ -150,8 +146,6 @@ function applyPreset(preset) {
             keyboard_mouse: {
                 mouse_yaw_sensitivity: 0.5,
                 mouse_pitch_sensitivity: 0.25,
-                keyboard_linear_speed: 0.2,
-                keyboard_strafe_speed: 0.2,
                 kb_max_linear_velocity: 1.5,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 1.2, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 3.0,
@@ -179,8 +173,6 @@ function applyPreset(preset) {
             keyboard_mouse: {
                 mouse_yaw_sensitivity: 0.8,
                 mouse_pitch_sensitivity: 0.4,
-                keyboard_linear_speed: 0.3,
-                keyboard_strafe_speed: 0.3,
                 kb_max_linear_velocity: 1.8,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 1.5, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 3.0,  // Fixed: was 3.5, exceeds 3.0 rad/s hardware limit
@@ -208,8 +200,6 @@ function applyPreset(preset) {
             keyboard_mouse: {
                 mouse_yaw_sensitivity: 1.2,
                 mouse_pitch_sensitivity: 0.6,
-                keyboard_linear_speed: 0.4,
-                keyboard_strafe_speed: 0.4,
                 kb_max_linear_velocity: 2.0,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 1.8, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 3.0,  // Fixed: was 4.0, exceeds 3.0 rad/s hardware limit
@@ -275,8 +265,6 @@ function getPresetSettings(preset) {
             keyboard_mouse: {
                 mouse_yaw_sensitivity: 0.3,
                 mouse_pitch_sensitivity: 0.15,
-                keyboard_linear_speed: 0.15,
-                keyboard_strafe_speed: 0.15,
                 kb_max_linear_velocity: 1.0,
                 kb_max_strafe_velocity: 0.8,
                 kb_max_rotation_velocity: 2.0
@@ -297,8 +285,6 @@ function getPresetSettings(preset) {
             keyboard_mouse: {
                 mouse_yaw_sensitivity: 0.5,
                 mouse_pitch_sensitivity: 0.25,
-                keyboard_linear_speed: 0.2,
-                keyboard_strafe_speed: 0.2,
                 kb_max_linear_velocity: 1.5,
                 kb_max_strafe_velocity: 1.2,
                 kb_max_rotation_velocity: 3.0
@@ -319,8 +305,6 @@ function getPresetSettings(preset) {
             keyboard_mouse: {
                 mouse_yaw_sensitivity: 0.8,
                 mouse_pitch_sensitivity: 0.4,
-                keyboard_linear_speed: 0.3,
-                keyboard_strafe_speed: 0.3,
                 kb_max_linear_velocity: 1.8,
                 kb_max_strafe_velocity: 1.5,
                 kb_max_rotation_velocity: 3.5
@@ -341,8 +325,6 @@ function getPresetSettings(preset) {
             keyboard_mouse: {
                 mouse_yaw_sensitivity: 1.2,
                 mouse_pitch_sensitivity: 0.6,
-                keyboard_linear_speed: 0.4,
-                keyboard_strafe_speed: 0.4,
                 kb_max_linear_velocity: 2.0,
                 kb_max_strafe_velocity: 1.8,
                 kb_max_rotation_velocity: 4.0

@@ -108,9 +108,9 @@
                                     <span>Max Velocity</span>
                                     <span id="kb-max-linear-value" class="text-unitree-primary font-mono">1.5 m/s</span>
                                 </label>
-                                <input type="range" id="kb-max-linear-velocity" class="slider" min="0.3" max="5.0" step="0.1" value="1.5"
-                                       title="Maximum forward/backward speed the robot can reach. This is the Y-axis maximum on the graph above. Hardware limit is 5.0 m/s.">
-                                <p class="form-help">Hardware limit: 5.0 m/s</p>
+                                <input type="range" id="kb-max-linear-velocity" class="slider" min="0.3" max="10.0" step="0.1" value="1.5"
+                                       title="Maximum forward/backward speed the robot can reach. This is the Y-axis maximum on the graph above. Hardware limit is 5.0 m/s. ⚠️ Values above 5.0 m/s may cause instability. Use with caution.">
+                                <p class="form-help">Hardware limit: 5.0 m/s (max: 10.0 for testing)</p>
                             </div>
 
                             <!-- Linear Alpha -->
@@ -194,9 +194,9 @@
                                     <span>Mouse Yaw Sensitivity</span>
                                     <span id="mouse-yaw-value" class="text-unitree-primary font-mono">0.5</span>
                                 </label>
-                                <input type="range" id="mouse-yaw-sensitivity" class="slider" min="0.1" max="2.0" step="0.1" value="0.5"
-                                       title="Controls how fast the robot rotates left/right when moving the mouse horizontally. Higher = faster rotation response to mouse movement.">
-                                <p class="form-help">Horizontal mouse sensitivity (0.1-2.0)</p>
+                                <input type="range" id="mouse-yaw-sensitivity" class="slider" min="0.1" max="5.0" step="0.1" value="0.5"
+                                       title="Controls how fast the robot rotates left/right when moving the mouse horizontally. Higher = faster rotation response to mouse movement. ⚠️ Values above 2.0 may be too sensitive.">
+                                <p class="form-help">Horizontal mouse sensitivity (0.1-5.0)</p>
                             </div>
 
                             <!-- Mouse Pitch Sensitivity -->
@@ -205,9 +205,9 @@
                                     <span>Mouse Pitch Sensitivity</span>
                                     <span id="mouse-pitch-value" class="text-unitree-primary font-mono">0.25</span>
                                 </label>
-                                <input type="range" id="mouse-pitch-sensitivity" class="slider" min="0.1" max="2.0" step="0.1" value="0.25"
-                                       title="Controls how fast the camera tilts up/down when moving the mouse vertically. Higher = faster pitch response to mouse movement.">
-                                <p class="form-help">Vertical mouse sensitivity (0.1-2.0)</p>
+                                <input type="range" id="mouse-pitch-sensitivity" class="slider" min="0.1" max="5.0" step="0.1" value="0.25"
+                                       title="Controls how fast the camera tilts up/down when moving the mouse vertically. Higher = faster pitch response to mouse movement. ⚠️ Values above 2.0 may be too sensitive.">
+                                <p class="form-help">Vertical mouse sensitivity (0.1-5.0)</p>
                             </div>
 
                             <!-- Max Rotation Velocity -->
@@ -216,9 +216,9 @@
                                     <span>Max Velocity</span>
                                     <span id="kb-max-rotation-value" class="text-unitree-primary font-mono">3.0 rad/s</span>
                                 </label>
-                                <input type="range" id="kb-max-rotation-velocity" class="slider" min="0.5" max="3.0" step="0.1" value="3.0"
-                                       title="Maximum rotation speed the robot can reach. This is the Y-axis maximum on the graph above. Hardware limit is 3.0 rad/s.">
-                                <p class="form-help">Hardware limit: 3.0 rad/s</p>
+                                <input type="range" id="kb-max-rotation-velocity" class="slider" min="0.5" max="9.0" step="0.1" value="3.0"
+                                       title="Maximum rotation speed the robot can reach. This is the Y-axis maximum on the graph above. Hardware limit is 3.0 rad/s. ⚠️ Values above 3.0 rad/s may cause instability. Use with caution.">
+                                <p class="form-help">Hardware limit: 3.0 rad/s (max: 9.0 for testing)</p>
                             </div>
 
                             <!-- Rotation Alpha -->
