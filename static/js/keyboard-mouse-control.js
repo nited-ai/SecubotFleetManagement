@@ -51,6 +51,9 @@ class KeyboardMouseControl {
         // Speed indicator timeout
         this.speedIndicatorTimeout = null;
 
+        // RAGE MODE flag (bypasses all smoothing)
+        this.rageMode = false;
+
         // Callbacks
         this.onCommandSend = null; // Callback to send commands
     }
@@ -414,6 +417,18 @@ class KeyboardMouseControl {
         strafe *= speedMultiplier;
         rotation *= speedMultiplier;
 
+        // RAGE MODE: Bypass all smoothing (curves, ramping, deadzone)
+        if (this.rageMode) {
+            const { maxLinear, maxStrafe, maxRotation } = this.settings;
+            const vx = forward * maxLinear;
+            const vy = -strafe * maxStrafe;  // Invert strafe
+            const vyaw = -rotation * maxRotation;  // Invert rotation
+
+            console.log(`🔥 [RAGE MODE] RAW: vx=${vx.toFixed(2)}, vy=${vy.toFixed(2)}, vyaw=${vyaw.toFixed(2)}`);
+            this.sendCommand(vx, vy, vyaw, true);  // Pass rageMode flag
+            return;
+        }
+
         // Apply velocity ramping (smooth acceleration/deceleration) with exponential curves
         // NOTE: Linear/strafe deadzone removed (keyboard is digital), rotation deadzone kept (mouse is analog)
         const { maxLinear, maxStrafe, maxRotation, acceleration, deceleration,
@@ -516,7 +531,7 @@ class KeyboardMouseControl {
     /**
      * Send movement command
      */
-    sendCommand(vx, vy, vyaw) {
+    sendCommand(vx, vy, vyaw, rageMode = false) {
         if (this.onCommandSend) {
             // CRITICAL: Normalize velocities and pre-invert axes to match backend expectations
             // Backend inverts lx and rx, so we pre-invert them here
@@ -536,6 +551,8 @@ class KeyboardMouseControl {
                 linear_ramp_time: this.settings.linearRampTime || 1.0,
                 strafe_ramp_time: this.settings.strafeRampTime || 0.2,
                 rotation_ramp_time: this.settings.rotationRampTime || 0.9,
+                // RAGE MODE flag (bypasses backend slew rate limiter)
+                rage_mode: rageMode,
                 source: 'keyboard_mouse'
             };
 
@@ -616,6 +633,27 @@ class KeyboardMouseControl {
     setSpeedPercentage(percentage) {
         this.speedPercentage = Math.max(this.MIN_SPEED, Math.min(this.MAX_SPEED, percentage));
         console.log(`🎚️ Speed set to ${this.speedPercentage}% (input percentage along curve)`);
+    }
+
+    /**
+     * Toggle RAGE MODE (bypasses all smoothing for raw control)
+     */
+    toggleRageMode(enabled) {
+        this.rageMode = enabled;
+        console.log(`🔥 RAGE MODE ${enabled ? 'ENABLED' : 'DISABLED'}`);
+
+        // Update UI
+        const icon = document.getElementById('rage-mode-icon');
+        const btn = document.getElementById('rage-mode-btn');
+        if (icon && btn) {
+            if (enabled) {
+                icon.style.color = '#ef4444';  // Red
+                btn.style.background = 'rgba(239, 68, 68, 0.2)';  // Red glow
+            } else {
+                icon.style.color = 'currentColor';
+                btn.style.background = 'rgba(255, 255, 255, 0.1)';
+            }
+        }
     }
 }
 

@@ -25,6 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize speed slider
     initializeSpeedSlider();
 
+    // Initialize RAGE MODE toggle
+    initializeRageModeToggle();
+
     // Initialize status polling
     initializeStatusPolling();
 
@@ -234,6 +237,61 @@ function initializeSpeedSlider() {
     // Set initial speed in keyboard/mouse control
     if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
         keyboardMouseControl.setSpeedPercentage(100);
+    }
+}
+
+/**
+ * Initialize RAGE MODE toggle button
+ */
+function initializeRageModeToggle() {
+    const rageModeBtn = document.getElementById('rage-mode-btn');
+    const rageModeModal = document.getElementById('rage-mode-modal');
+    const rageModeConfirm = document.getElementById('rage-mode-confirm');
+    const rageModeCancel = document.getElementById('rage-mode-cancel');
+
+    let rageModeEnabled = false;
+    let rageModeWarningShown = localStorage.getItem('rage_mode_warning_shown') === 'true';
+
+    if (rageModeBtn) {
+        rageModeBtn.addEventListener('click', () => {
+            if (!rageModeEnabled) {
+                // Enabling RAGE MODE
+                if (!rageModeWarningShown) {
+                    // Show warning modal on first use
+                    rageModeModal.classList.remove('hidden');
+                } else {
+                    // Already seen warning, enable directly
+                    rageModeEnabled = true;
+                    if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
+                        keyboardMouseControl.toggleRageMode(true);
+                    }
+                }
+            } else {
+                // Disabling RAGE MODE
+                rageModeEnabled = false;
+                if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
+                    keyboardMouseControl.toggleRageMode(false);
+                }
+            }
+        });
+    }
+
+    if (rageModeConfirm) {
+        rageModeConfirm.addEventListener('click', () => {
+            rageModeEnabled = true;
+            rageModeWarningShown = true;
+            localStorage.setItem('rage_mode_warning_shown', 'true');
+            rageModeModal.classList.add('hidden');
+            if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
+                keyboardMouseControl.toggleRageMode(true);
+            }
+        });
+    }
+
+    if (rageModeCancel) {
+        rageModeCancel.addEventListener('click', () => {
+            rageModeModal.classList.add('hidden');
+        });
     }
 }
 

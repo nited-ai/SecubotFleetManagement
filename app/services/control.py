@@ -284,55 +284,69 @@ class ControlService:
 
             # Step 2: Apply Slew Rate Limiter (prevents jerky "freaking out" movements)
             # This smoothly ramps velocity changes over time instead of allowing instant jumps
+            # UNLESS RAGE MODE is enabled (bypasses all smoothing)
 
-            # Get ramp-up time from command data (if provided by frontend)
-            # Ramp-up time = time to reach max velocity from standstill
-            linear_ramp_time = data.get('linear_ramp_time', 1.0)
-            strafe_ramp_time = data.get('strafe_ramp_time', 0.2)
-            rotation_ramp_time = data.get('rotation_ramp_time', 0.9)
+            # Check if RAGE MODE is enabled
+            rage_mode = data.get('rage_mode', False)
 
-            # Convert ramp-up time to acceleration limit
-            # Formula: MAX_ACCEL = max_velocity / ramp_time
-            # Edge case: If ramp_time = 0, use very high acceleration (instant response)
-            MAX_LINEAR_ACCEL = max_linear / linear_ramp_time if linear_ramp_time > 0.01 else 1000.0
-            MAX_STRAFE_ACCEL = max_strafe / strafe_ramp_time if strafe_ramp_time > 0.01 else 1000.0
-            MAX_YAW_ACCEL = max_rotation / rotation_ramp_time if rotation_ramp_time > 0.01 else 1000.0
+            if rage_mode:
+                # RAGE MODE: Bypass slew rate limiter, use raw velocities directly
+                vx = raw_target_vx
+                vy = raw_target_vy
+                vyaw = raw_target_vyaw
 
-            # Calculate time delta since last command
-            now = time.time()
-            dt = now - self.last_cmd_time
-            self.last_cmd_time = now
+                self.logger.warning(f"🔥 [RAGE MODE] RAW VELOCITIES: vx={vx:.3f}, vy={vy:.3f}, vyaw={vyaw:.3f}")
+            else:
+                # Normal mode: Apply slew rate limiter
 
-            # Edge case: If connection dropped for a while (>100ms), reset dt to avoid huge jumps
-            if dt > 0.1:
-                dt = 0.033  # Use typical 30Hz polling rate as fallback
+                # Get ramp-up time from command data (if provided by frontend)
+                # Ramp-up time = time to reach max velocity from standstill
+                linear_ramp_time = data.get('linear_ramp_time', 1.0)
+                strafe_ramp_time = data.get('strafe_ramp_time', 0.2)
+                rotation_ramp_time = data.get('rotation_ramp_time', 0.9)
 
-            # Apply slew rate limiter to each axis
-            # Formula: new_velocity = current_velocity + clamp(delta_velocity, -max_step, +max_step)
-            # where max_step = MAX_ACCEL * dt
+                # Convert ramp-up time to acceleration limit
+                # Formula: MAX_ACCEL = max_velocity / ramp_time
+                # Edge case: If ramp_time = 0, use very high acceleration (instant response)
+                MAX_LINEAR_ACCEL = max_linear / linear_ramp_time if linear_ramp_time > 0.01 else 1000.0
+                MAX_STRAFE_ACCEL = max_strafe / strafe_ramp_time if strafe_ramp_time > 0.01 else 1000.0
+                MAX_YAW_ACCEL = max_rotation / rotation_ramp_time if rotation_ramp_time > 0.01 else 1000.0
 
-            # Linear (Forward/Back)
-            delta_vx = raw_target_vx - self.current_vx
-            max_step_vx = MAX_LINEAR_ACCEL * dt
-            safe_delta_vx = max(-max_step_vx, min(max_step_vx, delta_vx))
-            self.current_vx += safe_delta_vx
+                # Calculate time delta since last command
+                now = time.time()
+                dt = now - self.last_cmd_time
+                self.last_cmd_time = now
 
-            # Strafe (Left/Right)
-            delta_vy = raw_target_vy - self.current_vy
-            max_step_vy = MAX_STRAFE_ACCEL * dt
-            safe_delta_vy = max(-max_step_vy, min(max_step_vy, delta_vy))
-            self.current_vy += safe_delta_vy
+                # Edge case: If connection dropped for a while (>100ms), reset dt to avoid huge jumps
+                if dt > 0.1:
+                    dt = 0.033  # Use typical 30Hz polling rate as fallback
 
-            # Rotation (Yaw)
-            delta_vyaw = raw_target_vyaw - self.current_vyaw
-            max_step_vyaw = MAX_YAW_ACCEL * dt
-            safe_delta_vyaw = max(-max_step_vyaw, min(max_step_vyaw, delta_vyaw))
-            self.current_vyaw += safe_delta_vyaw
+                # Apply slew rate limiter to each axis
+                # Formula: new_velocity = current_velocity + clamp(delta_velocity, -max_step, +max_step)
+                # where max_step = MAX_ACCEL * dt
 
-            # Step 3: Final Safety Clamp (absolute limits - should rarely trigger now)
-            vx = max(-max_linear, min(max_linear, self.current_vx))
-            vy = max(-max_strafe, min(max_strafe, self.current_vy))
-            vyaw = max(-max_rotation, min(max_rotation, self.current_vyaw))
+                # Linear (Forward/Back)
+                delta_vx = raw_target_vx - self.current_vx
+                max_step_vx = MAX_LINEAR_ACCEL * dt
+                safe_delta_vx = max(-max_step_vx, min(max_step_vx, delta_vx))
+                self.current_vx += safe_delta_vx
+
+                # Strafe (Left/Right)
+                delta_vy = raw_target_vy - self.current_vy
+                max_step_vy = MAX_STRAFE_ACCEL * dt
+                safe_delta_vy = max(-max_step_vy, min(max_step_vy, delta_vy))
+                self.current_vy += safe_delta_vy
+
+                # Rotation (Yaw)
+                delta_vyaw = raw_target_vyaw - self.current_vyaw
+                max_step_vyaw = MAX_YAW_ACCEL * dt
+                safe_delta_vyaw = max(-max_step_vyaw, min(max_step_vyaw, delta_vyaw))
+                self.current_vyaw += safe_delta_vyaw
+
+                # Step 3: Final Safety Clamp (absolute limits - should rarely trigger now)
+                vx = max(-max_linear, min(max_linear, self.current_vx))
+                vy = max(-max_strafe, min(max_strafe, self.current_vy))
+                vyaw = max(-max_rotation, min(max_rotation, self.current_vyaw))
 
             # Debug logging for keyboard/mouse commands (shows slew rate limiter in action)
             if is_keyboard_mouse and (abs(vx) > 0.01 or abs(vy) > 0.01 or abs(vyaw) > 0.01):
