@@ -285,6 +285,19 @@ class ControlService:
             # Step 2: Apply Slew Rate Limiter (prevents jerky "freaking out" movements)
             # This smoothly ramps velocity changes over time instead of allowing instant jumps
 
+            # Get ramp-up time from command data (if provided by frontend)
+            # Ramp-up time = time to reach max velocity from standstill
+            linear_ramp_time = data.get('linear_ramp_time', 1.0)
+            strafe_ramp_time = data.get('strafe_ramp_time', 0.2)
+            rotation_ramp_time = data.get('rotation_ramp_time', 0.9)
+
+            # Convert ramp-up time to acceleration limit
+            # Formula: MAX_ACCEL = max_velocity / ramp_time
+            # Edge case: If ramp_time = 0, use very high acceleration (instant response)
+            MAX_LINEAR_ACCEL = max_linear / linear_ramp_time if linear_ramp_time > 0.01 else 1000.0
+            MAX_STRAFE_ACCEL = max_strafe / strafe_ramp_time if strafe_ramp_time > 0.01 else 1000.0
+            MAX_YAW_ACCEL = max_rotation / rotation_ramp_time if rotation_ramp_time > 0.01 else 1000.0
+
             # Calculate time delta since last command
             now = time.time()
             dt = now - self.last_cmd_time
@@ -300,19 +313,19 @@ class ControlService:
 
             # Linear (Forward/Back)
             delta_vx = raw_target_vx - self.current_vx
-            max_step_vx = self.MAX_LINEAR_ACCEL * dt
+            max_step_vx = MAX_LINEAR_ACCEL * dt
             safe_delta_vx = max(-max_step_vx, min(max_step_vx, delta_vx))
             self.current_vx += safe_delta_vx
 
             # Strafe (Left/Right)
             delta_vy = raw_target_vy - self.current_vy
-            max_step_vy = self.MAX_STRAFE_ACCEL * dt
+            max_step_vy = MAX_STRAFE_ACCEL * dt
             safe_delta_vy = max(-max_step_vy, min(max_step_vy, delta_vy))
             self.current_vy += safe_delta_vy
 
             # Rotation (Yaw)
             delta_vyaw = raw_target_vyaw - self.current_vyaw
-            max_step_vyaw = self.MAX_YAW_ACCEL * dt
+            max_step_vyaw = MAX_YAW_ACCEL * dt
             safe_delta_vyaw = max(-max_step_vyaw, min(max_step_vyaw, delta_vyaw))
             self.current_vyaw += safe_delta_vyaw
 

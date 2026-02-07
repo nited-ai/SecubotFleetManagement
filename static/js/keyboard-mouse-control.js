@@ -85,7 +85,11 @@ class KeyboardMouseControl {
                         strafeAlpha: parseFloat(km.strafe_alpha !== undefined ? km.strafe_alpha : 1.2),
                         strafeDeadzone: parseFloat(km.strafe_deadzone !== undefined ? km.strafe_deadzone : 0.10),
                         rotationAlpha: parseFloat(km.rotation_alpha !== undefined ? km.rotation_alpha : 2.5),
-                        rotationDeadzone: parseFloat(km.rotation_deadzone !== undefined ? km.rotation_deadzone : 0.10)
+                        rotationDeadzone: parseFloat(km.rotation_deadzone !== undefined ? km.rotation_deadzone : 0.10),
+                        // Backend slew rate limiter parameters (acceleration ramp-up time)
+                        linearRampTime: parseFloat(km.linear_ramp_time !== undefined ? km.linear_ramp_time : 1.0),
+                        strafeRampTime: parseFloat(km.strafe_ramp_time !== undefined ? km.strafe_ramp_time : 0.2),
+                        rotationRampTime: parseFloat(km.rotation_ramp_time !== undefined ? km.rotation_ramp_time : 0.9)
                     };
                     console.log('✅ [loadSettings] Loaded settings from unitree_settings:', settings);
                     return settings;
@@ -528,6 +532,10 @@ class KeyboardMouseControl {
                 max_linear: maxLinear,
                 max_strafe: maxStrafe,
                 max_rotation: maxRotation,
+                // Backend slew rate limiter parameters (acceleration ramp-up time)
+                linear_ramp_time: this.settings.linearRampTime || 1.0,
+                strafe_ramp_time: this.settings.strafeRampTime || 0.2,
+                rotation_ramp_time: this.settings.rotationRampTime || 0.9,
                 source: 'keyboard_mouse'
             };
 

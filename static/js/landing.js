@@ -312,6 +312,16 @@ function updateAllKeyboardMouseSliders(kbMouseSettings) {
     document.getElementById('rotation-deadzone').value = rotationDeadzonePercent;
     document.getElementById('rotation-deadzone-value').textContent = rotationDeadzonePercent + '%';
 
+    // Update ramp-up time sliders (backend slew rate limiter)
+    document.getElementById('linear-ramp-time').value = kbMouseSettings.linear_ramp_time;
+    document.getElementById('linear-ramp-time-value').textContent = `${kbMouseSettings.linear_ramp_time.toFixed(1)}s`;
+
+    document.getElementById('strafe-ramp-time').value = kbMouseSettings.strafe_ramp_time;
+    document.getElementById('strafe-ramp-time-value').textContent = `${kbMouseSettings.strafe_ramp_time.toFixed(1)}s`;
+
+    document.getElementById('rotation-ramp-time').value = kbMouseSettings.rotation_ramp_time;
+    document.getElementById('rotation-ramp-time-value').textContent = `${kbMouseSettings.rotation_ramp_time.toFixed(1)}s`;
+
     // Update curve graphs (linear/strafe deadzone removed, rotation deadzone kept)
     if (typeof charts !== 'undefined' && charts.linear && charts.strafe && charts.rotation) {
         updateCurveChart(
@@ -1104,6 +1114,51 @@ function initializeCurveSliders() {
                 fresh.kb_max_rotation_velocity !== undefined ? fresh.kb_max_rotation_velocity : 3.0,
                 HARDWARE_LIMITS.rotation
             );
+        });
+    }
+
+    // Linear ramp-up time slider (Backend Slew Rate Limiter)
+    const linearRampTimeSlider = document.getElementById('linear-ramp-time');
+    const linearRampTimeValue = document.getElementById('linear-ramp-time-value');
+    if (linearRampTimeSlider && linearRampTimeValue) {
+        const rampTime = km.linear_ramp_time || 1.0;
+        linearRampTimeSlider.value = rampTime;
+        linearRampTimeValue.textContent = `${rampTime.toFixed(1)}s`;
+
+        linearRampTimeSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            linearRampTimeValue.textContent = `${value.toFixed(1)}s`;
+            updateSetting('keyboard_mouse', 'linear_ramp_time', value);
+        });
+    }
+
+    // Strafe ramp-up time slider (Backend Slew Rate Limiter)
+    const strafeRampTimeSlider = document.getElementById('strafe-ramp-time');
+    const strafeRampTimeValue = document.getElementById('strafe-ramp-time-value');
+    if (strafeRampTimeSlider && strafeRampTimeValue) {
+        const rampTime = km.strafe_ramp_time || 0.2;
+        strafeRampTimeSlider.value = rampTime;
+        strafeRampTimeValue.textContent = `${rampTime.toFixed(1)}s`;
+
+        strafeRampTimeSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            strafeRampTimeValue.textContent = `${value.toFixed(1)}s`;
+            updateSetting('keyboard_mouse', 'strafe_ramp_time', value);
+        });
+    }
+
+    // Rotation ramp-up time slider (Backend Slew Rate Limiter)
+    const rotationRampTimeSlider = document.getElementById('rotation-ramp-time');
+    const rotationRampTimeValue = document.getElementById('rotation-ramp-time-value');
+    if (rotationRampTimeSlider && rotationRampTimeValue) {
+        const rampTime = km.rotation_ramp_time || 0.9;
+        rotationRampTimeSlider.value = rampTime;
+        rotationRampTimeValue.textContent = `${rampTime.toFixed(1)}s`;
+
+        rotationRampTimeSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            rotationRampTimeValue.textContent = `${value.toFixed(1)}s`;
+            updateSetting('keyboard_mouse', 'rotation_ramp_time', value);
         });
     }
 

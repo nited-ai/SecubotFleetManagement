@@ -22,7 +22,11 @@ function getDefaultSettings() {
             linear_alpha: 1.5,
             strafe_alpha: 1.2,
             rotation_alpha: 2.5,
-            rotation_deadzone: 0.10  // Mouse rotation needs deadzone to prevent drift
+            rotation_deadzone: 0.10,  // Mouse rotation needs deadzone to prevent drift
+            // Backend slew rate limiter settings (acceleration ramp-up time)
+            linear_ramp_time: 1.0,    // seconds - time to reach max linear speed
+            strafe_ramp_time: 0.2,    // seconds - time to reach max strafe speed
+            rotation_ramp_time: 0.9   // seconds - time to reach max rotation speed
         },
         gamepad: {
             deadzone_left_stick: 0.15,
@@ -162,7 +166,11 @@ function applyPreset(preset) {
                 linear_alpha: 1.8,
                 strafe_alpha: 1.5,
                 rotation_alpha: 3.0,  // High exponential suppresses jitter from sensitivity
-                rotation_deadzone: 0.15  // Higher deadzone for beginners to prevent accidental rotation
+                rotation_deadzone: 0.15,  // Higher deadzone for beginners to prevent accidental rotation
+                // Beginner ramp-up time: Slower acceleration for smoother feel
+                linear_ramp_time: 1.5,
+                strafe_ramp_time: 1.2,
+                rotation_ramp_time: 1.2
             },
             gamepad: {
                 deadzone_left_stick: 0.15,
@@ -187,7 +195,11 @@ function applyPreset(preset) {
                 linear_alpha: 1.5,
                 strafe_alpha: 1.2,
                 rotation_alpha: 2.5,  // Exponential curve for smooth precision-flick
-                rotation_deadzone: 0.10  // Mouse rotation needs deadzone to prevent drift
+                rotation_deadzone: 0.10,  // Mouse rotation needs deadzone to prevent drift
+                // Normal ramp-up time: Current defaults
+                linear_ramp_time: 1.0,
+                strafe_ramp_time: 0.2,
+                rotation_ramp_time: 0.9
             },
             gamepad: {
                 deadzone_left_stick: 0.1,
@@ -212,7 +224,11 @@ function applyPreset(preset) {
                 linear_alpha: 1.2,
                 strafe_alpha: 1.0,
                 rotation_alpha: 2.0,  // Lower exponential for more linear response
-                rotation_deadzone: 0.05  // Lower deadzone for advanced users (more responsive)
+                rotation_deadzone: 0.05,  // Lower deadzone for advanced users (more responsive)
+                // Advanced ramp-up time: Faster acceleration for snappier response
+                linear_ramp_time: 0.5,
+                strafe_ramp_time: 0.3,
+                rotation_ramp_time: 0.4
             },
             gamepad: {
                 deadzone_left_stick: 0.05,
@@ -237,7 +253,11 @@ function applyPreset(preset) {
                 linear_alpha: 1.0,
                 strafe_alpha: 0.8,
                 rotation_alpha: 1.5,  // Lower exponential for near-linear response
-                rotation_deadzone: 0.05  // Minimal deadzone for sport/competitive use
+                rotation_deadzone: 0.05,  // Minimal deadzone for sport/competitive use
+                // Sport ramp-up time: Minimal acceleration for instant response
+                linear_ramp_time: 0.2,
+                strafe_ramp_time: 0.1,
+                rotation_ramp_time: 0.2
             },
             gamepad: {
                 deadzone_left_stick: 0.05,
