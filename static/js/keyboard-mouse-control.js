@@ -649,7 +649,7 @@ class KeyboardMouseControl {
                 btn.style.color = '#ef4444';  // Red
                 btn.style.filter = 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.6))';  // Red glow
             } else {
-                btn.style.color = 'currentColor';
+                btn.style.color = '#00E8DA';  // Teal (matches other HUD icons)
                 btn.style.filter = 'drop-shadow(0 0 2px black)';  // Default shadow
             }
         }

@@ -249,35 +249,60 @@ function initializeRageModeToggle() {
     const rageModeConfirm = document.getElementById('rage-mode-confirm');
     const rageModeCancel = document.getElementById('rage-mode-cancel');
 
+    // Debug logging
+    console.log('🔥 Initializing RAGE MODE toggle...');
+    console.log('  - Button found:', !!rageModeBtn);
+    console.log('  - Modal found:', !!rageModeModal);
+    console.log('  - Confirm button found:', !!rageModeConfirm);
+    console.log('  - Cancel button found:', !!rageModeCancel);
+
+    if (!rageModeBtn) {
+        console.error('❌ RAGE MODE button not found!');
+        return;
+    }
+
+    if (!rageModeModal) {
+        console.error('❌ RAGE MODE modal not found!');
+        return;
+    }
+
     let rageModeEnabled = false;
     let rageModeWarningShown = localStorage.getItem('rage_mode_warning_shown') === 'true';
+    console.log('  - Warning already shown:', rageModeWarningShown);
 
-    if (rageModeBtn) {
-        rageModeBtn.addEventListener('click', () => {
-            if (!rageModeEnabled) {
-                // Enabling RAGE MODE
-                if (!rageModeWarningShown) {
-                    // Show warning modal on first use
-                    rageModeModal.classList.remove('hidden');
-                } else {
-                    // Already seen warning, enable directly
-                    rageModeEnabled = true;
-                    if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
-                        keyboardMouseControl.toggleRageMode(true);
-                    }
-                }
+    rageModeBtn.addEventListener('click', (e) => {
+        console.log('🔥 RAGE MODE button clicked!');
+        console.log('  - Current state:', rageModeEnabled ? 'ENABLED' : 'DISABLED');
+        console.log('  - Warning shown:', rageModeWarningShown);
+
+        if (!rageModeEnabled) {
+            // Enabling RAGE MODE
+            if (!rageModeWarningShown) {
+                // Show warning modal on first use
+                console.log('  - Showing warning modal...');
+                rageModeModal.classList.remove('hidden');
+                console.log('  - Modal classes:', rageModeModal.className);
             } else {
-                // Disabling RAGE MODE
-                rageModeEnabled = false;
+                // Already seen warning, enable directly
+                console.log('  - Enabling RAGE MODE directly (warning already shown)');
+                rageModeEnabled = true;
                 if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
-                    keyboardMouseControl.toggleRageMode(false);
+                    keyboardMouseControl.toggleRageMode(true);
                 }
             }
-        });
-    }
+        } else {
+            // Disabling RAGE MODE
+            console.log('  - Disabling RAGE MODE');
+            rageModeEnabled = false;
+            if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
+                keyboardMouseControl.toggleRageMode(false);
+            }
+        }
+    });
 
     if (rageModeConfirm) {
         rageModeConfirm.addEventListener('click', () => {
+            console.log('🔥 RAGE MODE confirmed!');
             rageModeEnabled = true;
             rageModeWarningShown = true;
             localStorage.setItem('rage_mode_warning_shown', 'true');
@@ -290,9 +315,12 @@ function initializeRageModeToggle() {
 
     if (rageModeCancel) {
         rageModeCancel.addEventListener('click', () => {
+            console.log('🔥 RAGE MODE cancelled');
             rageModeModal.classList.add('hidden');
         });
     }
+
+    console.log('✅ RAGE MODE toggle initialized successfully');
 }
 
 /**
