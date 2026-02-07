@@ -411,9 +411,13 @@ class KeyboardMouseControl {
         rotation *= speedMultiplier;
 
         // Apply velocity ramping (smooth acceleration/deceleration) with exponential curves
+        // NOTE: Keyboard deadzone removed (Task 34.2) - keyboard is digital, deadzone creates artificial delay
+        // Default to 0.0 deadzone for keyboard inputs (jump-start logic handles instant response)
         const { maxLinear, maxStrafe, maxRotation, acceleration, deceleration,
-                linearAlpha, linearDeadzone, strafeAlpha, strafeDeadzone,
-                rotationAlpha, rotationDeadzone } = this.settings;
+                linearAlpha, strafeAlpha, rotationAlpha } = this.settings;
+        const linearDeadzone = this.settings.linearDeadzone !== undefined ? this.settings.linearDeadzone : 0.0;
+        const strafeDeadzone = this.settings.strafeDeadzone !== undefined ? this.settings.strafeDeadzone : 0.0;
+        const rotationDeadzone = this.settings.rotationDeadzone !== undefined ? this.settings.rotationDeadzone : 0.0;
 
         // Linear velocity (forward/backward) - apply exponential curve
         // Convert input (-1 to 1) to absolute percentage (0 to 1), apply curve, then restore sign

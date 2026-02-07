@@ -18,12 +18,11 @@ function getDefaultSettings() {
             kb_max_strafe_velocity: 0.6,  // Fixed: hardware limit
             kb_max_rotation_velocity: 3.0,
             // Exponential curve settings (Normal preset defaults)
+            // NOTE: Keyboard deadzone removed - keyboard is digital (on/off), deadzone creates artificial delay
+            // Jump-start logic in keyboard-mouse-control.js handles instant response
             linear_alpha: 1.5,
-            linear_deadzone: 0.10,
             strafe_alpha: 1.2,
-            strafe_deadzone: 0.10,
-            rotation_alpha: 2.5,
-            rotation_deadzone: 0.10
+            rotation_alpha: 2.5
         },
         gamepad: {
             deadzone_left_stick: 0.15,
@@ -159,13 +158,10 @@ function applyPreset(preset) {
                 kb_max_linear_velocity: 1.0,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 0.8, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 2.0,
-                // Beginner curve: Smooth, forgiving, high deadzone
+                // Beginner curve: Smooth, forgiving (keyboard deadzone removed)
                 linear_alpha: 1.8,
-                linear_deadzone: 0.15,
                 strafe_alpha: 1.5,
-                strafe_deadzone: 0.15,
-                rotation_alpha: 3.0,  // High exponential suppresses jitter from sensitivity
-                rotation_deadzone: 0.15
+                rotation_alpha: 3.0  // High exponential suppresses jitter from sensitivity
             },
             gamepad: {
                 deadzone_left_stick: 0.15,
@@ -186,13 +182,10 @@ function applyPreset(preset) {
                 kb_max_linear_velocity: 1.5,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 1.2, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 3.0,
-                // Normal curve: Balanced, default values
+                // Normal curve: Balanced, default values (keyboard deadzone removed)
                 linear_alpha: 1.5,
-                linear_deadzone: 0.10,
                 strafe_alpha: 1.2,
-                strafe_deadzone: 0.10,
-                rotation_alpha: 2.5,  // Exponential curve for smooth precision-flick
-                rotation_deadzone: 0.10
+                rotation_alpha: 2.5  // Exponential curve for smooth precision-flick
             },
             gamepad: {
                 deadzone_left_stick: 0.1,
@@ -213,13 +206,10 @@ function applyPreset(preset) {
                 kb_max_linear_velocity: 1.8,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 1.5, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 3.0,  // Fixed: was 3.5, exceeds 3.0 rad/s hardware limit
-                // Advanced curve: More responsive, lower deadzone
+                // Advanced curve: More responsive (keyboard deadzone removed)
                 linear_alpha: 1.2,
-                linear_deadzone: 0.05,
                 strafe_alpha: 1.0,
-                strafe_deadzone: 0.05,
-                rotation_alpha: 2.0,  // Lower exponential for more linear response
-                rotation_deadzone: 0.05
+                rotation_alpha: 2.0  // Lower exponential for more linear response
             },
             gamepad: {
                 deadzone_left_stick: 0.05,
@@ -240,13 +230,10 @@ function applyPreset(preset) {
                 kb_max_linear_velocity: 2.0,
                 kb_max_strafe_velocity: 0.6,  // Fixed: was 1.8, exceeds 0.6 m/s hardware limit
                 kb_max_rotation_velocity: 3.0,  // Fixed: was 4.0, exceeds 3.0 rad/s hardware limit
-                // Sport curve: Linear/aggressive, minimal deadzone
+                // Sport curve: Linear/aggressive (keyboard deadzone removed)
                 linear_alpha: 1.0,
-                linear_deadzone: 0.05,
                 strafe_alpha: 0.8,
-                strafe_deadzone: 0.05,
-                rotation_alpha: 1.5,  // Lower exponential for near-linear response
-                rotation_deadzone: 0.05
+                rotation_alpha: 1.5  // Lower exponential for near-linear response
             },
             gamepad: {
                 deadzone_left_stick: 0.05,

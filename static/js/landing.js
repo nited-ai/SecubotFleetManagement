@@ -139,7 +139,7 @@ function initializeSettingsSliders() {
                 charts.linear,
                 'Linear',
                 fresh.linear_alpha !== undefined ? fresh.linear_alpha : 1.5,
-                fresh.linear_deadzone !== undefined ? fresh.linear_deadzone : 0.10,
+                0.0,  // Keyboard deadzone removed (Task 34.2)
                 parseFloat(value),
                 HARDWARE_LIMITS.linear
             );
@@ -155,7 +155,7 @@ function initializeSettingsSliders() {
                 charts.strafe,
                 'Strafe',
                 fresh.strafe_alpha !== undefined ? fresh.strafe_alpha : 1.2,
-                fresh.strafe_deadzone !== undefined ? fresh.strafe_deadzone : 0.10,
+                0.0,  // Keyboard deadzone removed (Task 34.2)
                 parseFloat(value),
                 HARDWARE_LIMITS.strafe
             );
@@ -171,7 +171,7 @@ function initializeSettingsSliders() {
                 charts.rotation,
                 'Rotation',
                 fresh.rotation_alpha !== undefined ? fresh.rotation_alpha : 2.5,
-                fresh.rotation_deadzone !== undefined ? fresh.rotation_deadzone : 0.10,
+                0.0,  // Keyboard deadzone removed (Task 34.2)
                 parseFloat(value),
                 HARDWARE_LIMITS.rotation
             );
@@ -307,26 +307,13 @@ function updateAllKeyboardMouseSliders(kbMouseSettings) {
     document.getElementById('rotation-alpha').value = kbMouseSettings.rotation_alpha;
     document.getElementById('rotation-alpha-value').textContent = kbMouseSettings.rotation_alpha.toFixed(1);
 
-    // Update deadzone sliders
-    const linearDeadzonePercent = Math.round(kbMouseSettings.linear_deadzone * 100);
-    document.getElementById('linear-deadzone').value = linearDeadzonePercent;
-    document.getElementById('linear-deadzone-value').textContent = linearDeadzonePercent + '%';
-
-    const strafeDeadzonePercent = Math.round(kbMouseSettings.strafe_deadzone * 100);
-    document.getElementById('strafe-deadzone').value = strafeDeadzonePercent;
-    document.getElementById('strafe-deadzone-value').textContent = strafeDeadzonePercent + '%';
-
-    const rotationDeadzonePercent = Math.round(kbMouseSettings.rotation_deadzone * 100);
-    document.getElementById('rotation-deadzone').value = rotationDeadzonePercent;
-    document.getElementById('rotation-deadzone-value').textContent = rotationDeadzonePercent + '%';
-
-    // Update curve graphs
+    // Update curve graphs (keyboard deadzone removed - Task 34.2)
     if (typeof charts !== 'undefined' && charts.linear && charts.strafe && charts.rotation) {
         updateCurveChart(
             charts.linear,
             'Linear',
             kbMouseSettings.linear_alpha,
-            kbMouseSettings.linear_deadzone,
+            0.0,  // Keyboard deadzone removed (Task 34.2)
             kbMouseSettings.kb_max_linear_velocity,
             HARDWARE_LIMITS.linear
         );
@@ -335,7 +322,7 @@ function updateAllKeyboardMouseSliders(kbMouseSettings) {
             charts.strafe,
             'Strafe',
             kbMouseSettings.strafe_alpha,
-            kbMouseSettings.strafe_deadzone,
+            0.0,  // Keyboard deadzone removed (Task 34.2)
             kbMouseSettings.kb_max_strafe_velocity,
             HARDWARE_LIMITS.strafe
         );
@@ -344,7 +331,7 @@ function updateAllKeyboardMouseSliders(kbMouseSettings) {
             charts.rotation,
             'Rotation',
             kbMouseSettings.rotation_alpha,
-            kbMouseSettings.rotation_deadzone,
+            0.0,  // Keyboard deadzone removed (Task 34.2)
             kbMouseSettings.kb_max_rotation_velocity,
             HARDWARE_LIMITS.rotation
         );
@@ -961,12 +948,13 @@ function initializeCurveCharts() {
     const km = settings.keyboard_mouse;
 
     // Create charts
+    // Initialize curve charts (keyboard deadzone removed - Task 34.2)
     charts.linear = createCurveChart(
         'linear-curve-chart',
         'Linear',
         'm/s',
         km.linear_alpha || 1.5,
-        km.linear_deadzone || 0.10,
+        0.0,  // Keyboard deadzone removed
         km.kb_max_linear_velocity || 1.5,
         HARDWARE_LIMITS.linear
     );
@@ -976,7 +964,7 @@ function initializeCurveCharts() {
         'Strafe',
         'm/s',
         km.strafe_alpha || 1.2,
-        km.strafe_deadzone || 0.10,
+        0.0,  // Keyboard deadzone removed
         km.kb_max_strafe_velocity || 0.6,
         HARDWARE_LIMITS.strafe
     );
@@ -986,7 +974,7 @@ function initializeCurveCharts() {
         'Rotation',
         'rad/s',
         km.rotation_alpha || 2.5,
-        km.rotation_deadzone || 0.10,
+        0.0,  // Keyboard deadzone removed
         km.kb_max_rotation_velocity || 3.0,
         HARDWARE_LIMITS.rotation
     );
@@ -1026,39 +1014,14 @@ function initializeCurveSliders() {
                 charts.linear,
                 'Linear',
                 alpha,
-                fresh.linear_deadzone !== undefined ? fresh.linear_deadzone : 0.10,
+                0.0,  // Keyboard deadzone removed (Task 34.2)
                 fresh.kb_max_linear_velocity !== undefined ? fresh.kb_max_linear_velocity : 1.5,
                 HARDWARE_LIMITS.linear
             );
         });
     }
 
-    // Linear deadzone slider
-    const linearDeadzoneSlider = document.getElementById('linear-deadzone');
-    const linearDeadzoneValue = document.getElementById('linear-deadzone-value');
-    if (linearDeadzoneSlider && linearDeadzoneValue) {
-        const deadzonePercent = Math.round((km.linear_deadzone || 0.10) * 100);
-        linearDeadzoneSlider.value = deadzonePercent;
-        linearDeadzoneValue.textContent = deadzonePercent + '%';
 
-        linearDeadzoneSlider.addEventListener('input', (e) => {
-            const deadzonePercent = parseInt(e.target.value);
-            const deadzone = deadzonePercent / 100.0;
-            linearDeadzoneValue.textContent = deadzonePercent + '%';
-            updateSetting('keyboard_mouse', 'linear_deadzone', deadzone);
-
-            // Get fresh settings after update
-            const fresh = getFreshSettings();
-            updateCurveChart(
-                charts.linear,
-                'Linear',
-                fresh.linear_alpha !== undefined ? fresh.linear_alpha : 1.5,
-                deadzone,
-                fresh.kb_max_linear_velocity !== undefined ? fresh.kb_max_linear_velocity : 1.5,
-                HARDWARE_LIMITS.linear
-            );
-        });
-    }
 
     // Strafe alpha slider
     const strafeAlphaSlider = document.getElementById('strafe-alpha');
@@ -1078,39 +1041,14 @@ function initializeCurveSliders() {
                 charts.strafe,
                 'Strafe',
                 alpha,
-                fresh.strafe_deadzone !== undefined ? fresh.strafe_deadzone : 0.10,
+                0.0,  // Keyboard deadzone removed (Task 34.2)
                 fresh.kb_max_strafe_velocity !== undefined ? fresh.kb_max_strafe_velocity : 0.6,
                 HARDWARE_LIMITS.strafe
             );
         });
     }
 
-    // Strafe deadzone slider
-    const strafeDeadzoneSlider = document.getElementById('strafe-deadzone');
-    const strafeDeadzoneValue = document.getElementById('strafe-deadzone-value');
-    if (strafeDeadzoneSlider && strafeDeadzoneValue) {
-        const deadzonePercent = Math.round((km.strafe_deadzone || 0.10) * 100);
-        strafeDeadzoneSlider.value = deadzonePercent;
-        strafeDeadzoneValue.textContent = deadzonePercent + '%';
 
-        strafeDeadzoneSlider.addEventListener('input', (e) => {
-            const deadzonePercent = parseInt(e.target.value);
-            const deadzone = deadzonePercent / 100.0;
-            strafeDeadzoneValue.textContent = deadzonePercent + '%';
-            updateSetting('keyboard_mouse', 'strafe_deadzone', deadzone);
-
-            // Get fresh settings after update
-            const fresh = getFreshSettings();
-            updateCurveChart(
-                charts.strafe,
-                'Strafe',
-                fresh.strafe_alpha !== undefined ? fresh.strafe_alpha : 1.2,
-                deadzone,
-                fresh.kb_max_strafe_velocity !== undefined ? fresh.kb_max_strafe_velocity : 0.6,
-                HARDWARE_LIMITS.strafe
-            );
-        });
-    }
 
     // Rotation alpha slider
     const rotationAlphaSlider = document.getElementById('rotation-alpha');
@@ -1130,39 +1068,14 @@ function initializeCurveSliders() {
                 charts.rotation,
                 'Rotation',
                 alpha,
-                fresh.rotation_deadzone !== undefined ? fresh.rotation_deadzone : 0.10,
+                0.0,  // Keyboard deadzone removed (Task 34.2)
                 fresh.kb_max_rotation_velocity !== undefined ? fresh.kb_max_rotation_velocity : 3.0,
                 HARDWARE_LIMITS.rotation
             );
         });
     }
 
-    // Rotation deadzone slider
-    const rotationDeadzoneSlider = document.getElementById('rotation-deadzone');
-    const rotationDeadzoneValue = document.getElementById('rotation-deadzone-value');
-    if (rotationDeadzoneSlider && rotationDeadzoneValue) {
-        const deadzonePercent = Math.round((km.rotation_deadzone || 0.10) * 100);
-        rotationDeadzoneSlider.value = deadzonePercent;
-        rotationDeadzoneValue.textContent = deadzonePercent + '%';
 
-        rotationDeadzoneSlider.addEventListener('input', (e) => {
-            const deadzonePercent = parseInt(e.target.value);
-            const deadzone = deadzonePercent / 100.0;
-            rotationDeadzoneValue.textContent = deadzonePercent + '%';
-            updateSetting('keyboard_mouse', 'rotation_deadzone', deadzone);
-
-            // Get fresh settings after update
-            const fresh = getFreshSettings();
-            updateCurveChart(
-                charts.rotation,
-                'Rotation',
-                fresh.rotation_alpha !== undefined ? fresh.rotation_alpha : 2.5,
-                deadzone,
-                fresh.kb_max_rotation_velocity !== undefined ? fresh.kb_max_rotation_velocity : 3.0,
-                HARDWARE_LIMITS.rotation
-            );
-        });
-    }
 
     // Reset curves button
     const resetCurvesBtn = document.getElementById('reset-curves-btn');
@@ -1171,50 +1084,41 @@ function initializeCurveSliders() {
             const defaults = getDefaultSettings();
             const defaultKm = defaults.keyboard_mouse;
 
-            // Reset linear
+            // Reset linear (keyboard deadzone removed - Task 34.2)
             updateSetting('keyboard_mouse', 'linear_alpha', defaultKm.linear_alpha);
-            updateSetting('keyboard_mouse', 'linear_deadzone', defaultKm.linear_deadzone);
             if (linearAlphaSlider) linearAlphaSlider.value = defaultKm.linear_alpha;
             if (linearAlphaValue) linearAlphaValue.textContent = defaultKm.linear_alpha.toFixed(1);
-            if (linearDeadzoneSlider) linearDeadzoneSlider.value = Math.round(defaultKm.linear_deadzone * 100);
-            if (linearDeadzoneValue) linearDeadzoneValue.textContent = Math.round(defaultKm.linear_deadzone * 100) + '%';
             updateCurveChart(
                 charts.linear,
                 'Linear',
                 defaultKm.linear_alpha,
-                defaultKm.linear_deadzone,
+                0.0,  // Keyboard deadzone removed
                 defaultKm.kb_max_linear_velocity,
                 HARDWARE_LIMITS.linear
             );
 
-            // Reset strafe
+            // Reset strafe (keyboard deadzone removed - Task 34.2)
             updateSetting('keyboard_mouse', 'strafe_alpha', defaultKm.strafe_alpha);
-            updateSetting('keyboard_mouse', 'strafe_deadzone', defaultKm.strafe_deadzone);
             if (strafeAlphaSlider) strafeAlphaSlider.value = defaultKm.strafe_alpha;
             if (strafeAlphaValue) strafeAlphaValue.textContent = defaultKm.strafe_alpha.toFixed(1);
-            if (strafeDeadzoneSlider) strafeDeadzoneSlider.value = Math.round(defaultKm.strafe_deadzone * 100);
-            if (strafeDeadzoneValue) strafeDeadzoneValue.textContent = Math.round(defaultKm.strafe_deadzone * 100) + '%';
             updateCurveChart(
                 charts.strafe,
                 'Strafe',
                 defaultKm.strafe_alpha,
-                defaultKm.strafe_deadzone,
+                0.0,  // Keyboard deadzone removed
                 defaultKm.kb_max_strafe_velocity,
                 HARDWARE_LIMITS.strafe
             );
 
-            // Reset rotation
+            // Reset rotation (keyboard deadzone removed - Task 34.2)
             updateSetting('keyboard_mouse', 'rotation_alpha', defaultKm.rotation_alpha);
-            updateSetting('keyboard_mouse', 'rotation_deadzone', defaultKm.rotation_deadzone);
             if (rotationAlphaSlider) rotationAlphaSlider.value = defaultKm.rotation_alpha;
             if (rotationAlphaValue) rotationAlphaValue.textContent = defaultKm.rotation_alpha.toFixed(1);
-            if (rotationDeadzoneSlider) rotationDeadzoneSlider.value = Math.round(defaultKm.rotation_deadzone * 100);
-            if (rotationDeadzoneValue) rotationDeadzoneValue.textContent = Math.round(defaultKm.rotation_deadzone * 100) + '%';
             updateCurveChart(
                 charts.rotation,
                 'Rotation',
                 defaultKm.rotation_alpha,
-                defaultKm.rotation_deadzone,
+                0.0,  // Keyboard deadzone removed
                 defaultKm.kb_max_rotation_velocity,
                 HARDWARE_LIMITS.rotation
             );
