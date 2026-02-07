@@ -209,6 +209,17 @@
                                        title="Controls the curve shape. Lower values (0.1-1.0) = more responsive at low speeds. Higher values (2.0-4.0) = smoother, more gradual acceleration. See graph above.">
                                 <p class="form-help">Curve steepness (0.1-4.0)</p>
                             </div>
+
+                            <!-- Rotation Deadzone (MOUSE INPUT - needs deadzone to prevent drift) -->
+                            <div class="form-group">
+                                <label for="rotation-deadzone" class="form-label flex justify-between">
+                                    <span>Deadzone (Mouse)</span>
+                                    <span id="rotation-deadzone-value" class="text-unitree-primary font-mono">10%</span>
+                                </label>
+                                <input type="range" id="rotation-deadzone" class="slider" min="0" max="30" step="1" value="10"
+                                       title="Ignores small mouse movements below this percentage to prevent drift or unintended rotation. Mouse is analog input and needs deadzone. 10% is typical.">
+                                <p class="form-help">Ignore mouse inputs below this % (0-30%)</p>
+                            </div>
                         </div>
                     </div>
                 </div>

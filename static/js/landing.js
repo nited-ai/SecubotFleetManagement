@@ -171,7 +171,7 @@ function initializeSettingsSliders() {
                 charts.rotation,
                 'Rotation',
                 fresh.rotation_alpha !== undefined ? fresh.rotation_alpha : 2.5,
-                0.0,  // Keyboard deadzone removed (Task 34.2)
+                fresh.rotation_deadzone !== undefined ? fresh.rotation_deadzone : 0.10,  // Mouse rotation needs deadzone
                 parseFloat(value),
                 HARDWARE_LIMITS.rotation
             );
@@ -307,13 +307,18 @@ function updateAllKeyboardMouseSliders(kbMouseSettings) {
     document.getElementById('rotation-alpha').value = kbMouseSettings.rotation_alpha;
     document.getElementById('rotation-alpha-value').textContent = kbMouseSettings.rotation_alpha.toFixed(1);
 
-    // Update curve graphs (keyboard deadzone removed - Task 34.2)
+    // Update rotation deadzone slider (mouse input - needs deadzone)
+    const rotationDeadzonePercent = Math.round(kbMouseSettings.rotation_deadzone * 100);
+    document.getElementById('rotation-deadzone').value = rotationDeadzonePercent;
+    document.getElementById('rotation-deadzone-value').textContent = rotationDeadzonePercent + '%';
+
+    // Update curve graphs (linear/strafe deadzone removed, rotation deadzone kept)
     if (typeof charts !== 'undefined' && charts.linear && charts.strafe && charts.rotation) {
         updateCurveChart(
             charts.linear,
             'Linear',
             kbMouseSettings.linear_alpha,
-            0.0,  // Keyboard deadzone removed (Task 34.2)
+            0.0,  // Keyboard deadzone removed
             kbMouseSettings.kb_max_linear_velocity,
             HARDWARE_LIMITS.linear
         );
@@ -322,7 +327,7 @@ function updateAllKeyboardMouseSliders(kbMouseSettings) {
             charts.strafe,
             'Strafe',
             kbMouseSettings.strafe_alpha,
-            0.0,  // Keyboard deadzone removed (Task 34.2)
+            0.0,  // Keyboard deadzone removed
             kbMouseSettings.kb_max_strafe_velocity,
             HARDWARE_LIMITS.strafe
         );
@@ -331,7 +336,7 @@ function updateAllKeyboardMouseSliders(kbMouseSettings) {
             charts.rotation,
             'Rotation',
             kbMouseSettings.rotation_alpha,
-            0.0,  // Keyboard deadzone removed (Task 34.2)
+            kbMouseSettings.rotation_deadzone,  // Mouse rotation needs deadzone
             kbMouseSettings.kb_max_rotation_velocity,
             HARDWARE_LIMITS.rotation
         );
@@ -948,7 +953,7 @@ function initializeCurveCharts() {
     const km = settings.keyboard_mouse;
 
     // Create charts
-    // Initialize curve charts (keyboard deadzone removed - Task 34.2)
+    // Initialize curve charts (linear/strafe deadzone removed, rotation deadzone kept)
     charts.linear = createCurveChart(
         'linear-curve-chart',
         'Linear',
@@ -974,7 +979,7 @@ function initializeCurveCharts() {
         'Rotation',
         'rad/s',
         km.rotation_alpha || 2.5,
-        0.0,  // Keyboard deadzone removed
+        km.rotation_deadzone || 0.10,  // Mouse rotation needs deadzone
         km.kb_max_rotation_velocity || 3.0,
         HARDWARE_LIMITS.rotation
     );
@@ -1068,7 +1073,34 @@ function initializeCurveSliders() {
                 charts.rotation,
                 'Rotation',
                 alpha,
-                0.0,  // Keyboard deadzone removed (Task 34.2)
+                fresh.rotation_deadzone !== undefined ? fresh.rotation_deadzone : 0.10,  // Mouse rotation needs deadzone
+                fresh.kb_max_rotation_velocity !== undefined ? fresh.kb_max_rotation_velocity : 3.0,
+                HARDWARE_LIMITS.rotation
+            );
+        });
+    }
+
+    // Rotation deadzone slider (MOUSE INPUT - needs deadzone to prevent drift)
+    const rotationDeadzoneSlider = document.getElementById('rotation-deadzone');
+    const rotationDeadzoneValue = document.getElementById('rotation-deadzone-value');
+    if (rotationDeadzoneSlider && rotationDeadzoneValue) {
+        const deadzonePercent = Math.round((km.rotation_deadzone || 0.10) * 100);
+        rotationDeadzoneSlider.value = deadzonePercent;
+        rotationDeadzoneValue.textContent = deadzonePercent + '%';
+
+        rotationDeadzoneSlider.addEventListener('input', (e) => {
+            const deadzonePercent = parseInt(e.target.value);
+            const deadzone = deadzonePercent / 100.0;
+            rotationDeadzoneValue.textContent = deadzonePercent + '%';
+            updateSetting('keyboard_mouse', 'rotation_deadzone', deadzone);
+
+            // Get fresh settings after update
+            const fresh = getFreshSettings();
+            updateCurveChart(
+                charts.rotation,
+                'Rotation',
+                fresh.rotation_alpha !== undefined ? fresh.rotation_alpha : 2.5,
+                deadzone,
                 fresh.kb_max_rotation_velocity !== undefined ? fresh.kb_max_rotation_velocity : 3.0,
                 HARDWARE_LIMITS.rotation
             );
@@ -1084,7 +1116,7 @@ function initializeCurveSliders() {
             const defaults = getDefaultSettings();
             const defaultKm = defaults.keyboard_mouse;
 
-            // Reset linear (keyboard deadzone removed - Task 34.2)
+            // Reset linear (keyboard deadzone removed)
             updateSetting('keyboard_mouse', 'linear_alpha', defaultKm.linear_alpha);
             if (linearAlphaSlider) linearAlphaSlider.value = defaultKm.linear_alpha;
             if (linearAlphaValue) linearAlphaValue.textContent = defaultKm.linear_alpha.toFixed(1);
@@ -1097,7 +1129,7 @@ function initializeCurveSliders() {
                 HARDWARE_LIMITS.linear
             );
 
-            // Reset strafe (keyboard deadzone removed - Task 34.2)
+            // Reset strafe (keyboard deadzone removed)
             updateSetting('keyboard_mouse', 'strafe_alpha', defaultKm.strafe_alpha);
             if (strafeAlphaSlider) strafeAlphaSlider.value = defaultKm.strafe_alpha;
             if (strafeAlphaValue) strafeAlphaValue.textContent = defaultKm.strafe_alpha.toFixed(1);
@@ -1110,15 +1142,18 @@ function initializeCurveSliders() {
                 HARDWARE_LIMITS.strafe
             );
 
-            // Reset rotation (keyboard deadzone removed - Task 34.2)
+            // Reset rotation (mouse rotation deadzone kept)
             updateSetting('keyboard_mouse', 'rotation_alpha', defaultKm.rotation_alpha);
+            updateSetting('keyboard_mouse', 'rotation_deadzone', defaultKm.rotation_deadzone);
             if (rotationAlphaSlider) rotationAlphaSlider.value = defaultKm.rotation_alpha;
             if (rotationAlphaValue) rotationAlphaValue.textContent = defaultKm.rotation_alpha.toFixed(1);
+            if (rotationDeadzoneSlider) rotationDeadzoneSlider.value = Math.round(defaultKm.rotation_deadzone * 100);
+            if (rotationDeadzoneValue) rotationDeadzoneValue.textContent = Math.round(defaultKm.rotation_deadzone * 100) + '%';
             updateCurveChart(
                 charts.rotation,
                 'Rotation',
                 defaultKm.rotation_alpha,
-                0.0,  // Keyboard deadzone removed
+                defaultKm.rotation_deadzone,  // Mouse rotation needs deadzone
                 defaultKm.kb_max_rotation_velocity,
                 HARDWARE_LIMITS.rotation
             );
