@@ -430,12 +430,14 @@ class KeyboardMouseControl {
 
         // Jump-start logic: When starting from standstill, snap to minimum viable speed
         // This fixes the "wait-then-jump" deadzone-ramping conflict
+        // CRITICAL: Jump-start velocity must be a PERCENTAGE of maxLinear, not absolute value
         // Before: W key → 0.0 → 0.005 (blocked by deadzone) → 0.009 (blocked) → 0.011 (move!) = 500ms delay
-        // After: W key → snap to 0.15 (move immediately!) → ramp to 1.0 = 0ms delay
+        // After: W key → snap to 15% of maxLinear (move immediately!) → ramp to 100% = 0ms delay
         if (Math.abs(targetLinear) > 0.001 && Math.abs(this.currentVelocities.linear) < 0.001) {
-            // Jump-start: snap to minimum viable speed for immediate feedback
-            this.currentVelocities.linear = Math.sign(targetLinear) * this.MIN_START_SPEED;
-            console.log(`🚀 [Jump-Start Linear] Snapped to ${this.currentVelocities.linear.toFixed(3)}`);
+            // Jump-start: snap to minimum viable speed (percentage of max velocity)
+            // Example: maxLinear=3.0 → 0.15*3.0 = 0.45 m/s, maxLinear=5.0 → 0.15*5.0 = 0.75 m/s
+            this.currentVelocities.linear = Math.sign(targetLinear) * this.MIN_START_SPEED * maxLinear;
+            console.log(`🚀 [Jump-Start Linear] Snapped to ${this.currentVelocities.linear.toFixed(3)} (${(this.MIN_START_SPEED*100).toFixed(0)}% of ${maxLinear})`);
         }
 
         // Apply exponential ramping (smooth acceleration/deceleration)
@@ -452,10 +454,10 @@ class KeyboardMouseControl {
             : 0;
         const targetStrafe = curvedStrafe;
 
-        // Jump-start logic for strafe (same as linear)
+        // Jump-start logic for strafe (same as linear - percentage of max velocity)
         if (Math.abs(targetStrafe) > 0.001 && Math.abs(this.currentVelocities.strafe) < 0.001) {
-            this.currentVelocities.strafe = Math.sign(targetStrafe) * this.MIN_START_SPEED;
-            console.log(`🚀 [Jump-Start Strafe] Snapped to ${this.currentVelocities.strafe.toFixed(3)}`);
+            this.currentVelocities.strafe = Math.sign(targetStrafe) * this.MIN_START_SPEED * maxStrafe;
+            console.log(`🚀 [Jump-Start Strafe] Snapped to ${this.currentVelocities.strafe.toFixed(3)} (${(this.MIN_START_SPEED*100).toFixed(0)}% of ${maxStrafe})`);
         }
 
         // Apply exponential ramping
@@ -482,11 +484,12 @@ class KeyboardMouseControl {
         // Keyboard rotation would use ramping, but we only have mouse rotation here
         this.currentVelocities.rotation = targetRotation;
 
-        // Apply deadzone and invert axes to match backend expectations
+        // Invert axes to match backend expectations
         // (matching old interface behavior from templates/index.html lines 2064-2066)
-        const vx = this.applyDeadzone(this.currentVelocities.linear);
-        const vy = -this.applyDeadzone(this.currentVelocities.strafe);  // Backend inverts for correct direction
-        const vyaw = -this.applyDeadzone(this.currentVelocities.rotation);  // Backend inverts for correct direction
+        // NOTE: Deadzone is already applied in applyCurve() functions, no need to apply again
+        const vx = this.currentVelocities.linear;
+        const vy = -this.currentVelocities.strafe;  // Backend inverts for correct direction
+        const vyaw = -this.currentVelocities.rotation;  // Backend inverts for correct direction
 
         // Calculate velocity magnitude for debug logging
         const velocityMagnitude = Math.sqrt(vx * vx + vy * vy + vyaw * vyaw);
