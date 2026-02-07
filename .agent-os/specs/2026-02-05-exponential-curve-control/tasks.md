@@ -548,3 +548,594 @@ The clamping logic `max(-max_rotation, min(max_rotation, -rx))` was treating the
 
 **Status:** ✅ FIXED - Robot should now rotate 9x faster!
 
+---
+
+## Phase 13: Fix Jerky Movement & Add Slew Rate UI Controls (2026-02-07)
+
+**Issue 34: Jerky "Wait-Then-Jump" Behavior from Deadzone-Ramping Conflict**
+
+**Root Cause Analysis:**
+After implementing the backend slew rate limiter (Phase 12), users experience a ~0.5 second delay before the robot starts moving when pressing 'W'. The velocity ramps from 0.0 → 0.001 → 0.005 → 0.008, but the frontend exponential curve deadzone (10%) blocks everything below 0.010. When the ramp finally crosses 0.011, the robot suddenly receives a valid command and "jumps" into motion.
+
+**Problem Breakdown:**
+1. **Deadzone-Ramping Conflict:** Frontend deadzone blocks low ramped velocities from backend
+2. **Keyboard Deadzone Unnecessary:** Keyboard is digital (on/off), deadzone creates artificial delay
+3. **No UI Control:** Users cannot adjust backend slew rate limiter acceleration parameters
+4. **No Raw Control Mode:** Advanced users need option to bypass all smoothing for emergency maneuvers
+
+**Solution Overview:**
+1. Implement "jump-start" logic to bypass deadzone wait on initial key press
+2. Remove keyboard deadzone (keep mouse deadzone for drift prevention)
+3. Add UI sliders for backend slew rate limiter ramp-up time control
+4. Add RAGE MODE toggle for raw control (bypass all smoothing)
+
+---
+
+### Task 34.1: Fix Jump-Start Logic (CRITICAL - Fix First)
+
+**Priority:** 🔴 CRITICAL
+**Estimated Time:** 30 minutes
+**Files to Modify:**
+- `static/js/keyboard-mouse-control.js`
+
+**Implementation Steps:**
+
+1. **Add Constants to KeyboardMouseControl Class:**
+   ```javascript
+   // Jump-start behavior constants
+   this.MIN_START_SPEED = 0.15;  // 15% - instant jump-start velocity
+   this.ACCEL_FACTOR = 0.05;     // Lower = smoother ramp (tune this)
+   ```
+
+2. **Modify poll() Method (around line 424-428):**
+   ```javascript
+   // BEFORE applying exponential ramping:
+   // Check if starting from standstill (jump-start logic)
+   if (Math.abs(targetLinear) > 0.001 && Math.abs(this.currentVelocities.linear) < 0.001) {
+       // Jump-start: snap to minimum viable speed for immediate feedback
+       this.currentVelocities.linear = Math.sign(targetLinear) * this.MIN_START_SPEED;
+   }
+
+   // Then apply normal exponential ramping
+   if (Math.abs(targetLinear) > 0.01) {
+       this.currentVelocities.linear += (targetLinear - this.currentVelocities.linear) * this.ACCEL_FACTOR;
+   } else {
+       this.currentVelocities.linear *= (1 - deceleration);
+   }
+   ```
+
+3. **Apply Same Logic to Strafe (around line 436-440):**
+   ```javascript
+   if (Math.abs(targetStrafe) > 0.001 && Math.abs(this.currentVelocities.strafe) < 0.001) {
+       this.currentVelocities.strafe = Math.sign(targetStrafe) * this.MIN_START_SPEED;
+   }
+
+   if (Math.abs(targetStrafe) > 0.01) {
+       this.currentVelocities.strafe += (targetStrafe - this.currentVelocities.strafe) * this.ACCEL_FACTOR;
+   } else {
+       this.currentVelocities.strafe *= (1 - deceleration);
+   }
+   ```
+
+4. **Apply Same Logic to Rotation (if using ramping):**
+   - Note: Mouse rotation currently uses instant response (line 457)
+   - Only apply if keyboard rotation uses ramping
+
+**Expected Result:**
+- **Before:** W key → 0.0 → 0.005 (blocked) → 0.009 (blocked) → 0.011 (move!) = 500ms delay
+- **After:** W key → snap to 0.15 (move immediately!) → ramp to 1.0 = 0ms delay
+
+**Testing Checklist:**
+- [ ] Press 'W' → Robot starts moving IMMEDIATELY (no 0.5s wait)
+- [ ] Movement still feels smooth (not jerky)
+- [ ] Release 'W' → Robot decelerates smoothly to stop
+- [ ] Same behavior for 'A', 'S', 'D' keys (strafe)
+- [ ] Console logs show jump-start velocity (0.15) on first frame
+
+---
+
+### Task 34.2: Remove Keyboard Deadzone (Keep Mouse Deadzone)
+
+**Priority:** 🟡 HIGH
+**Estimated Time:** 45 minutes
+**Files to Modify:**
+- `templates/landing.html`
+- `static/js/settings-manager.js`
+- `static/js/keyboard-mouse-control.js`
+
+**Implementation Steps:**
+
+1. **Remove Deadzone Sliders from UI (`templates/landing.html`):**
+   - Remove Linear Deadzone slider (currently around line 220-230)
+   - Remove Strafe Deadzone slider (currently around line 240-250)
+   - Remove Rotation Deadzone slider (currently around line 260-270)
+   - **KEEP** Mouse Rotation Deadzone slider (for drift prevention)
+
+2. **Update Settings Manager (`static/js/settings-manager.js`):**
+   - Remove `linear_deadzone` from all presets (Beginner, Normal, Advanced, Sport)
+   - Remove `strafe_deadzone` from all presets
+   - **KEEP** `rotation_deadzone` for mouse rotation
+   - Update `cleanObsoleteSettings()` to remove old deadzone keys
+
+3. **Update Keyboard/Mouse Control (`static/js/keyboard-mouse-control.js`):**
+   - Set `linearDeadzone = 0.0` (hardcoded, no slider)
+   - Set `strafeDeadzone = 0.0` (hardcoded, no slider)
+   - **KEEP** `rotationDeadzone` from settings (for mouse)
+   - Remove deadzone application for keyboard inputs in `poll()` method
+
+**Rationale:**
+- Keyboard is digital (on/off), so deadzone creates artificial "wait-then-jump" delay
+- Mouse is analog and needs deadzone to prevent accidental micro-movements
+- Backend slew rate limiter already provides smoothing, so frontend deadzone is redundant for keyboard
+
+**Testing Checklist:**
+- [ ] Linear/Strafe deadzone sliders removed from settings UI
+- [ ] Mouse rotation deadzone slider still present
+- [ ] Keyboard movement has zero deadzone (instant response)
+- [ ] Mouse rotation still has deadzone (prevents drift)
+- [ ] Settings save/load correctly without keyboard deadzone
+
+---
+
+### Task 34.3: Add UI Sliders for Backend Slew Rate Limiter
+
+**Priority:** 🟡 HIGH
+**Estimated Time:** 90 minutes
+**Files to Modify:**
+- `templates/landing.html`
+- `static/js/settings-manager.js`
+- `static/js/landing.js`
+- `app/services/control.py`
+
+**Implementation Steps:**
+
+**Part A: Add UI Sliders (`templates/landing.html`)**
+
+Add three new sliders in the "Keyboard & Mouse Settings" section (after max velocity sliders):
+
+1. **Linear Ramp-Up Time Slider:**
+   ```html
+   <!-- Linear Acceleration Time -->
+   <div class="form-group">
+       <label for="linear-ramp-time" class="form-label flex justify-between">
+           <span>Forward/Back Acceleration Time</span>
+           <span id="linear-ramp-time-value" class="text-unitree-primary font-mono">1.0s</span>
+       </label>
+       <input type="range" id="linear-ramp-time" class="slider"
+              min="0.0" max="2.0" step="0.1" value="1.0"
+              title="Time to reach max linear speed from standstill. Lower = snappier, Higher = smoother.">
+       <p class="form-help">Acceleration ramp-up time (0.0-2.0 seconds)</p>
+   </div>
+   ```
+
+2. **Strafe Ramp-Up Time Slider:**
+   ```html
+   <!-- Strafe Acceleration Time -->
+   <div class="form-group">
+       <label for="strafe-ramp-time" class="form-label flex justify-between">
+           <span>Left/Right Acceleration Time</span>
+           <span id="strafe-ramp-time-value" class="text-unitree-primary font-mono">0.2s</span>
+       </label>
+       <input type="range" id="strafe-ramp-time" class="slider"
+              min="0.0" max="2.0" step="0.1" value="0.2"
+              title="Time to reach max strafe speed from standstill. Lower = snappier, Higher = smoother.">
+       <p class="form-help">Acceleration ramp-up time (0.0-2.0 seconds)</p>
+   </div>
+   ```
+
+3. **Rotation Ramp-Up Time Slider:**
+   ```html
+   <!-- Rotation Acceleration Time -->
+   <div class="form-group">
+       <label for="rotation-ramp-time" class="form-label flex justify-between">
+           <span>Rotation Acceleration Time</span>
+           <span id="rotation-ramp-time-value" class="text-unitree-primary font-mono">0.9s</span>
+       </label>
+       <input type="range" id="rotation-ramp-time" class="slider"
+              min="0.0" max="2.0" step="0.1" value="0.9"
+              title="Time to reach max rotation speed from standstill. Lower = snappier, Higher = smoother.">
+       <p class="form-help">Acceleration ramp-up time (0.0-2.0 seconds)</p>
+   </div>
+   ```
+
+**Part B: Update Settings Manager (`static/js/settings-manager.js`)**
+
+1. **Add Ramp-Up Time to Default Settings:**
+   ```javascript
+   keyboard_mouse: {
+       // ... existing settings ...
+       linear_ramp_time: 1.0,    // seconds
+       strafe_ramp_time: 0.2,    // seconds
+       rotation_ramp_time: 0.9,  // seconds
+   }
+   ```
+
+2. **Add Ramp-Up Time to All Presets:**
+   ```javascript
+   beginner: {
+       // ... existing settings ...
+       linear_ramp_time: 1.5,    // Slower ramp for beginners
+       strafe_ramp_time: 1.2,
+       rotation_ramp_time: 1.2,
+   },
+   normal: {
+       // ... existing settings ...
+       linear_ramp_time: 1.0,    // Current defaults
+       strafe_ramp_time: 0.2,
+       rotation_ramp_time: 0.9,
+   },
+   advanced: {
+       // ... existing settings ...
+       linear_ramp_time: 0.5,    // Faster ramp for advanced users
+       strafe_ramp_time: 0.3,
+       rotation_ramp_time: 0.4,
+   },
+   sport: {
+       // ... existing settings ...
+       linear_ramp_time: 0.2,    // Minimal ramp for sport mode
+       strafe_ramp_time: 0.1,
+       rotation_ramp_time: 0.2,
+   }
+   ```
+
+**Part C: Connect Sliders to Settings (`static/js/landing.js`)**
+
+1. **Add Event Listeners for Ramp-Up Time Sliders:**
+   ```javascript
+   // Linear ramp-up time
+   const linearRampTimeSlider = document.getElementById('linear-ramp-time');
+   const linearRampTimeValue = document.getElementById('linear-ramp-time-value');
+   linearRampTimeSlider.addEventListener('input', (e) => {
+       const value = parseFloat(e.target.value);
+       linearRampTimeValue.textContent = `${value.toFixed(1)}s`;
+       settings.keyboard_mouse.linear_ramp_time = value;
+       saveSettings(settings);
+   });
+
+   // Strafe ramp-up time
+   const strafeRampTimeSlider = document.getElementById('strafe-ramp-time');
+   const strafeRampTimeValue = document.getElementById('strafe-ramp-time-value');
+   strafeRampTimeSlider.addEventListener('input', (e) => {
+       const value = parseFloat(e.target.value);
+       strafeRampTimeValue.textContent = `${value.toFixed(1)}s`;
+       settings.keyboard_mouse.strafe_ramp_time = value;
+       saveSettings(settings);
+   });
+
+   // Rotation ramp-up time
+   const rotationRampTimeSlider = document.getElementById('rotation-ramp-time');
+   const rotationRampTimeValue = document.getElementById('rotation-ramp-time-value');
+   rotationRampTimeSlider.addEventListener('input', (e) => {
+       const value = parseFloat(e.target.value);
+       rotationRampTimeValue.textContent = `${value.toFixed(1)}s`;
+       settings.keyboard_mouse.rotation_ramp_time = value;
+       saveSettings(settings);
+   });
+   ```
+
+**Part D: Update Backend to Receive Ramp-Up Time (`app/services/control.py`)**
+
+1. **Modify `process_movement_command()` to Accept Ramp-Up Time:**
+   ```python
+   # Get ramp-up time from command data (if provided)
+   linear_ramp_time = data.get('linear_ramp_time', 1.0)
+   strafe_ramp_time = data.get('strafe_ramp_time', 0.2)
+   rotation_ramp_time = data.get('rotation_ramp_time', 0.9)
+
+   # Convert ramp-up time to acceleration limit
+   # Formula: MAX_ACCEL = max_velocity / ramp_time
+   # Edge case: If ramp_time = 0, use very high acceleration (instant response)
+   MAX_LINEAR_ACCEL = max_linear / linear_ramp_time if linear_ramp_time > 0.01 else 1000.0
+   MAX_STRAFE_ACCEL = max_strafe / strafe_ramp_time if strafe_ramp_time > 0.01 else 1000.0
+   MAX_YAW_ACCEL = max_rotation / rotation_ramp_time if rotation_ramp_time > 0.01 else 1000.0
+
+   # Use these calculated values instead of hardcoded self.MAX_LINEAR_ACCEL, etc.
+   ```
+
+2. **Update Frontend to Send Ramp-Up Time (`static/js/keyboard-mouse-control.js`):**
+   ```javascript
+   sendCommand(vx, vy, vyaw) {
+       const data = {
+           lx: vy / this.settings.maxStrafe,
+           ly: vx / this.settings.maxLinear,
+           rx: vyaw / this.settings.maxRotation,
+           ry: 0,
+           max_linear: this.settings.maxLinear,
+           max_strafe: this.settings.maxStrafe,
+           max_rotation: this.settings.maxRotation,
+           // Add ramp-up time parameters
+           linear_ramp_time: this.settings.linearRampTime || 1.0,
+           strafe_ramp_time: this.settings.strafeRampTime || 0.2,
+           rotation_ramp_time: this.settings.rotationRampTime || 0.9,
+           source: 'keyboard_mouse'
+       };
+       // ... rest of sendCommand logic ...
+   }
+   ```
+
+**Testing Checklist:**
+- [ ] Three ramp-up time sliders appear in settings UI
+- [ ] Slider values update in real-time (display shows "X.Xs")
+- [ ] Settings save to localStorage and persist across page reloads
+- [ ] Backend receives ramp-up time values and converts to acceleration limits
+- [ ] Robot acceleration feel changes when adjusting sliders
+- [ ] Preset buttons load correct ramp-up times for each preset
+- [ ] Setting ramp-up time to 0.0 provides instant response (no ramping)
+
+---
+
+### Task 34.4: Add RAGE MODE Toggle Button
+
+**Priority:** 🟢 MEDIUM
+**Estimated Time:** 60 minutes
+**Files to Modify:**
+- `templates/control.html`
+- `static/js/control.js`
+- `static/js/keyboard-mouse-control.js`
+- `app/services/control.py`
+
+**Implementation Steps:**
+
+**Part A: Add RAGE MODE Button to UI (`templates/control.html`)**
+
+1. **Modify Running Human Icon (Speed Slider Area):**
+   ```html
+   <!-- Speed Slider Section -->
+   <div class="flex items-center gap-2">
+       <!-- RAGE MODE Toggle Button -->
+       <button id="rage-mode-btn"
+               class="p-2 rounded-lg transition-all duration-200 hover:scale-110"
+               style="background: rgba(255, 255, 255, 0.1);"
+               title="RAGE MODE: Bypass all smoothing for raw control (DANGEROUS!)">
+           <svg class="w-6 h-6 transition-colors duration-200" id="rage-mode-icon"
+                fill="currentColor" viewBox="0 0 24 24">
+               <!-- Running human icon SVG path -->
+               <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+           </svg>
+       </button>
+
+       <!-- Speed Slider -->
+       <input type="range" id="speed-slider" ... />
+   </div>
+
+   <!-- RAGE MODE Warning Modal (hidden by default) -->
+   <div id="rage-mode-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+       <div class="bg-unitree-dark-lighter rounded-lg p-6 max-w-md">
+           <h3 class="text-xl font-bold text-red-500 mb-4">⚠️ RAGE MODE WARNING</h3>
+           <p class="text-white mb-4">
+               RAGE MODE disables ALL safety smoothing (exponential curves, acceleration limiting, deadzone).
+               Robot will respond to raw input instantly, which may cause:
+           </p>
+           <ul class="text-white mb-4 list-disc list-inside">
+               <li>Jerky, erratic movements</li>
+               <li>Sudden acceleration/deceleration</li>
+               <li>Potential motor strain</li>
+               <li>Loss of precision control</li>
+           </ul>
+           <p class="text-white mb-6 font-bold">Use at your own risk. Recommended for emergency maneuvers only.</p>
+           <div class="flex gap-4">
+               <button id="rage-mode-confirm" class="btn-primary flex-1">I Understand - Enable RAGE MODE</button>
+               <button id="rage-mode-cancel" class="btn-secondary flex-1">Cancel</button>
+           </div>
+       </div>
+   </div>
+   ```
+
+**Part B: Implement RAGE MODE Logic (`static/js/keyboard-mouse-control.js`)**
+
+1. **Add RAGE MODE Flag to Class:**
+   ```javascript
+   constructor() {
+       // ... existing code ...
+       this.rageMode = false;  // RAGE MODE flag
+   }
+   ```
+
+2. **Add Toggle Method:**
+   ```javascript
+   toggleRageMode(enabled) {
+       this.rageMode = enabled;
+       console.log(`🔥 RAGE MODE ${enabled ? 'ENABLED' : 'DISABLED'}`);
+
+       // Update UI
+       const icon = document.getElementById('rage-mode-icon');
+       const btn = document.getElementById('rage-mode-btn');
+       if (enabled) {
+           icon.style.color = '#ef4444';  // Red
+           btn.style.background = 'rgba(239, 68, 68, 0.2)';  // Red glow
+       } else {
+           icon.style.color = 'currentColor';
+           btn.style.background = 'rgba(255, 255, 255, 0.1)';
+       }
+   }
+   ```
+
+3. **Modify poll() Method to Bypass Smoothing in RAGE MODE:**
+   ```javascript
+   poll() {
+       // ... existing input gathering code ...
+
+       if (this.rageMode) {
+           // RAGE MODE: Send raw input directly (NO curves, NO ramping, NO deadzone)
+           const vx = forward * this.settings.maxLinear;
+           const vy = -strafe * this.settings.maxStrafe;
+           const vyaw = -rotation * this.settings.maxRotation;
+
+           console.log(`🔥 [RAGE MODE] RAW: vx=${vx.toFixed(2)}, vy=${vy.toFixed(2)}, vyaw=${vyaw.toFixed(2)}`);
+           this.sendCommand(vx, vy, vyaw, true);  // Pass rageMode flag
+           return;
+       }
+
+       // Normal mode: Apply curves and ramping
+       // ... existing curve/ramp logic ...
+   }
+   ```
+
+4. **Update sendCommand() to Include RAGE MODE Flag:**
+   ```javascript
+   sendCommand(vx, vy, vyaw, rageMode = false) {
+       const data = {
+           // ... existing data ...
+           rage_mode: rageMode  // Add RAGE MODE flag
+       };
+       // ... rest of sendCommand logic ...
+   }
+   ```
+
+**Part C: Update Backend to Bypass Slew Rate Limiter (`app/services/control.py`)**
+
+1. **Modify process_movement_command() to Check RAGE MODE:**
+   ```python
+   def process_movement_command(self, data: dict) -> dict:
+       # ... existing code ...
+
+       # Check if RAGE MODE is enabled
+       rage_mode = data.get('rage_mode', False)
+
+       if rage_mode:
+           # RAGE MODE: Bypass slew rate limiter, send raw velocities
+           vx = raw_target_vx
+           vy = raw_target_vy
+           vyaw = raw_target_vyaw
+
+           self.logger.warning(f"🔥 [RAGE MODE] RAW VELOCITIES: vx={vx:.3f}, vy={vy:.3f}, vyaw={vyaw:.3f}")
+       else:
+           # Normal mode: Apply slew rate limiter
+           # ... existing slew rate limiter logic ...
+
+       # ... rest of function ...
+   ```
+
+**Part D: Add UI Event Handlers (`static/js/control.js`)**
+
+1. **Add RAGE MODE Button Click Handler:**
+   ```javascript
+   // RAGE MODE toggle
+   const rageModeBtn = document.getElementById('rage-mode-btn');
+   const rageModeModal = document.getElementById('rage-mode-modal');
+   const rageModeConfirm = document.getElementById('rage-mode-confirm');
+   const rageModeCancel = document.getElementById('rage-mode-cancel');
+
+   let rageModeEnabled = false;
+   let rageModeWarningShown = localStorage.getItem('rage_mode_warning_shown') === 'true';
+
+   rageModeBtn.addEventListener('click', () => {
+       if (!rageModeEnabled) {
+           // Enabling RAGE MODE
+           if (!rageModeWarningShown) {
+               // Show warning modal on first use
+               rageModeModal.classList.remove('hidden');
+           } else {
+               // Already seen warning, enable directly
+               rageModeEnabled = true;
+               keyboardMouseControl.toggleRageMode(true);
+           }
+       } else {
+           // Disabling RAGE MODE
+           rageModeEnabled = false;
+           keyboardMouseControl.toggleRageMode(false);
+       }
+   });
+
+   rageModeConfirm.addEventListener('click', () => {
+       rageModeEnabled = true;
+       rageModeWarningShown = true;
+       localStorage.setItem('rage_mode_warning_shown', 'true');
+       rageModeModal.classList.add('hidden');
+       keyboardMouseControl.toggleRageMode(true);
+   });
+
+   rageModeCancel.addEventListener('click', () => {
+       rageModeModal.classList.add('hidden');
+   });
+   ```
+
+**Testing Checklist:**
+- [ ] RAGE MODE button appears next to speed slider
+- [ ] Clicking button shows warning modal on first use
+- [ ] Confirming modal enables RAGE MODE (icon turns red)
+- [ ] RAGE MODE bypasses all frontend smoothing (curves, ramping, deadzone)
+- [ ] RAGE MODE bypasses backend slew rate limiter
+- [ ] Robot responds instantly to raw input (jerky but immediate)
+- [ ] Clicking button again disables RAGE MODE (icon returns to normal)
+- [ ] Warning modal only shows once (localStorage remembers)
+- [ ] Console logs show "🔥 [RAGE MODE]" messages
+
+---
+
+### Task 34.5: Integration Testing & Tuning
+
+**Priority:** 🟡 HIGH
+**Estimated Time:** 60 minutes
+
+**Testing Scenarios:**
+
+1. **Jump-Start Behavior:**
+   - [ ] Press 'W' → Robot starts moving within 50ms (no delay)
+   - [ ] Movement feels smooth and controlled (not jerky)
+   - [ ] Release 'W' → Robot decelerates smoothly to stop
+
+2. **Deadzone Removal:**
+   - [ ] Keyboard movement has zero deadzone (instant response)
+   - [ ] Mouse rotation still has deadzone (prevents drift)
+   - [ ] No "wait-then-jump" behavior
+
+3. **Ramp-Up Time Sliders:**
+   - [ ] Adjusting linear ramp-up time changes forward/back acceleration feel
+   - [ ] Adjusting strafe ramp-up time changes left/right acceleration feel
+   - [ ] Adjusting rotation ramp-up time changes rotation acceleration feel
+   - [ ] Setting ramp-up time to 0.0 provides instant response
+   - [ ] Settings persist across page reloads
+
+4. **RAGE MODE:**
+   - [ ] RAGE MODE provides instant raw control (no smoothing)
+   - [ ] Robot responds immediately but may be jerky
+   - [ ] Useful for emergency maneuvers
+   - [ ] Can be toggled on/off easily
+
+5. **Preset Testing:**
+   - [ ] Beginner preset: Slower ramp-up times (1.5s linear, 1.2s rotation)
+   - [ ] Normal preset: Current defaults (1.0s linear, 0.9s rotation)
+   - [ ] Advanced preset: Faster ramp-up times (0.5s linear, 0.4s rotation)
+   - [ ] Sport preset: Minimal ramp-up times (0.2s linear, 0.2s rotation)
+
+**Tuning Parameters:**
+
+Based on real robot testing, adjust these values:
+
+1. **Jump-Start Speed (`MIN_START_SPEED`):**
+   - Current: 0.15 (15%)
+   - If too slow: Increase to 0.20 or 0.25
+   - If too jerky: Decrease to 0.10 or 0.12
+
+2. **Acceleration Factor (`ACCEL_FACTOR`):**
+   - Current: 0.05
+   - If too slow to ramp: Increase to 0.08 or 0.10
+   - If too jerky: Decrease to 0.03 or 0.04
+
+3. **Default Ramp-Up Times:**
+   - Linear: 1.0s (tune based on feel)
+   - Strafe: 0.2s (tune based on feel)
+   - Rotation: 0.9s (tune based on feel)
+
+---
+
+### Summary of Phase 13 Tasks
+
+| Task | Priority | Est. Time | Status |
+|------|----------|-----------|--------|
+| 34.1: Fix Jump-Start Logic | 🔴 CRITICAL | 30 min | ⏳ Pending |
+| 34.2: Remove Keyboard Deadzone | 🟡 HIGH | 45 min | ⏳ Pending |
+| 34.3: Add Slew Rate UI Sliders | 🟡 HIGH | 90 min | ⏳ Pending |
+| 34.4: Add RAGE MODE Toggle | 🟢 MEDIUM | 60 min | ⏳ Pending |
+| 34.5: Integration Testing | 🟡 HIGH | 60 min | ⏳ Pending |
+
+**Total Estimated Time:** 4.5 hours
+
+**Implementation Order:**
+1. Task 34.1 (CRITICAL - fixes immediate user pain point)
+2. Task 34.2 (removes root cause of deadzone conflict)
+3. Task 34.3 (adds user control over backend smoothing)
+4. Task 34.4 (adds advanced raw control mode)
+5. Task 34.5 (validates all changes work together)
+
