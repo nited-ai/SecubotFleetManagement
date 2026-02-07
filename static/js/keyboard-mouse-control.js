@@ -42,6 +42,12 @@ class KeyboardMouseControl {
         //                  100px * 0.08 * 0.5 sens = 4.0 → clamped to 1.0 (max rotation)
         this.MOUSE_SCALE_FACTOR = 0.08;  // Scale raw pixels to 0-1 range for curve input
 
+        // Jump-start behavior constants (fixes "wait-then-jump" deadzone-ramping conflict)
+        // When a key is first pressed, snap to minimum viable speed for immediate feedback
+        // This bypasses the deadzone wait and provides instant visual response
+        this.MIN_START_SPEED = 0.15;  // 15% - instant jump-start velocity
+        this.ACCEL_FACTOR = 0.05;     // Lower = smoother ramp (tune this)
+
         // Speed indicator timeout
         this.speedIndicatorTimeout = null;
 
@@ -421,8 +427,20 @@ class KeyboardMouseControl {
         if (linearInput > 0.01) {
             console.log(`[applyCurve Linear] input=${linearInput.toFixed(3)}, curved=${curvedLinear.toFixed(3)}, maxLinear=${maxLinear}, alpha=${linearAlpha}, deadzone=${linearDeadzone}`);
         }
+
+        // Jump-start logic: When starting from standstill, snap to minimum viable speed
+        // This fixes the "wait-then-jump" deadzone-ramping conflict
+        // Before: W key → 0.0 → 0.005 (blocked by deadzone) → 0.009 (blocked) → 0.011 (move!) = 500ms delay
+        // After: W key → snap to 0.15 (move immediately!) → ramp to 1.0 = 0ms delay
+        if (Math.abs(targetLinear) > 0.001 && Math.abs(this.currentVelocities.linear) < 0.001) {
+            // Jump-start: snap to minimum viable speed for immediate feedback
+            this.currentVelocities.linear = Math.sign(targetLinear) * this.MIN_START_SPEED;
+            console.log(`🚀 [Jump-Start Linear] Snapped to ${this.currentVelocities.linear.toFixed(3)}`);
+        }
+
+        // Apply exponential ramping (smooth acceleration/deceleration)
         if (Math.abs(targetLinear) > 0.01) {
-            this.currentVelocities.linear += (targetLinear - this.currentVelocities.linear) * acceleration;
+            this.currentVelocities.linear += (targetLinear - this.currentVelocities.linear) * this.ACCEL_FACTOR;
         } else {
             this.currentVelocities.linear *= (1 - deceleration);
         }
@@ -433,8 +451,16 @@ class KeyboardMouseControl {
             ? applyStrafeCurve(strafeInput, strafeAlpha, strafeDeadzone, maxStrafe) * Math.sign(strafe)
             : 0;
         const targetStrafe = curvedStrafe;
+
+        // Jump-start logic for strafe (same as linear)
+        if (Math.abs(targetStrafe) > 0.001 && Math.abs(this.currentVelocities.strafe) < 0.001) {
+            this.currentVelocities.strafe = Math.sign(targetStrafe) * this.MIN_START_SPEED;
+            console.log(`🚀 [Jump-Start Strafe] Snapped to ${this.currentVelocities.strafe.toFixed(3)}`);
+        }
+
+        // Apply exponential ramping
         if (Math.abs(targetStrafe) > 0.01) {
-            this.currentVelocities.strafe += (targetStrafe - this.currentVelocities.strafe) * acceleration;
+            this.currentVelocities.strafe += (targetStrafe - this.currentVelocities.strafe) * this.ACCEL_FACTOR;
         } else {
             this.currentVelocities.strafe *= (1 - deceleration);
         }
