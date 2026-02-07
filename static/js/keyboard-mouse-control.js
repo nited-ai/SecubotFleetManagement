@@ -642,16 +642,15 @@ class KeyboardMouseControl {
         this.rageMode = enabled;
         console.log(`🔥 RAGE MODE ${enabled ? 'ENABLED' : 'DISABLED'}`);
 
-        // Update UI
-        const icon = document.getElementById('rage-mode-icon');
+        // Update UI (SVG element is the button now)
         const btn = document.getElementById('rage-mode-btn');
-        if (icon && btn) {
+        if (btn) {
             if (enabled) {
-                icon.style.color = '#ef4444';  // Red
-                btn.style.background = 'rgba(239, 68, 68, 0.2)';  // Red glow
+                btn.style.color = '#ef4444';  // Red
+                btn.style.filter = 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.6))';  // Red glow
             } else {
-                icon.style.color = 'currentColor';
-                btn.style.background = 'rgba(255, 255, 255, 0.1)';
+                btn.style.color = 'currentColor';
+                btn.style.filter = 'drop-shadow(0 0 2px black)';  // Default shadow
             }
         }
     }
