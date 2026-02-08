@@ -203,3 +203,29 @@ These are the tasks to be completed for the spec detailed in @.agent-os/specs/20
   - [ ] 20.5 Create pull request
   - [ ] 20.6 Merge to main after review
 
+- [x] 21. Fix HUD Redesign Issues (2026-02-05)
+  - [x] 21.1 Fix video feed not fullscreen
+    - Issue: Video is positioned in top-right corner instead of fullscreen
+    - Fix: Changed `.fullscreen-video` from Tailwind `@apply` to standard CSS with `position: absolute`, `width: 100vw`, `height: 100vh`, `object-fit: cover`
+  - [x] 21.2 Fix battery and ping text positioning
+    - Issue: Text overlays are too close to icon graphics
+    - Fix: Adjusted `hud-icon-value` bottom padding from 8px to 12px, reduced font-size from 14px to 13px
+  - [x] 21.3 Fix WiFi icon aspect ratio
+    - Issue: WiFi icon is stretched vertically and looks distorted
+    - Fix: Adjusted WiFi icon dimensions from 48x48px to 44x44px for better aspect ratio
+  - [x] 21.4 Reduce button size
+    - Issue: Settings and disconnect buttons are too large (80x80px)
+    - Fix: Reduced button size from 80x80px to 64x64px
+  - [x] 21.5 Remove borders and hover states from HUD elements
+    - Issue: HUD icon containers (battery, WiFi) have borders and hover effects
+    - Issue: Settings and disconnect buttons have borders
+    - Fix: Removed `border` CSS properties from `.hud-icon-container` and `.hud-btn`
+    - Fix: Removed `:hover` transform/shadow effects from `.hud-icon-container`
+    - Fix: Added glowing hover state for settings and exit button icons using `filter: drop-shadow()`
+  - [x] 21.6 Connect speed slider to mouse wheel control
+    - Issue: Speed slider is disabled and not functional
+    - Fix: Removed `disabled` attribute from speed slider, changed range to 10-200% with 10% steps
+    - Fix: Added `initializeSpeedSlider()` function in `control.js` to handle slider input events
+    - Fix: Added `updateSpeedSlider()` function in `keyboard-mouse-control.js` to update slider when mouse wheel changes speed
+    - Fix: Both controls now modify the same `keyboard_linear_speed` and `keyboard_strafe_speed` settings in localStorage
+

@@ -571,6 +571,19 @@ After implementing the backend slew rate limiter (Phase 12), users experience a 
 
 ---
 
+## Phase 14: Critical Control Optimization (2026-02-07)
+
+**Overview:**
+Three critical issues discovered during precision control testing that affect robot responsiveness and user experience:
+
+1. **Issue 35: Mouse Yaw Sensitivity Slider Has No Effect** - Sensitivity setting (0.1-5.0) doesn't affect rotation speed
+2. **Issue 36: Jarring Camera Movement During Body Rotation** - Stick-slip discontinuity when transitioning from camera-only to body rotation
+3. **Issue 37: Settings Panel Not Accessible on Control Page** - Must switch between landing/control pages to test settings
+
+**Priority:** 🔴 CRITICAL - Blocks effective robot control and testing workflow
+
+---
+
 ### Task 34.1: Fix Jump-Start Logic (CRITICAL - Fix First)
 
 **Priority:** 🔴 CRITICAL
@@ -674,6 +687,640 @@ After implementing the backend slew rate limiter (Phase 12), users experience a 
 - [ ] Keyboard movement has zero deadzone (instant response)
 - [ ] Mouse rotation still has deadzone (prevents drift)
 - [ ] Settings save/load correctly without keyboard deadzone
+
+---
+
+### Task 35: Fix Mouse Yaw Sensitivity Slider (CRITICAL - Priority 1)
+
+**Priority:** 🔴 CRITICAL
+**Estimated Time:** 90 minutes
+**Files to Modify:**
+- `static/js/keyboard-mouse-control.js`
+- `static/js/curve-utils.js`
+- `app/services/control.py`
+
+**Problem Statement:**
+Mouse yaw sensitivity slider (range: 0.1 to 5.0) does not affect rotation speed. At 0.1 (minimum), robot should rotate ~20x slower than at 5.0, but currently rotates at identical high speed regardless of sensitivity value.
+
+**Root Cause Investigation:**
+
+**Step 1: Trace Complete Data Flow**
+```
+mouseMovement.x (pixels)
+→ × MOUSE_SCALE_FACTOR (0.001 or 0.08?)
+→ × this.settings.mouseSensitivity (0.1 to 5.0)
+→ × speedPercentage/100 (0.0 to 2.0)
+→ applyRotationCurve(input, rotationAlpha, rotationDeadzone, maxRotation)
+→ velocity ramping (acceleration/deceleration)
+→ sendCommand(vx, vy, vyaw)
+→ normalization (rx = -vyaw / maxRotation)
+→ backend processing
+→ robot command
+```
+
+**Step 2: Add Diagnostic Logging**
+
+Add comprehensive logging to identify where sensitivity effect is lost:
+
+1. **In poll() method (after rotation calculation, line ~409):**
+   ```javascript
+   console.log(`[Sensitivity Debug] mouseMovement.x=${this.mouseMovement.x}, MOUSE_SCALE_FACTOR=${this.MOUSE_SCALE_FACTOR}, mouseSensitivity=${this.settings.mouseSensitivity}, speedMultiplier=${speedMultiplier}, rotation=${rotation.toFixed(3)}`);
+   ```
+
+2. **After applyRotationCurve() (line ~496):**
+   ```javascript
+   console.log(`[Curve Debug] rotationInput=${rotationInput.toFixed(3)}, curvedRotation=${curvedRotation.toFixed(3)}, maxRotation=${maxRotation}, alpha=${rotationAlpha}, deadzone=${rotationDeadzone}`);
+   ```
+
+3. **In sendCommand() (line ~540):**
+   ```javascript
+   console.log(`[Normalization Debug] vyaw=${vyaw.toFixed(3)}, maxRotation=${maxRotation}, rx=${rx.toFixed(3)}`);
+   ```
+
+**Step 3: Verify Each Transformation**
+
+1. **Line 43:** Verify `MOUSE_SCALE_FACTOR = 0.08` (NOT 0.001 from old code)
+2. **Line 409:** Verify rotation calculation: `rotation = this.mouseMovement.x * this.MOUSE_SCALE_FACTOR * this.settings.mouseSensitivity;`
+3. **Line 418:** Verify speedPercentage multiplier is applied: `rotation *= speedMultiplier;`
+4. **Line 494-496:** Verify `applyRotationCurve()` doesn't clamp input prematurely
+5. **Line 507:** Verify instant response (no ramping): `this.currentVelocities.rotation = targetRotation;`
+6. **Line 540-550:** Verify normalization preserves sensitivity: `rx = maxRotation > 0 ? -vyaw / maxRotation : 0;`
+
+**Step 4: Test with Extreme Values**
+
+1. Set sensitivity to 0.1 (minimum) → Move mouse 100 pixels → Log all values
+2. Set sensitivity to 5.0 (maximum) → Move mouse 100 pixels → Log all values
+3. Compare outputs at each transformation step
+4. Identify where 50x difference is lost
+
+**Expected Behavior:**
+- **Sensitivity 0.1:** 100px × 0.08 × 0.1 = 0.8 → curve → ~0.6 rad/s (slow)
+- **Sensitivity 5.0:** 100px × 0.08 × 5.0 = 40.0 → clamped to 1.0 → curve → 9.0 rad/s (fast)
+- **Ratio:** 9.0 / 0.6 = 15x difference (acceptable, limited by curve clamping)
+
+**Implementation Tasks:**
+
+- [ ] 35.1 Add diagnostic logging to poll() method (rotation calculation)
+- [ ] 35.2 Add diagnostic logging after applyRotationCurve()
+- [ ] 35.3 Add diagnostic logging to sendCommand() (normalization)
+- [ ] 35.4 Test with sensitivity=0.1, log all transformation steps
+- [ ] 35.5 Test with sensitivity=5.0, log all transformation steps
+- [ ] 35.6 Compare logs to identify where sensitivity effect is lost
+- [ ] 35.7 Verify MOUSE_SCALE_FACTOR value (should be 0.08, not 0.001)
+- [ ] 35.8 Verify speedPercentage multiplier is applied correctly
+- [ ] 35.9 Check if applyRotationCurve() clamps input too early
+- [ ] 35.10 Check if normalization overrides sensitivity scaling
+- [ ] 35.11 Implement fix based on findings
+- [ ] 35.12 Test fix with real robot across full sensitivity range (0.1 to 5.0)
+- [ ] 35.13 Verify linear scaling: sensitivity=1.0 → baseline, sensitivity=2.0 → 2x faster
+- [ ] 35.14 Remove diagnostic logging after fix is verified
+
+**Success Criteria:**
+- ✅ Sensitivity 0.1 produces visibly slower rotation than 5.0
+- ✅ Sensitivity scaling is approximately linear (2x sensitivity → 2x rotation speed)
+- ✅ No observable difference between 0.1 and 5.0 is FIXED
+- ✅ Robot rotation speed matches user expectations based on slider value
+
+---
+
+### Task 36: Implement Settings Panel on Control Page (Priority 2)
+
+**Priority:** 🟡 HIGH
+**Estimated Time:** 120 minutes
+**Files to Modify:**
+- `templates/control.html`
+- `static/js/control.js`
+- `templates/landing.html` (extract settings HTML)
+
+**Problem Statement:**
+Settings UI exists only on landing page. Testing requires switching between landing page (adjust settings) → control page (test robot), slowing iteration. Settings button exists on control page but is not wired up.
+
+**Implementation Steps:**
+
+**Part A: Extract Settings HTML from Landing Page**
+
+- [ ] 36.1 Locate keyboard/mouse settings card in `templates/landing.html`
+  - Find "Response Curve Tuning" section (line ~89)
+  - Includes: Mouse yaw/pitch sensitivity sliders
+  - Includes: Max linear/strafe/rotation velocity sliders
+  - Includes: Alpha sliders (linear, strafe, rotation)
+  - Includes: Deadzone sliders (rotation only - keyboard deadzone removed)
+  - Includes: Preset buttons (Beginner/Normal/Advanced/Sport)
+  - Includes: Chart.js curve visualizations (3 canvas elements)
+
+- [ ] 36.2 Copy entire HTML structure
+  - Copy from `<div class="mb-8">` (Response Curve Tuning section)
+  - Include all form elements, labels, help text
+  - Include Chart.js canvas elements
+  - Include preset buttons
+
+**Part B: Create Slide-In Panel in Control Page**
+
+- [ ] 36.3 Design panel structure in `templates/control.html`
+  ```html
+  <!-- Settings Panel (slide-in from bottom) -->
+  <div id="settings-panel" class="settings-panel hidden">
+      <!-- Backdrop overlay -->
+      <div id="settings-backdrop" class="settings-backdrop"></div>
+
+      <!-- Panel content -->
+      <div class="settings-panel-content">
+          <!-- Header -->
+          <div class="settings-panel-header">
+              <h2 class="text-2xl font-bold text-unitree-primary">⚙️ Control Settings</h2>
+              <button id="settings-close-btn" class="settings-close-btn">
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+              </button>
+          </div>
+
+          <!-- Settings content (paste from landing.html) -->
+          <div class="settings-panel-body">
+              <!-- PASTE SETTINGS HTML HERE -->
+          </div>
+      </div>
+  </div>
+  ```
+
+- [ ] 36.4 Add CSS for slide-in animation
+  ```css
+  .settings-panel {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+  }
+
+  .settings-panel.hidden {
+      display: none;
+  }
+
+  .settings-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+  }
+
+  .settings-panel-content {
+      position: relative;
+      width: 100%;
+      max-width: 1200px;
+      max-height: 80vh;
+      background: linear-gradient(135deg, rgba(30, 30, 30, 0.95), rgba(20, 20, 20, 0.95));
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+      overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform 0.3s ease-out;
+  }
+
+  .settings-panel:not(.hidden) .settings-panel-content {
+      transform: translateY(0);
+  }
+
+  .settings-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      position: sticky;
+      top: 0;
+      background: rgba(30, 30, 30, 0.95);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+  }
+
+  .settings-close-btn {
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      background: rgba(255, 255, 255, 0.1);
+      transition: all 0.2s;
+  }
+
+  .settings-close-btn:hover {
+      background: rgba(255, 68, 68, 0.2);
+      transform: scale(1.1);
+  }
+
+  .settings-panel-body {
+      padding: 1.5rem;
+  }
+  ```
+
+**Part C: Wire Up Settings Button**
+
+- [ ] 36.5 Add click handler to settings button in `static/js/control.js`
+  ```javascript
+  // Settings panel toggle
+  const settingsBtn = document.getElementById('quick-settings-btn');
+  const settingsPanel = document.getElementById('settings-panel');
+  const settingsBackdrop = document.getElementById('settings-backdrop');
+  const settingsCloseBtn = document.getElementById('settings-close-btn');
+
+  function openSettingsPanel() {
+      settingsPanel.classList.remove('hidden');
+      settingsBtn.classList.add('active');  // Highlight button
+  }
+
+  function closeSettingsPanel() {
+      settingsPanel.classList.add('hidden');
+      settingsBtn.classList.remove('active');
+  }
+
+  settingsBtn.addEventListener('click', openSettingsPanel);
+  settingsCloseBtn.addEventListener('click', closeSettingsPanel);
+  settingsBackdrop.addEventListener('click', closeSettingsPanel);
+
+  // ESC key closes panel
+  document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !settingsPanel.classList.contains('hidden')) {
+          closeSettingsPanel();
+      }
+  });
+  ```
+
+**Part D: Ensure Full Functionality**
+
+- [ ] 36.6 Initialize Chart.js visualizations in control page
+  - Import `static/js/curve-visualizer.js` in control.html
+  - Call `initializeCurveCharts()` when settings panel opens
+  - Update charts when sliders change
+
+- [ ] 36.7 Connect sliders to settings manager
+  - Import `static/js/settings-manager.js` in control.html
+  - Import `static/js/landing.js` slider handlers (or duplicate logic)
+  - Ensure settings save to localStorage on change
+
+- [ ] 36.8 Connect preset buttons
+  - Ensure preset buttons call `applyPreset()` function
+  - Verify all sliders update when preset is selected
+  - Verify charts update when preset is selected
+
+- [ ] 36.9 Verify real-time application
+  - Settings apply to active keyboard/mouse control immediately
+  - No page reload required
+  - Changes persist to localStorage
+
+**Part E: Testing**
+
+- [ ] 36.10 Test panel open/close animation (smooth slide-up/down)
+- [ ] 36.11 Test backdrop overlay (appears/disappears correctly)
+- [ ] 36.12 Test all sliders update settings and persist to localStorage
+- [ ] 36.13 Test curve visualizations render correctly
+- [ ] 36.14 Test preset buttons apply correct settings
+- [ ] 36.15 Test responsive design (mobile/tablet/desktop)
+- [ ] 36.16 Test ESC key closes panel
+- [ ] 36.17 Test clicking backdrop closes panel
+- [ ] 36.18 Test settings button highlights when panel is open
+- [ ] 36.19 Verify no JavaScript errors in console
+- [ ] 36.20 Test with real robot to verify settings apply in real-time
+
+**Success Criteria:**
+- ✅ Settings panel opens smoothly from bottom of screen
+- ✅ All sliders work identically to landing page version
+- ✅ Settings save to localStorage immediately on change
+- ✅ Settings apply to robot control in real-time (no reload)
+- ✅ Preset buttons work correctly
+- ✅ Chart.js visualizations update in real-time
+- ✅ Panel is responsive on different screen sizes
+- ✅ No JavaScript errors in console
+
+---
+
+### Task 37: Fix Jarring Camera Movement During Body Rotation (Priority 3)
+
+**Priority:** 🟢 MEDIUM (Requires real robot testing and iteration)
+**Estimated Time:** 180 minutes
+**Files to Modify:**
+- `static/js/curve-utils.js`
+- `static/js/keyboard-mouse-control.js`
+- `static/js/settings-manager.js`
+- `templates/landing.html`
+- `app/services/control.py` (if Active Mode Blending is needed)
+
+**Problem Statement:**
+Unitree Go2 has a two-stage rotation mechanism that creates a discontinuous physical response:
+1. **Camera-only rotation (low speed):** Robot's head/camera yaws ±30-45° without moving body (feet planted, torso twists)
+2. **Body rotation (high speed):** When camera reaches physical limit OR rotation speed exceeds threshold, robot steps/trots to rotate entire body
+
+**The Discontinuity:**
+Transition from camera-only to body rotation causes sudden acceleration (kinetic energy release). User perceives this as camera "snapping" or "jumping" despite constant mouse input, creating disorienting, unpredictable visual experience.
+
+**Mathematical Problem:**
+This is a classic **mode transition discontinuity** (stick-slip behavior). Robot's physical output resembles a step function:
+```
+Mouse 20% input → Robot twists 10° (slow, camera-only)
+Mouse 21% input → Robot steps → Jumps to 40° (fast, body rotation)
+```
+
+**Solution Approach: Piecewise Plateau Curve (Inverse-Jerk Mapping)**
+
+Instead of exponential curve `y = x^alpha`, use **piecewise linear interpolation** to create a "flat spot" (plateau) at the transition point. This forces the user to move the mouse further to push through the transition, giving them control over the mode switch.
+
+**Phase A: Research Robot Behavior**
+
+- [ ] 37.1 Research robot's camera yaw limits
+  - Check WebRTC data channel for camera yaw angle telemetry
+  - Check `app/services/control.py` for telemetry access
+  - Determine physical limit for camera-only rotation (degrees/radians)
+
+- [ ] 37.2 Identify transition threshold
+  - Test with real robot: Move mouse slowly until robot is about to step
+  - Record input percentage when transition occurs (e.g., 25%)
+  - Record output velocity when transition occurs (e.g., 0.15 rad/s)
+
+- [ ] 37.3 Verify telemetry availability
+  - Check if robot telemetry provides current camera yaw angle relative to body
+  - Check if telemetry indicates body rotation state (leg movement, body yaw velocity)
+  - Determine if we can detect mode transition from telemetry
+
+**Phase B: Implement Piecewise Curve Class**
+
+- [ ] 37.4 Create `PiecewiseCurve` class in `static/js/curve-utils.js`
+  ```javascript
+  /**
+   * Piecewise linear curve for smooth mode transitions
+   *
+   * Creates a curve from multiple control points using linear interpolation.
+   * Useful for creating "plateau" regions to prevent stick-slip discontinuities.
+   *
+   * @class PiecewiseCurve
+   */
+  class PiecewiseCurve {
+      /**
+       * @param {Array<{x: number, y: number}>} points - Control points (must be sorted by x)
+       * @example
+       * const curve = new PiecewiseCurve([
+       *     { x: 0.00, y: 0.00 },  // Stop
+       *     { x: 0.25, y: 0.15 },  // Point A: Max camera-only speed
+       *     { x: 0.40, y: 0.18 },  // Point B: PLATEAU (slow rise)
+       *     { x: 1.00, y: 1.00 }   // Full speed
+       * ]);
+       */
+      constructor(points) {
+          this.points = points;
+          // Validate points are sorted by x
+          for (let i = 1; i < points.length; i++) {
+              if (points[i].x <= points[i-1].x) {
+                  throw new Error('Piecewise curve points must be sorted by x');
+              }
+          }
+      }
+
+      /**
+       * Compute output value for given input using linear interpolation
+       *
+       * @param {number} input - Input value (0.0 to 1.0)
+       * @returns {number} Output value (0.0 to 1.0)
+       */
+      compute(input) {
+          let x = Math.abs(input);
+          if (x > 1) x = 1;
+
+          // Find which two points we are between
+          for (let i = 0; i < this.points.length - 1; i++) {
+              let p1 = this.points[i];
+              let p2 = this.points[i + 1];
+
+              if (x >= p1.x && x <= p2.x) {
+                  // Linear interpolation between p1 and p2
+                  let percentage = (x - p1.x) / (p2.x - p1.x);
+                  let output = p1.y + (percentage * (p2.y - p1.y));
+                  return output * Math.sign(input); // Restore sign
+              }
+          }
+          return Math.sign(input);
+      }
+  }
+  ```
+
+- [ ] 37.5 Add piecewise curve to exports
+  ```javascript
+  if (typeof module !== 'undefined' && module.exports) {
+      module.exports = {
+          // ... existing exports ...
+          PiecewiseCurve
+      };
+  }
+  ```
+
+**Phase C: Add Piecewise Curve Settings**
+
+- [ ] 37.6 Add rotation curve points to settings structure (`static/js/settings-manager.js`)
+  ```javascript
+  keyboard_mouse: {
+      // ... existing settings ...
+      rotation_curve_type: 'exponential',  // 'exponential' or 'piecewise'
+      rotation_curve_points: [
+          { x: 0.00, y: 0.00 },  // Stop
+          { x: 0.25, y: 0.15 },  // Point A: Max camera-only speed
+          { x: 0.40, y: 0.18 },  // Point B: PLATEAU (slow rise)
+          { x: 1.00, y: 1.00 }   // Full speed
+      ]
+  }
+  ```
+
+- [ ] 37.7 Add piecewise curve points to all presets
+  - Beginner: Wider plateau (easier to control)
+  - Normal: Moderate plateau (balanced)
+  - Advanced: Narrow plateau (more responsive)
+  - Sport: Minimal plateau (aggressive)
+
+**Phase D: Integrate Piecewise Curve into Keyboard/Mouse Control**
+
+- [ ] 37.8 Update `applyRotationCurve()` to support piecewise curves
+  ```javascript
+  function applyRotationCurve(input, alpha, deadzone, maxVelocity, curveType = 'exponential', curvePoints = null) {
+      if (curveType === 'piecewise' && curvePoints) {
+          // Use piecewise curve
+          const curve = new PiecewiseCurve(curvePoints);
+          const normalized = curve.compute(input);
+          return normalized * maxVelocity;
+      } else {
+          // Use exponential curve (existing logic)
+          return applyCurve(input, alpha, deadzone, maxVelocity, HARDWARE_LIMITS.rotation);
+      }
+  }
+  ```
+
+- [ ] 37.9 Update `poll()` method to use piecewise curve for rotation
+  ```javascript
+  // Rotation velocity - apply curve (exponential or piecewise)
+  const rotationInput = Math.abs(rotation);
+  const curvedRotation = rotationInput > 0
+      ? applyRotationCurve(
+          rotationInput,
+          rotationAlpha,
+          rotationDeadzone,
+          maxRotation,
+          this.settings.rotationCurveType,
+          this.settings.rotationCurvePoints
+      ) * Math.sign(rotation)
+      : 0;
+  ```
+
+**Phase E: Add UI Controls for Piecewise Curve**
+
+- [ ] 37.10 Add curve type toggle to settings panel (`templates/landing.html`)
+  ```html
+  <!-- Rotation Curve Type -->
+  <div class="form-group">
+      <label class="form-label">Rotation Curve Type</label>
+      <div class="flex gap-4">
+          <button id="rotation-curve-exponential" class="preset-btn active">
+              Exponential
+          </button>
+          <button id="rotation-curve-piecewise" class="preset-btn">
+              Piecewise (Anti-Jerk)
+          </button>
+      </div>
+      <p class="form-help">Exponential: Smooth curve. Piecewise: Plateau to prevent camera jump.</p>
+  </div>
+  ```
+
+- [ ] 37.11 Add piecewise curve point editors (optional - advanced feature)
+  - Four sliders for Point A, Point B x/y coordinates
+  - Real-time graph update showing piecewise curve
+  - Reset button to restore default points
+
+**Phase F: Testing and Tuning**
+
+- [ ] 37.12 Test with real robot using exponential curve (baseline)
+  - Record video of camera movement during rotation
+  - Note when camera "jumps" or "snaps"
+  - Identify input percentage when jump occurs
+
+- [ ] 37.13 Switch to piecewise curve and test
+  - Use default plateau points (0.25 → 0.40)
+  - Test if plateau reduces camera jump
+  - Verify user can control mode transition
+
+- [ ] 37.14 Tune plateau points based on robot behavior
+  - **Find Point A:** Move mouse slowly until robot is about to step (e.g., 25% input)
+  - **Set Point A:** `{x: 0.25, y: 0.15}` (just before stepping)
+  - **Create Plateau (Point B):** Set Point B significantly further in input (e.g., 40%) but only slightly higher in output (e.g., 0.18)
+  - **Result:** Moving mouse from 25% to 40% barely changes command → robot stays in camera-only mode
+
+- [ ] 37.15 Compare exponential vs piecewise curves
+  - Record video of both approaches
+  - Measure perceived smoothness (subjective)
+  - Measure control precision (objective - can user stop at desired angle?)
+
+**Phase G: Alternative Approach (If Piecewise Insufficient)**
+
+**Active Mode Blending** - Use different robot commands for different input zones:
+
+- [ ] 37.16 Research Euler command support
+  - Check if robot supports `Euler(roll=0, pitch=0, yaw=angle)` commands
+  - Verify this forces camera-only rotation
+  - Test if this prevents body rotation
+
+- [ ] 37.17 Implement zone-based command switching
+  ```javascript
+  // Zone 1 (input < 20%): Send Euler commands (camera-only)
+  if (rotationInput < 0.20) {
+      sendEulerCommand(yaw=angle);
+  }
+  // Zone 2 (input > 20%): Send Move commands (body rotation)
+  else {
+      sendMoveCommand(vyaw=velocity);
+  }
+  ```
+
+- [ ] 37.18 Implement smooth transition between zones
+  - Gradually reset Euler yaw to 0 while ramping up Move velocity
+  - Prevent sudden jump when crossing 20% threshold
+
+- [ ] 37.19 Test Active Mode Blending with real robot
+  - Verify camera-only rotation in Zone 1
+  - Verify body rotation in Zone 2
+  - Verify smooth transition between zones
+
+**Success Criteria:**
+- ✅ Camera movement feels smooth and predictable during rotation
+- ✅ User can control when robot transitions from camera-only to body rotation
+- ✅ No sudden "snapping" or "jumping" during constant mouse input
+- ✅ Piecewise plateau curve reduces stick-slip discontinuity by 90%
+- ✅ User can choose between exponential and piecewise curves
+- ✅ Settings persist across sessions
+- ✅ If piecewise insufficient, Active Mode Blending provides alternative solution
+
+**Notes:**
+- Start with **Piecewise Plateau Curve** (solves 90% of visual jerk issues without complex backend logic)
+- If insufficient, escalate to **Active Mode Blending** (requires backend changes and telemetry access)
+- This is a known problem in robotics control systems (stick-slip behavior)
+- Solution requires real robot testing and iteration to tune plateau points
+
+---
+
+## Phase 15: Integration Testing & Documentation (2026-02-07)
+
+**Overview:**
+After completing Tasks 35-37, perform comprehensive integration testing to ensure all three fixes work together correctly and don't introduce regressions.
+
+**Testing Scenarios:**
+
+- [ ] 38.1 Test mouse sensitivity with settings panel open
+  - Open settings panel on control page
+  - Adjust mouse yaw sensitivity from 0.1 to 5.0
+  - Verify rotation speed changes proportionally
+  - Verify settings persist after closing panel
+
+- [ ] 38.2 Test piecewise curve with different sensitivity values
+  - Set sensitivity to 0.5, test piecewise curve
+  - Set sensitivity to 5.0, test piecewise curve
+  - Verify plateau behavior is consistent
+
+- [ ] 38.3 Test all presets with new features
+  - Test Beginner preset (low sensitivity, wide plateau)
+  - Test Normal preset (moderate sensitivity, moderate plateau)
+  - Test Advanced preset (high sensitivity, narrow plateau)
+  - Test Sport preset (very high sensitivity, minimal plateau)
+
+- [ ] 38.4 Test settings persistence
+  - Adjust all settings (sensitivity, curve type, plateau points)
+  - Refresh page
+  - Verify all settings restored correctly
+
+- [ ] 38.5 Test cross-browser compatibility
+  - Test in Chrome
+  - Test in Firefox
+  - Test in Edge
+  - Verify no JavaScript errors
+
+- [ ] 38.6 Test responsive design
+  - Test settings panel on desktop (1920x1080)
+  - Test settings panel on tablet (768x1024)
+  - Test settings panel on mobile (375x667)
+  - Verify panel is usable on all screen sizes
+
+- [ ] 38.7 Performance testing
+  - Monitor CPU usage during rotation with piecewise curve
+  - Monitor frame rate during settings panel animation
+  - Verify no performance regressions
+
+- [ ] 38.8 Documentation updates
+  - Update README.md with new features
+  - Document mouse sensitivity troubleshooting
+  - Document piecewise curve tuning process
+  - Document settings panel usage
+
+**Success Criteria:**
+- ✅ All three fixes work together without conflicts
+- ✅ No regressions in existing functionality
+- ✅ Settings panel accessible and functional on control page
+- ✅ Mouse sensitivity affects rotation speed as expected
+- ✅ Piecewise curve reduces camera jump during body rotation
+- ✅ All presets work correctly with new features
+- ✅ Settings persist across sessions
+- ✅ No JavaScript errors in console
+- ✅ Performance is acceptable (no lag or stuttering)
+- ✅ Documentation is up-to-date and accurate
 
 ---
 

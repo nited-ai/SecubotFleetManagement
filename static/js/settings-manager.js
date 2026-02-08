@@ -26,7 +26,12 @@ function getDefaultSettings() {
             // Backend slew rate limiter settings (acceleration ramp-up time)
             linear_ramp_time: 1.0,    // seconds - time to reach max linear speed
             strafe_ramp_time: 0.2,    // seconds - time to reach max strafe speed
-            rotation_ramp_time: 0.9   // seconds - time to reach max rotation speed
+            rotation_ramp_time: 0.9,  // seconds - time to reach max rotation speed
+            // Pitch (body tilt) curve settings
+            pitch_alpha: 2.0,           // Exponential curve factor for pitch
+            pitch_deadzone: 0.10,       // Mouse pitch deadzone (prevents drift)
+            pitch_max_velocity: 0.35,   // Max pitch angle in rad (~20°)
+            pitch_ramp_time: 0.8        // seconds - time to reach max pitch angle
         },
         gamepad: {
             deadzone_left_stick: 0.15,
@@ -170,7 +175,12 @@ function applyPreset(preset) {
                 // Beginner ramp-up time: Slower acceleration for smoother feel
                 linear_ramp_time: 1.5,
                 strafe_ramp_time: 1.2,
-                rotation_ramp_time: 1.2
+                rotation_ramp_time: 1.2,
+                // Beginner pitch: Smooth, limited range
+                pitch_alpha: 2.5,
+                pitch_deadzone: 0.15,
+                pitch_max_velocity: 0.20,
+                pitch_ramp_time: 1.2
             },
             gamepad: {
                 deadzone_left_stick: 0.15,
@@ -199,7 +209,12 @@ function applyPreset(preset) {
                 // Normal ramp-up time: Current defaults
                 linear_ramp_time: 1.0,
                 strafe_ramp_time: 0.2,
-                rotation_ramp_time: 0.9
+                rotation_ramp_time: 0.9,
+                // Normal pitch: Balanced
+                pitch_alpha: 2.0,
+                pitch_deadzone: 0.10,
+                pitch_max_velocity: 0.35,
+                pitch_ramp_time: 0.8
             },
             gamepad: {
                 deadzone_left_stick: 0.1,
@@ -228,7 +243,12 @@ function applyPreset(preset) {
                 // Advanced ramp-up time: Faster acceleration for snappier response
                 linear_ramp_time: 0.5,
                 strafe_ramp_time: 0.3,
-                rotation_ramp_time: 0.4
+                rotation_ramp_time: 0.4,
+                // Advanced pitch: More responsive
+                pitch_alpha: 1.5,
+                pitch_deadzone: 0.05,
+                pitch_max_velocity: 0.35,
+                pitch_ramp_time: 0.4
             },
             gamepad: {
                 deadzone_left_stick: 0.05,
@@ -257,7 +277,12 @@ function applyPreset(preset) {
                 // Sport ramp-up time: Minimal acceleration for instant response
                 linear_ramp_time: 0.2,
                 strafe_ramp_time: 0.1,
-                rotation_ramp_time: 0.2
+                rotation_ramp_time: 0.2,
+                // Sport pitch: Near-instant, full range
+                pitch_alpha: 1.2,
+                pitch_deadzone: 0.05,
+                pitch_max_velocity: 0.35,
+                pitch_ramp_time: 0.2
             },
             gamepad: {
                 deadzone_left_stick: 0.05,

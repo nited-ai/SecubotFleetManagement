@@ -13,7 +13,8 @@
 const HARDWARE_LIMITS = {
     linear: 5.0,    // m/s - Maximum linear (forward/back) velocity
     strafe: 0.6,    // m/s - Maximum strafe (left/right) velocity
-    rotation: 3.0   // rad/s - Maximum rotation (yaw) velocity
+    rotation: 3.0,  // rad/s - Maximum rotation (yaw) velocity
+    pitch: 0.35     // rad - Maximum pitch angle (~20°)
 };
 
 /**
@@ -144,6 +145,19 @@ function exceedsHardwareLimit(maxVelocity, hardwareLimit) {
     return maxVelocity > hardwareLimit;
 }
 
+/**
+ * Apply curve to pitch (head tilt) angle
+ *
+ * @param {number} input - Input value (0.0 to 1.0)
+ * @param {number} alpha - Exponential factor (0.5 to 4.0)
+ * @param {number} deadzone - Deadzone threshold (0.0 to 0.3)
+ * @param {number} maxVelocity - Maximum pitch angle (rad)
+ * @returns {number} Curve-adjusted pitch angle (rad)
+ */
+function applyPitchCurve(input, alpha, deadzone, maxVelocity) {
+    return applyCurve(input, alpha, deadzone, maxVelocity, HARDWARE_LIMITS.pitch);
+}
+
 // Export functions for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     // Node.js environment (for testing)
@@ -153,6 +167,7 @@ if (typeof module !== 'undefined' && module.exports) {
         applyLinearCurve,
         applyStrafeCurve,
         applyRotationCurve,
+        applyPitchCurve,
         generateCurveData,
         exceedsHardwareLimit
     };

@@ -41,6 +41,7 @@ class ControlService:
         self.current_vx = 0.0      # Current linear velocity (m/s)
         self.current_vy = 0.0      # Current strafe velocity (m/s)
         self.current_vyaw = 0.0    # Current rotation velocity (rad/s)
+        self.current_pitch = 0.0   # Current pitch angle (rad)
 
         # Acceleration Limits (units per second squared)
         # These control how fast the robot can change velocity
@@ -49,6 +50,7 @@ class ControlService:
         self.MAX_LINEAR_ACCEL = 5.0   # m/s² (tune for linear movement smoothness)
         self.MAX_STRAFE_ACCEL = 3.0   # m/s² (tune for strafe movement smoothness)
         self.MAX_YAW_ACCEL = 10.0     # rad/s² (tune for rotation smoothness)
+        self.MAX_PITCH_ACCEL = 0.5    # rad/s² (tune for pitch smoothness)
         
         # Preset configurations
         self.presets = {
@@ -246,7 +248,9 @@ class ControlService:
                 ly = 0.0
             if abs(rx) < deadzone_right:
                 rx = 0.0
-            if abs(ry) < deadzone_right:
+            # Only apply deadzone to ry for gamepad input
+            # Keyboard/mouse pitch already has its own deadzone applied in frontend
+            if data.get('source', 'gamepad') != 'keyboard_mouse' and abs(ry) < deadzone_right:
                 ry = 0.0
 
             # Check if this is keyboard/mouse input (already has curves applied)
@@ -272,6 +276,7 @@ class ControlService:
             max_linear = data.get('max_linear', self.state.gamepad_settings['max_linear_velocity'])
             max_strafe = data.get('max_strafe', self.state.gamepad_settings['max_strafe_velocity'])
             max_rotation = data.get('max_rotation', self.state.gamepad_settings['max_rotation_velocity'])
+            max_pitch = data.get('max_pitch', 0.35)  # Default to 0.35 rad (~20°) if not provided
 
             # CRITICAL FIX: Scale normalized input (-1.0 to 1.0) by max velocity BEFORE clamping
             # Frontend sends normalized values (0.0-1.0), backend must multiply by max velocity
@@ -281,10 +286,16 @@ class ControlService:
             raw_target_vx = ly * max_linear          # Forward/back from left stick Y
             raw_target_vy = -lx * max_strafe         # Strafe from left stick X (inverted)
             raw_target_vyaw = -rx * max_rotation     # Yaw from right stick X (inverted)
+            raw_target_pitch = ry * max_pitch        # Pitch angle (rad) - NOT inverted
 
             # Step 2: Apply Slew Rate Limiter (prevents jerky "freaking out" movements)
             # This smoothly ramps velocity changes over time instead of allowing instant jumps
             # UNLESS RAGE MODE is enabled (bypasses all smoothing)
+
+            # For keyboard/mouse: pitch uses INSTANT response (no slew rate limiter)
+            # because the frontend already handles pitch smoothing
+            # For gamepad: pitch goes through the slew rate limiter like other axes
+            pitch = raw_target_pitch
 
             # Check if RAGE MODE is enabled
             rage_mode = data.get('rage_mode', False)
@@ -304,6 +315,7 @@ class ControlService:
                 linear_ramp_time = data.get('linear_ramp_time', 1.0)
                 strafe_ramp_time = data.get('strafe_ramp_time', 0.2)
                 rotation_ramp_time = data.get('rotation_ramp_time', 0.9)
+                pitch_ramp_time = data.get('pitch_ramp_time', 0.8)
 
                 # Convert ramp-up time to acceleration limit
                 # Formula: MAX_ACCEL = max_velocity / ramp_time
@@ -311,6 +323,7 @@ class ControlService:
                 MAX_LINEAR_ACCEL = max_linear / linear_ramp_time if linear_ramp_time > 0.01 else 1000.0
                 MAX_STRAFE_ACCEL = max_strafe / strafe_ramp_time if strafe_ramp_time > 0.01 else 1000.0
                 MAX_YAW_ACCEL = max_rotation / rotation_ramp_time if rotation_ramp_time > 0.01 else 1000.0
+                MAX_PITCH_ACCEL = max_pitch / pitch_ramp_time if pitch_ramp_time > 0.01 else 1000.0
 
                 # Calculate time delta since last command
                 now = time.time()
@@ -343,23 +356,39 @@ class ControlService:
                 safe_delta_vyaw = max(-max_step_vyaw, min(max_step_vyaw, delta_vyaw))
                 self.current_vyaw += safe_delta_vyaw
 
+                # Pitch (Body Tilt) - only apply slew rate for gamepad
+                if is_keyboard_mouse:
+                    # Keyboard/mouse: instant pitch (frontend handles smoothing)
+                    self.current_pitch = raw_target_pitch
+                else:
+                    # Gamepad: apply slew rate limiter
+                    delta_pitch = raw_target_pitch - self.current_pitch
+                    max_step_pitch = MAX_PITCH_ACCEL * dt
+                    safe_delta_pitch = max(-max_step_pitch, min(max_step_pitch, delta_pitch))
+                    self.current_pitch += safe_delta_pitch
+
                 # Step 3: Final Safety Clamp (absolute limits - should rarely trigger now)
                 vx = max(-max_linear, min(max_linear, self.current_vx))
                 vy = max(-max_strafe, min(max_strafe, self.current_vy))
                 vyaw = max(-max_rotation, min(max_rotation, self.current_vyaw))
+                pitch = max(-max_pitch, min(max_pitch, self.current_pitch))
 
             # Debug logging for keyboard/mouse commands (shows slew rate limiter in action)
-            if is_keyboard_mouse and (abs(vx) > 0.01 or abs(vy) > 0.01 or abs(vyaw) > 0.01):
-                self.logger.info(f"[KB/Mouse Backend] rx={rx:.3f} → target={raw_target_vyaw:.3f} → ramped={vyaw:.3f} (dt={dt*1000:.1f}ms) | max_rotation={max_rotation}")
+            if is_keyboard_mouse and (abs(vx) > 0.01 or abs(vy) > 0.01 or abs(vyaw) > 0.01 or abs(pitch) > 0.005):
+                if rage_mode:
+                    self.logger.info(f"[KB/Mouse Backend RAGE] vx={vx:.3f}, vy={vy:.3f}, vyaw={vyaw:.3f}, pitch={pitch:.3f}")
+                else:
+                    self.logger.info(f"[KB/Mouse Backend] rx={rx:.3f} → vyaw={vyaw:.3f}, ry={ry:.3f} → pitch={pitch:.3f} (dt={dt*1000:.1f}ms)")
 
-            # Check if all velocities are zero
-            is_zero_velocity = (abs(vx) < 0.01 and abs(vy) < 0.01 and abs(vyaw) < 0.01)
+            # Check if all velocities AND pitch are zero
+            is_zero_velocity = (abs(vx) < 0.01 and abs(vy) < 0.01 and abs(vyaw) < 0.01 and abs(pitch) < 0.005)
 
             # Reset slew rate limiter state when robot stops (prevents drift)
             if is_zero_velocity:
                 self.current_vx = 0.0
                 self.current_vy = 0.0
                 self.current_vyaw = 0.0
+                self.current_pitch = 0.0
 
             # Determine if we should send the command
             should_send = True
@@ -373,6 +402,19 @@ class ControlService:
             self.state.last_sent_velocities['vyaw'] = vyaw
             self.state.zero_velocity_sent = is_zero_velocity
 
+            # Re-normalize for WirelessController (joystick values -1 to 1)
+            # These reverse the scaling done earlier (raw_target_vy = -lx * max_strafe, etc.)
+            ly_norm = round(vx / max_linear, 4) if max_linear > 0 else 0.0
+            lx_norm = round(-vy / max_strafe, 4) if max_strafe > 0 else 0.0
+            rx_norm = round(-vyaw / max_rotation, 4) if max_rotation > 0 else 0.0
+            ry_norm = round(pitch / max_pitch, 4) if max_pitch > 0 else 0.0
+
+            # Clamp normalized values to [-1, 1] for safety
+            ly_norm = max(-1.0, min(1.0, ly_norm))
+            lx_norm = max(-1.0, min(1.0, lx_norm))
+            rx_norm = max(-1.0, min(1.0, rx_norm))
+            ry_norm = max(-1.0, min(1.0, ry_norm))
+
             # Calculate processing time
             processing_time = (time.time() - request_start_time) * 1000  # Convert to ms
             if processing_time > 10:  # Log if processing takes more than 10ms
@@ -382,7 +424,10 @@ class ControlService:
                 'status': 'success',
                 'zero_velocity': is_zero_velocity,
                 'should_send': should_send,
-                'velocities': {'vx': round(vx, 3), 'vy': round(vy, 3), 'vyaw': round(vyaw, 3)},
+                'velocities': {
+                    'vx': round(vx, 3), 'vy': round(vy, 3), 'vyaw': round(vyaw, 3), 'pitch': round(pitch, 3),
+                    'lx': lx_norm, 'ly': ly_norm, 'rx': rx_norm, 'ry': ry_norm
+                },
                 'processing_time_ms': round(processing_time, 2)
             }
 
@@ -390,7 +435,7 @@ class ControlService:
             self.logger.error(f"Movement command error: {e}")
             return {'status': 'error', 'message': str(e)}
 
-    def send_movement_command_sync(self, vx: float, vy: float, vyaw: float, is_zero_velocity: bool) -> dict:
+    def send_movement_command_sync(self, lx: float, ly: float, rx: float, ry: float, is_zero_velocity: bool) -> dict:
         """
         Synchronous wrapper for send_movement_command.
 
@@ -398,9 +443,10 @@ class ControlService:
         Returns immediately without waiting for completion.
 
         Args:
-            vx: Forward/back velocity
-            vy: Left/right velocity
-            vyaw: Rotation velocity
+            lx: Normalized strafe (-1 to 1, +right -left)
+            ly: Normalized forward/back (-1 to 1, +forward -backward)
+            rx: Normalized yaw rotation (-1 to 1)
+            ry: Normalized pitch (-1 to 1) - currently unused, reserved for future pitch implementation
             is_zero_velocity: Whether this is a zero velocity command
 
         Returns:
@@ -408,7 +454,7 @@ class ControlService:
         """
         if self.state.event_loop and self.state.event_loop.is_running():
             asyncio.run_coroutine_threadsafe(
-                self.send_movement_command(vx, vy, vyaw, is_zero_velocity),
+                self.send_movement_command(lx, ly, rx, ry, is_zero_velocity),
                 self.state.event_loop
             )
             return {'status': 'success', 'message': 'Movement command scheduled'}
@@ -419,32 +465,41 @@ class ControlService:
             )
             return {'status': 'error', 'message': 'Event loop not running'}
 
-    async def send_movement_command(self, vx: float, vy: float, vyaw: float, is_zero_velocity: bool):
+    async def send_movement_command(self, lx: float, ly: float, rx: float, ry: float, is_zero_velocity: bool):
         """
-        Send movement command to robot asynchronously.
+        Send movement command to robot via WirelessController topic.
+
+        Uses rt/wirelesscontroller (joystick emulation) for movement control.
+        This works in all modes including AI mode.
+
+        Note: ry is accepted but NOT sent to the robot. The Euler API (1007) was
+        tested for pitch control but it switches the robot out of AI mode into
+        Pose Mode, breaking WASD movement and yaw control. Pitch control requires
+        a different approach (TBD).
 
         Args:
-            vx: Forward/back velocity
-            vy: Strafe velocity
-            vyaw: Yaw (rotation) velocity
+            lx: Normalized strafe (-1 to 1, +right -left)
+            ly: Normalized forward/back (-1 to 1, +forward -backward)
+            rx: Normalized yaw rotation (-1 to 1)
+            ry: Normalized pitch (-1 to 1) - currently IGNORED (pitch not sent to robot)
             is_zero_velocity: Whether this is a zero velocity command
         """
         try:
-            from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD
+            from unitree_webrtc_connect.constants import RTC_TOPIC
 
-            # CRITICAL DEBUG: Log exact values being sent to robot
-            if abs(vyaw) > 0.01:
-                self.logger.info(f"🤖 [ROBOT COMMAND] Sending to robot: x={vx:.3f} m/s, y={vy:.3f} m/s, z={vyaw:.3f} rad/s")
-
-            # Create task without awaiting to avoid blocking
-            asyncio.create_task(
-                self.state.connection.datachannel.pub_sub.publish_request_new(
-                    RTC_TOPIC["SPORT_MOD"],
-                    {
-                        "api_id": SPORT_CMD["Move"],
-                        "parameter": {"x": vx, "y": vy, "z": vyaw}
-                    }
+            # Debug logging for non-trivial commands
+            if abs(ly) > 0.01 or abs(lx) > 0.01 or abs(rx) > 0.01:
+                self.logger.info(
+                    f"🤖 [ROBOT COMMAND] WirelessController: lx={lx:.3f}, ly={ly:.3f}, rx={rx:.3f}"
                 )
+
+            # Send via WirelessController topic (joystick emulation)
+            # ry is always 0: WirelessController ry does NOT control pitch,
+            # and the Euler API (1007) switches the robot out of AI mode.
+            # Pitch control is disabled until a compatible approach is found.
+            self.state.connection.datachannel.pub_sub.publish_without_callback(
+                RTC_TOPIC["WIRELESS_CONTROLLER"],
+                {"lx": round(lx, 4), "ly": round(ly, 4), "rx": round(rx, 4), "ry": 0.0, "keys": 0}
             )
 
             # Log zero velocity commands for debugging
@@ -452,7 +507,7 @@ class ControlService:
                 self.logger.info("✓ Zero velocity command sent - robot should stop immediately")
 
         except Exception as e:
-            self.logger.error(f"Error sending Move command: {e}")
+            self.logger.error(f"Error sending WirelessController command: {e}")
 
     def send_robot_action_sync(self, action: str) -> dict:
         """

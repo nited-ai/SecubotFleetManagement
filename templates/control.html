@@ -8,6 +8,91 @@
     body {
         overflow: hidden;
     }
+
+    /* ===== Settings Slide-In Panel ===== */
+    .settings-panel {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: flex-end;
+        justify-content: stretch;
+        /* Hidden by default using visibility + pointer-events (NOT display:none)
+           This allows CSS transitions to work properly */
+        visibility: hidden;
+        pointer-events: none;
+        transition: visibility 0s 0.3s; /* delay hiding until animation finishes */
+    }
+    .settings-panel.open {
+        visibility: visible;
+        pointer-events: auto;
+        transition: visibility 0s 0s; /* instantly visible when opening */
+    }
+
+    .settings-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        opacity: 0;
+        transition: opacity 0.3s ease-out;
+    }
+    .settings-panel.open .settings-backdrop {
+        opacity: 1;
+    }
+
+    .settings-panel-content {
+        position: relative;
+        width: 100%;
+        max-height: 70vh;
+        background: linear-gradient(135deg, rgba(30, 30, 30, 0.97), rgba(20, 20, 20, 0.97));
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+        overflow-y: auto;
+        transform: translateY(100%);
+        transition: transform 0.3s ease-out;
+    }
+    .settings-panel.open .settings-panel-content {
+        transform: translateY(0);
+    }
+
+    .settings-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        position: sticky;
+        top: 0;
+        background: rgba(30, 30, 30, 0.97);
+        backdrop-filter: blur(8px);
+        z-index: 10;
+    }
+
+    .settings-close-btn {
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+        color: white;
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .settings-close-btn:hover {
+        background: rgba(255, 68, 68, 0.3);
+        transform: scale(1.1);
+    }
+
+    .settings-panel-body {
+        padding: 1.5rem;
+    }
+
+    /* Settings button active state */
+    #quick-settings-btn.settings-active {
+        color: #00E8DA;
+        background: rgba(0, 232, 218, 0.15);
+        border-radius: 0.5rem;
+    }
 </style>
 {% endblock %}
 
@@ -154,6 +239,262 @@
             </div>
         </div>
     </div>
+
+    <!-- Settings Slide-In Panel -->
+    <div id="settings-panel" class="settings-panel">
+        <!-- Backdrop overlay -->
+        <div id="settings-backdrop" class="settings-backdrop"></div>
+
+        <!-- Panel content -->
+        <div class="settings-panel-content">
+            <!-- Header -->
+            <div class="settings-panel-header">
+                <h2 class="text-2xl font-bold text-unitree-primary">⚙️ Control Settings</h2>
+                <button id="settings-close-btn" class="settings-close-btn">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Settings body -->
+            <div class="settings-panel-body">
+                <!-- Preset Buttons -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-300">Control Presets</h3>
+                    <div class="flex flex-wrap gap-3">
+                        <button id="preset-beginner" class="preset-btn" data-preset="beginner">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Beginner
+                        </button>
+                        <button id="preset-normal" class="preset-btn preset-btn-active" data-preset="normal">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            Normal
+                        </button>
+                        <button id="preset-advanced" class="preset-btn" data-preset="advanced">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                            Advanced
+                        </button>
+                        <button id="preset-sport" class="preset-btn" data-preset="sport">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            Sport
+                        </button>
+                        <button id="preset-custom" class="preset-btn" data-preset="custom">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                            </svg>
+                            Custom
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-400 mt-2">Select a preset or adjust individual sliders below.</p>
+                </div>
+
+                <!-- Response Curve Tuning -->
+                <div class="mb-8">
+                    <h3 class="text-xl font-semibold mb-4 text-unitree-primary">⚙️ Response Curve Tuning</h3>
+                    <p class="text-sm text-gray-400 mb-6">Adjust the exponential response curves for fine-tuned control feel. Higher alpha = smoother acceleration, lower alpha = more responsive.</p>
+
+                    <!-- Curve Controls Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        <!-- Linear Axis -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-semibold text-unitree-primary">Linear (Forward/Back)</h4>
+                            <div class="bg-unitree-dark-lighter rounded-lg p-4">
+                                <canvas id="linear-curve-chart" height="200"></canvas>
+                            </div>
+                            <div class="form-group">
+                                <label for="kb-max-linear-velocity" class="form-label flex justify-between">
+                                    <span>Max Velocity</span>
+                                    <span id="kb-max-linear-value" class="text-unitree-primary font-mono">1.5 m/s</span>
+                                </label>
+                                <input type="range" id="kb-max-linear-velocity" class="slider" min="0.3" max="10.0" step="0.1" value="1.5"
+                                       title="Maximum forward/backward speed. Hardware limit is 5.0 m/s.">
+                                <p class="form-help">Hardware limit: 5.0 m/s (max: 10.0 for testing)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="linear-alpha" class="form-label flex justify-between">
+                                    <span>Alpha (α)</span>
+                                    <span id="linear-alpha-value" class="text-unitree-primary font-mono">1.5</span>
+                                </label>
+                                <input type="range" id="linear-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="1.5"
+                                       title="Curve steepness. Lower = responsive, Higher = smoother.">
+                                <p class="form-help">Curve steepness (0.1-4.0)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="linear-ramp-time" class="form-label flex justify-between">
+                                    <span>Acceleration Time</span>
+                                    <span id="linear-ramp-time-value" class="text-unitree-primary font-mono">1.0s</span>
+                                </label>
+                                <input type="range" id="linear-ramp-time" class="slider" min="0.0" max="2.0" step="0.1" value="1.0"
+                                       title="Time to reach max linear speed from standstill.">
+                                <p class="form-help">Ramp-up time (0.0-2.0s)</p>
+                            </div>
+                        </div>
+
+                        <!-- Strafe Axis -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-semibold text-unitree-primary">Strafe (Left/Right)</h4>
+                            <div class="bg-unitree-dark-lighter rounded-lg p-4">
+                                <canvas id="strafe-curve-chart" height="200"></canvas>
+                            </div>
+                            <div class="form-group">
+                                <label for="kb-max-strafe-velocity" class="form-label flex justify-between">
+                                    <span>Max Velocity</span>
+                                    <span id="kb-max-strafe-value" class="text-unitree-primary font-mono">0.6 m/s</span>
+                                </label>
+                                <input type="range" id="kb-max-strafe-velocity" class="slider" min="0.1" max="0.6" step="0.05" value="0.6"
+                                       title="Maximum left/right speed. Hardware limit is 0.6 m/s.">
+                                <p class="form-help">Hardware limit: 0.6 m/s</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="strafe-alpha" class="form-label flex justify-between">
+                                    <span>Alpha (α)</span>
+                                    <span id="strafe-alpha-value" class="text-unitree-primary font-mono">1.2</span>
+                                </label>
+                                <input type="range" id="strafe-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="1.2"
+                                       title="Curve steepness. Lower = responsive, Higher = smoother.">
+                                <p class="form-help">Curve steepness (0.1-4.0)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="strafe-ramp-time" class="form-label flex justify-between">
+                                    <span>Acceleration Time</span>
+                                    <span id="strafe-ramp-time-value" class="text-unitree-primary font-mono">0.2s</span>
+                                </label>
+                                <input type="range" id="strafe-ramp-time" class="slider" min="0.0" max="2.0" step="0.1" value="0.2"
+                                       title="Time to reach max strafe speed from standstill.">
+                                <p class="form-help">Ramp-up time (0.0-2.0s)</p>
+                            </div>
+                        </div>
+
+                        <!-- Rotation Axis -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-semibold text-unitree-primary">Rotation (Yaw)</h4>
+                            <div class="bg-unitree-dark-lighter rounded-lg p-4">
+                                <canvas id="rotation-curve-chart" height="200"></canvas>
+                            </div>
+                            <div class="form-group">
+                                <label for="mouse-yaw-sensitivity" class="form-label flex justify-between">
+                                    <span>Mouse Yaw Sensitivity</span>
+                                    <span id="mouse-yaw-value" class="text-unitree-primary font-mono">5.0</span>
+                                </label>
+                                <input type="range" id="mouse-yaw-sensitivity" class="slider" min="0.1" max="50.0" step="0.1" value="5.0"
+                                       title="How fast the robot rotates from horizontal mouse movement.">
+                                <p class="form-help">Horizontal mouse sensitivity (0.1-50.0)</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="kb-max-rotation-velocity" class="form-label flex justify-between">
+                                    <span>Max Velocity</span>
+                                    <span id="kb-max-rotation-value" class="text-unitree-primary font-mono">3.0 rad/s</span>
+                                </label>
+                                <input type="range" id="kb-max-rotation-velocity" class="slider" min="0.5" max="9.0" step="0.1" value="3.0"
+                                       title="Maximum rotation speed. Hardware limit is 3.0 rad/s.">
+                                <p class="form-help">Hardware limit: 3.0 rad/s (max: 9.0 for testing)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="rotation-alpha" class="form-label flex justify-between">
+                                    <span>Alpha (α)</span>
+                                    <span id="rotation-alpha-value" class="text-unitree-primary font-mono">2.5</span>
+                                </label>
+                                <input type="range" id="rotation-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="2.5"
+                                       title="Curve steepness. Lower = responsive, Higher = smoother.">
+                                <p class="form-help">Curve steepness (0.1-4.0)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="rotation-deadzone" class="form-label flex justify-between">
+                                    <span>Deadzone (Mouse)</span>
+                                    <span id="rotation-deadzone-value" class="text-unitree-primary font-mono">10%</span>
+                                </label>
+                                <input type="range" id="rotation-deadzone" class="slider" min="0" max="30" step="1" value="10"
+                                       title="Ignores small mouse movements below this percentage.">
+                                <p class="form-help">Ignore mouse inputs below this % (0-30%)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="rotation-ramp-time" class="form-label flex justify-between">
+                                    <span>Acceleration Time</span>
+                                    <span id="rotation-ramp-time-value" class="text-unitree-primary font-mono">0.9s</span>
+                                </label>
+                                <input type="range" id="rotation-ramp-time" class="slider" min="0.0" max="2.0" step="0.1" value="0.9"
+                                       title="Time to reach max rotation speed from standstill.">
+                                <p class="form-help">Ramp-up time (0.0-2.0s)</p>
+                            </div>
+                        </div>
+
+                        <!-- Pitch Axis -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-semibold text-unitree-primary">Pitch (Body Tilt)</h4>
+                            <div class="bg-unitree-dark-lighter rounded-lg p-4">
+                                <canvas id="pitch-curve-chart" height="200"></canvas>
+                            </div>
+                            <div class="form-group">
+                                <label for="mouse-pitch-sensitivity" class="form-label flex justify-between">
+                                    <span>Mouse Pitch Sensitivity</span>
+                                    <span id="mouse-pitch-value" class="text-unitree-primary font-mono">2.5</span>
+                                </label>
+                                <input type="range" id="mouse-pitch-sensitivity" class="slider" min="0.1" max="25.0" step="0.1" value="2.5"
+                                       title="How fast the body tilts from vertical mouse movement.">
+                                <p class="form-help">Vertical mouse sensitivity (0.1-25.0)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="pitch-max-velocity" class="form-label flex justify-between">
+                                    <span>Max Pitch Angle</span>
+                                    <span id="pitch-max-value" class="text-unitree-primary font-mono">0.35 rad</span>
+                                </label>
+                                <input type="range" id="pitch-max-velocity" class="slider" min="0.10" max="0.35" step="0.01" value="0.35"
+                                       title="Maximum body tilt angle. Hardware limit is 0.35 rad (~20°).">
+                                <p class="form-help">Hardware limit: 0.35 rad (~20°)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="pitch-alpha" class="form-label flex justify-between">
+                                    <span>Alpha (α)</span>
+                                    <span id="pitch-alpha-value" class="text-unitree-primary font-mono">2.0</span>
+                                </label>
+                                <input type="range" id="pitch-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="2.0"
+                                       title="Curve steepness. Lower = responsive, Higher = smoother.">
+                                <p class="form-help">Curve steepness (0.1-4.0)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="pitch-deadzone" class="form-label flex justify-between">
+                                    <span>Deadzone (Mouse)</span>
+                                    <span id="pitch-deadzone-value" class="text-unitree-primary font-mono">10%</span>
+                                </label>
+                                <input type="range" id="pitch-deadzone" class="slider" min="0" max="30" step="1" value="10"
+                                       title="Ignores small vertical mouse movements below this percentage.">
+                                <p class="form-help">Ignore mouse inputs below this % (0-30%)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="pitch-ramp-time" class="form-label flex justify-between">
+                                    <span>Acceleration Time</span>
+                                    <span id="pitch-ramp-time-value" class="text-unitree-primary font-mono">0.8s</span>
+                                </label>
+                                <input type="range" id="pitch-ramp-time" class="slider" min="0.0" max="2.0" step="0.1" value="0.8"
+                                       title="Time to reach max pitch angle from neutral position.">
+                                <p class="form-help">Ramp-up time (0.0-2.0s)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reset Button -->
+                <div class="flex justify-end">
+                    <button id="reset-settings-btn" class="btn-secondary">
+                        <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Reset to Defaults
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -162,12 +503,14 @@
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 
 <!-- Control modules -->
-<script src="{{ url_for('static', filename='js/curve-utils.js') }}?v=1.0.0"></script>
+<script src="{{ url_for('static', filename='js/curve-utils.js') }}?v=1.1.0"></script>
+<script src="{{ url_for('static', filename='js/curve-visualizer.js') }}?v=1.1.0"></script>
+<script src="{{ url_for('static', filename='js/settings-manager.js') }}?v=1.2.0"></script>
 <script src="{{ url_for('static', filename='js/websocket-client.js') }}?v=1.0.2"></script>
-<script src="{{ url_for('static', filename='js/keyboard-mouse-control.js') }}?v=1.3.1"></script>
+<script src="{{ url_for('static', filename='js/keyboard-mouse-control.js') }}?v=1.5.0"></script>
 <script src="{{ url_for('static', filename='js/gamepad-control.js') }}?v=1.0.1"></script>
 
 <!-- Main control script -->
-<script src="{{ url_for('static', filename='js/control.js') }}?v=1.0.8"></script>
+<script src="{{ url_for('static', filename='js/control.js') }}?v=1.3.0"></script>
 {% endblock %}
 

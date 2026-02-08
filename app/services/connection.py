@@ -234,7 +234,7 @@ class ConnectionService:
                     self.logger.error(f"Error processing LOW_STATE data: {e}")
 
             def sportmode_callback(message):
-                """Process LF_SPORT_MOD_STATE data for mode and gait type."""
+                """Process LF_SPORT_MOD_STATE data for mode, gait type, and actual velocities."""
                 try:
                     data = message['data']
 
@@ -255,6 +255,15 @@ class ConnectionService:
                     if gait_name != self.state.current_mode:
                         self.logger.info(f"Gait type changed: {self.state.current_mode} → {gait_name}")
                         self.state.current_mode = gait_name
+
+                    # CRITICAL DEBUG: Log actual robot velocities
+                    # This shows what the robot is ACTUALLY doing vs what we commanded
+                    velocity = data.get('velocity', [0, 0, 0])  # [vx, vy, vz]
+                    yaw_speed = data.get('yaw_speed', 0)  # Actual rotation speed
+
+                    # Only log when robot is moving (avoid spam)
+                    if abs(yaw_speed) > 0.01 or abs(velocity[0]) > 0.01 or abs(velocity[1]) > 0.01:
+                        self.logger.info(f"🤖 [ROBOT ACTUAL] velocity=[{velocity[0]:.3f}, {velocity[1]:.3f}, {velocity[2]:.3f}] m/s, yaw_speed={yaw_speed:.3f} rad/s")
 
                 except Exception as e:
                     self.logger.error(f"Error processing LF_SPORT_MOD_STATE data: {e}")

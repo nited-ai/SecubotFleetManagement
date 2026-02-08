@@ -7,7 +7,8 @@
 const charts = {
     linear: null,
     strafe: null,
-    rotation: null
+    rotation: null,
+    pitch: null
 };
 
 /**

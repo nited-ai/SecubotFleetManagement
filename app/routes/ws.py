@@ -62,11 +62,12 @@ def register_websocket_handlers(socketio):
             if result.get('should_send', False):
                 velocities = result['velocities']
                 # Log actual robot commands at DEBUG level (high frequency)
-                logging.debug(f"[WebSocket] Sending to robot: vx={velocities['vx']}, vy={velocities['vy']}, vyaw={velocities['vyaw']}")
+                logging.debug(f"[WebSocket] Sending to robot: lx={velocities.get('lx', 0)}, ly={velocities.get('ly', 0)}, rx={velocities.get('rx', 0)}, ry={velocities.get('ry', 0)}")
                 send_result = control_service.send_movement_command_sync(
-                    velocities['vx'],
-                    velocities['vy'],
-                    velocities['vyaw'],
+                    velocities.get('lx', 0.0),
+                    velocities.get('ly', 0.0),
+                    velocities.get('rx', 0.0),
+                    velocities.get('ry', 0.0),
                     result['zero_velocity']
                 )
                 # Merge send result with process result

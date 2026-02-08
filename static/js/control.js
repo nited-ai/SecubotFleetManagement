@@ -88,18 +88,423 @@ function initializeExitButton() {
 }
 
 /**
- * Initialize quick settings button
+ * Initialize quick settings button and slide-in panel
  */
 function initializeQuickSettingsButton() {
-    const quickSettingsBtn = document.getElementById('quick-settings-btn');
-    
-    if (quickSettingsBtn) {
-        quickSettingsBtn.addEventListener('click', () => {
-            console.log('Quick settings button clicked');
-            // Modal functionality will be added in later task
-            alert('Quick settings modal will be implemented in a later task');
+    const settingsBtn = document.getElementById('quick-settings-btn');
+    const settingsPanel = document.getElementById('settings-panel');
+    const settingsBackdrop = document.getElementById('settings-backdrop');
+    const settingsCloseBtn = document.getElementById('settings-close-btn');
+
+    let settingsPanelInitialized = false;
+
+    function openSettingsPanel() {
+        if (!settingsPanel) return;
+        settingsPanel.classList.add('open');
+        if (settingsBtn) settingsBtn.classList.add('settings-active');
+
+        // Disable keyboard/mouse control while panel is open to prevent robot movement
+        if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
+            keyboardMouseControl.disable();
+        }
+
+        // Lazy-initialize settings panel on first open
+        if (!settingsPanelInitialized) {
+            initializeSettingsPanelControls();
+            settingsPanelInitialized = true;
+        } else {
+            // Refresh slider values from localStorage on re-open
+            refreshSettingsPanelValues();
+        }
+    }
+
+    function closeSettingsPanel() {
+        if (!settingsPanel) return;
+        settingsPanel.classList.remove('open');
+        if (settingsBtn) settingsBtn.classList.remove('settings-active');
+
+        // Re-enable keyboard/mouse control when panel closes
+        if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
+            keyboardMouseControl.enable();
+        }
+    }
+
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', () => {
+            if (settingsPanel && settingsPanel.classList.contains('open')) {
+                closeSettingsPanel();
+            } else {
+                openSettingsPanel();
+            }
         });
     }
+
+    if (settingsCloseBtn) {
+        settingsCloseBtn.addEventListener('click', closeSettingsPanel);
+    }
+
+    if (settingsBackdrop) {
+        settingsBackdrop.addEventListener('click', closeSettingsPanel);
+    }
+
+    // ESC key closes panel
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && settingsPanel && settingsPanel.classList.contains('open')) {
+            closeSettingsPanel();
+        }
+    });
+}
+
+// ===== Settings Panel Controls =====
+
+/**
+ * Helper: initialize a single slider with value display and change handler
+ */
+function initializeSettingsSlider(sliderId, valueId, initialValue, onChange, suffix = '') {
+    const slider = document.getElementById(sliderId);
+    const valueDisplay = document.getElementById(valueId);
+
+    if (slider && valueDisplay) {
+        slider.value = initialValue;
+        valueDisplay.textContent = parseFloat(initialValue).toFixed(2) + suffix;
+
+        slider.addEventListener('input', (e) => {
+            valueDisplay.textContent = parseFloat(e.target.value).toFixed(2) + suffix;
+        });
+
+        slider.addEventListener('change', (e) => {
+            onChange(e.target.value);
+            updateActivePresetButtonOnControlPage('custom');
+        });
+    }
+}
+
+/**
+ * Update active preset button highlight on control page
+ */
+function updateActivePresetButtonOnControlPage(preset) {
+    if (!preset) {
+        preset = typeof getCurrentPreset === 'function' ? getCurrentPreset() : 'custom';
+    }
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.classList.remove('preset-btn-active');
+    });
+    const activeButton = document.getElementById(`preset-${preset}`);
+    if (activeButton) {
+        activeButton.classList.add('preset-btn-active');
+    }
+}
+
+/**
+ * Update all keyboard/mouse sliders on control page with given settings
+ */
+function updateAllControlPageSliders(km) {
+    const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+    const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+
+    setVal('mouse-yaw-sensitivity', km.mouse_yaw_sensitivity);
+    setTxt('mouse-yaw-value', km.mouse_yaw_sensitivity.toFixed(2));
+
+    setVal('mouse-pitch-sensitivity', km.mouse_pitch_sensitivity);
+    setTxt('mouse-pitch-value', km.mouse_pitch_sensitivity.toFixed(2));
+
+    setVal('kb-max-linear-velocity', km.kb_max_linear_velocity);
+    setTxt('kb-max-linear-value', km.kb_max_linear_velocity.toFixed(2) + ' m/s');
+
+    setVal('kb-max-strafe-velocity', km.kb_max_strafe_velocity);
+    setTxt('kb-max-strafe-value', km.kb_max_strafe_velocity.toFixed(2) + ' m/s');
+
+    setVal('kb-max-rotation-velocity', km.kb_max_rotation_velocity);
+    setTxt('kb-max-rotation-value', km.kb_max_rotation_velocity.toFixed(2) + ' rad/s');
+
+    setVal('linear-alpha', km.linear_alpha);
+    setTxt('linear-alpha-value', (km.linear_alpha || 1.5).toFixed(1));
+
+    setVal('strafe-alpha', km.strafe_alpha);
+    setTxt('strafe-alpha-value', (km.strafe_alpha || 1.2).toFixed(1));
+
+    setVal('rotation-alpha', km.rotation_alpha);
+    setTxt('rotation-alpha-value', (km.rotation_alpha || 2.5).toFixed(1));
+
+    const dzPercent = Math.round((km.rotation_deadzone || 0.10) * 100);
+    setVal('rotation-deadzone', dzPercent);
+    setTxt('rotation-deadzone-value', dzPercent + '%');
+
+    setVal('linear-ramp-time', km.linear_ramp_time);
+    setTxt('linear-ramp-time-value', `${(km.linear_ramp_time || 1.0).toFixed(1)}s`);
+
+    setVal('strafe-ramp-time', km.strafe_ramp_time);
+    setTxt('strafe-ramp-time-value', `${(km.strafe_ramp_time || 0.2).toFixed(1)}s`);
+
+    setVal('rotation-ramp-time', km.rotation_ramp_time);
+    setTxt('rotation-ramp-time-value', `${(km.rotation_ramp_time || 0.9).toFixed(1)}s`);
+
+    // Pitch sliders
+    setVal('pitch-max-velocity', km.pitch_max_velocity);
+    setTxt('pitch-max-value', (km.pitch_max_velocity || 0.35).toFixed(2) + ' rad');
+
+    setVal('pitch-alpha', km.pitch_alpha);
+    setTxt('pitch-alpha-value', (km.pitch_alpha || 2.0).toFixed(1));
+
+    const pitchDzPercent = Math.round((km.pitch_deadzone || 0.10) * 100);
+    setVal('pitch-deadzone', pitchDzPercent);
+    setTxt('pitch-deadzone-value', pitchDzPercent + '%');
+
+    setVal('pitch-ramp-time', km.pitch_ramp_time);
+    setTxt('pitch-ramp-time-value', `${(km.pitch_ramp_time || 0.8).toFixed(1)}s`);
+
+    // Update curve charts
+    if (charts.linear && charts.strafe && charts.rotation) {
+        updateCurveChart(charts.linear, 'Linear', km.linear_alpha, 0.0, km.kb_max_linear_velocity, HARDWARE_LIMITS.linear);
+        updateCurveChart(charts.strafe, 'Strafe', km.strafe_alpha, 0.0, km.kb_max_strafe_velocity, HARDWARE_LIMITS.strafe);
+        updateCurveChart(charts.rotation, 'Rotation', km.rotation_alpha, km.rotation_deadzone, km.kb_max_rotation_velocity, HARDWARE_LIMITS.rotation);
+    }
+    if (charts.pitch) {
+        updateCurveChart(charts.pitch, 'Pitch', km.pitch_alpha, km.pitch_deadzone, km.pitch_max_velocity, HARDWARE_LIMITS.pitch);
+    }
+}
+
+/**
+ * Refresh panel values from localStorage (called on re-open)
+ */
+function refreshSettingsPanelValues() {
+    const settings = loadSettings();
+    updateAllControlPageSliders(settings.keyboard_mouse);
+    updateActivePresetButtonOnControlPage();
+}
+
+/**
+ * Initialize settings panel controls (called once on first panel open)
+ * Sets up charts, sliders, presets, and reset button
+ */
+function initializeSettingsPanelControls() {
+    console.log('⚙️ Initializing settings panel controls...');
+
+    const settings = loadSettings();
+    const km = settings.keyboard_mouse;
+
+    // --- Create curve charts ---
+    charts.linear = createCurveChart('linear-curve-chart', 'Linear', 'm/s',
+        km.linear_alpha || 1.5, 0.0, km.kb_max_linear_velocity || 1.5, HARDWARE_LIMITS.linear);
+    charts.strafe = createCurveChart('strafe-curve-chart', 'Strafe', 'm/s',
+        km.strafe_alpha || 1.2, 0.0, km.kb_max_strafe_velocity || 0.6, HARDWARE_LIMITS.strafe);
+    charts.rotation = createCurveChart('rotation-curve-chart', 'Rotation', 'rad/s',
+        km.rotation_alpha || 2.5, km.rotation_deadzone || 0.10, km.kb_max_rotation_velocity || 3.0, HARDWARE_LIMITS.rotation);
+    charts.pitch = createCurveChart('pitch-curve-chart', 'Pitch', 'rad',
+        km.pitch_alpha || 2.0, km.pitch_deadzone || 0.10, km.pitch_max_velocity || 0.35, HARDWARE_LIMITS.pitch);
+
+    // --- Helper to get fresh settings ---
+    const getFresh = () => loadSettings().keyboard_mouse;
+
+    // --- Velocity sliders ---
+    initializeSettingsSlider('mouse-yaw-sensitivity', 'mouse-yaw-value', km.mouse_yaw_sensitivity, (v) => {
+        updateSetting('keyboard_mouse', 'mouse_yaw_sensitivity', parseFloat(v));
+    });
+    initializeSettingsSlider('mouse-pitch-sensitivity', 'mouse-pitch-value', km.mouse_pitch_sensitivity, (v) => {
+        updateSetting('keyboard_mouse', 'mouse_pitch_sensitivity', parseFloat(v));
+    });
+    initializeSettingsSlider('kb-max-linear-velocity', 'kb-max-linear-value', km.kb_max_linear_velocity, (v) => {
+        updateSetting('keyboard_mouse', 'kb_max_linear_velocity', parseFloat(v));
+        if (charts.linear) {
+            const f = getFresh();
+            updateCurveChart(charts.linear, 'Linear', f.linear_alpha || 1.5, 0.0, parseFloat(v), HARDWARE_LIMITS.linear);
+        }
+    }, ' m/s');
+    initializeSettingsSlider('kb-max-strafe-velocity', 'kb-max-strafe-value', km.kb_max_strafe_velocity, (v) => {
+        updateSetting('keyboard_mouse', 'kb_max_strafe_velocity', parseFloat(v));
+        if (charts.strafe) {
+            const f = getFresh();
+            updateCurveChart(charts.strafe, 'Strafe', f.strafe_alpha || 1.2, 0.0, parseFloat(v), HARDWARE_LIMITS.strafe);
+        }
+    }, ' m/s');
+    initializeSettingsSlider('kb-max-rotation-velocity', 'kb-max-rotation-value', km.kb_max_rotation_velocity, (v) => {
+        updateSetting('keyboard_mouse', 'kb_max_rotation_velocity', parseFloat(v));
+        if (charts.rotation) {
+            const f = getFresh();
+            updateCurveChart(charts.rotation, 'Rotation', f.rotation_alpha || 2.5, f.rotation_deadzone || 0.10, parseFloat(v), HARDWARE_LIMITS.rotation);
+        }
+    }, ' rad/s');
+
+    // --- Alpha sliders ---
+    const linearAlphaSlider = document.getElementById('linear-alpha');
+    const linearAlphaValue = document.getElementById('linear-alpha-value');
+    if (linearAlphaSlider && linearAlphaValue) {
+        linearAlphaSlider.value = km.linear_alpha || 1.5;
+        linearAlphaValue.textContent = (km.linear_alpha || 1.5).toFixed(1);
+        linearAlphaSlider.addEventListener('input', (e) => {
+            const a = parseFloat(e.target.value);
+            linearAlphaValue.textContent = a.toFixed(1);
+            updateSetting('keyboard_mouse', 'linear_alpha', a);
+            const f = getFresh();
+            updateCurveChart(charts.linear, 'Linear', a, 0.0, f.kb_max_linear_velocity || 1.5, HARDWARE_LIMITS.linear);
+        });
+    }
+
+    const strafeAlphaSlider = document.getElementById('strafe-alpha');
+    const strafeAlphaValue = document.getElementById('strafe-alpha-value');
+    if (strafeAlphaSlider && strafeAlphaValue) {
+        strafeAlphaSlider.value = km.strafe_alpha || 1.2;
+        strafeAlphaValue.textContent = (km.strafe_alpha || 1.2).toFixed(1);
+        strafeAlphaSlider.addEventListener('input', (e) => {
+            const a = parseFloat(e.target.value);
+            strafeAlphaValue.textContent = a.toFixed(1);
+            updateSetting('keyboard_mouse', 'strafe_alpha', a);
+            const f = getFresh();
+            updateCurveChart(charts.strafe, 'Strafe', a, 0.0, f.kb_max_strafe_velocity || 0.6, HARDWARE_LIMITS.strafe);
+        });
+    }
+
+    const rotationAlphaSlider = document.getElementById('rotation-alpha');
+    const rotationAlphaValue = document.getElementById('rotation-alpha-value');
+    if (rotationAlphaSlider && rotationAlphaValue) {
+        rotationAlphaSlider.value = km.rotation_alpha || 2.5;
+        rotationAlphaValue.textContent = (km.rotation_alpha || 2.5).toFixed(1);
+        rotationAlphaSlider.addEventListener('input', (e) => {
+            const a = parseFloat(e.target.value);
+            rotationAlphaValue.textContent = a.toFixed(1);
+            updateSetting('keyboard_mouse', 'rotation_alpha', a);
+            const f = getFresh();
+            updateCurveChart(charts.rotation, 'Rotation', a, f.rotation_deadzone || 0.10, f.kb_max_rotation_velocity || 3.0, HARDWARE_LIMITS.rotation);
+        });
+    }
+
+    // --- Rotation deadzone slider ---
+    const rotDeadzoneSlider = document.getElementById('rotation-deadzone');
+    const rotDeadzoneValue = document.getElementById('rotation-deadzone-value');
+    if (rotDeadzoneSlider && rotDeadzoneValue) {
+        const dzPct = Math.round((km.rotation_deadzone || 0.10) * 100);
+        rotDeadzoneSlider.value = dzPct;
+        rotDeadzoneValue.textContent = dzPct + '%';
+        rotDeadzoneSlider.addEventListener('input', (e) => {
+            const pct = parseInt(e.target.value);
+            const dz = pct / 100.0;
+            rotDeadzoneValue.textContent = pct + '%';
+            updateSetting('keyboard_mouse', 'rotation_deadzone', dz);
+            const f = getFresh();
+            updateCurveChart(charts.rotation, 'Rotation', f.rotation_alpha || 2.5, dz, f.kb_max_rotation_velocity || 3.0, HARDWARE_LIMITS.rotation);
+        });
+    }
+
+    // --- Ramp time sliders ---
+    const linearRampSlider = document.getElementById('linear-ramp-time');
+    const linearRampValue = document.getElementById('linear-ramp-time-value');
+    if (linearRampSlider && linearRampValue) {
+        linearRampSlider.value = km.linear_ramp_time || 1.0;
+        linearRampValue.textContent = `${(km.linear_ramp_time || 1.0).toFixed(1)}s`;
+        linearRampSlider.addEventListener('input', (e) => {
+            const v = parseFloat(e.target.value);
+            linearRampValue.textContent = `${v.toFixed(1)}s`;
+            updateSetting('keyboard_mouse', 'linear_ramp_time', v);
+        });
+    }
+
+    const strafeRampSlider = document.getElementById('strafe-ramp-time');
+    const strafeRampValue = document.getElementById('strafe-ramp-time-value');
+    if (strafeRampSlider && strafeRampValue) {
+        strafeRampSlider.value = km.strafe_ramp_time || 0.2;
+        strafeRampValue.textContent = `${(km.strafe_ramp_time || 0.2).toFixed(1)}s`;
+        strafeRampSlider.addEventListener('input', (e) => {
+            const v = parseFloat(e.target.value);
+            strafeRampValue.textContent = `${v.toFixed(1)}s`;
+            updateSetting('keyboard_mouse', 'strafe_ramp_time', v);
+        });
+    }
+
+    const rotRampSlider = document.getElementById('rotation-ramp-time');
+    const rotRampValue = document.getElementById('rotation-ramp-time-value');
+    if (rotRampSlider && rotRampValue) {
+        rotRampSlider.value = km.rotation_ramp_time || 0.9;
+        rotRampValue.textContent = `${(km.rotation_ramp_time || 0.9).toFixed(1)}s`;
+        rotRampSlider.addEventListener('input', (e) => {
+            const v = parseFloat(e.target.value);
+            rotRampValue.textContent = `${v.toFixed(1)}s`;
+            updateSetting('keyboard_mouse', 'rotation_ramp_time', v);
+        });
+    }
+
+    // --- Pitch sliders ---
+    initializeSettingsSlider('pitch-max-velocity', 'pitch-max-value', km.pitch_max_velocity || 0.35, (v) => {
+        updateSetting('keyboard_mouse', 'pitch_max_velocity', parseFloat(v));
+        if (charts.pitch) {
+            const f = getFresh();
+            updateCurveChart(charts.pitch, 'Pitch', f.pitch_alpha || 2.0, f.pitch_deadzone || 0.10, parseFloat(v), HARDWARE_LIMITS.pitch);
+        }
+    }, ' rad');
+
+    const pitchAlphaSlider = document.getElementById('pitch-alpha');
+    const pitchAlphaValue = document.getElementById('pitch-alpha-value');
+    if (pitchAlphaSlider && pitchAlphaValue) {
+        pitchAlphaSlider.value = km.pitch_alpha || 2.0;
+        pitchAlphaValue.textContent = (km.pitch_alpha || 2.0).toFixed(1);
+        pitchAlphaSlider.addEventListener('input', (e) => {
+            const a = parseFloat(e.target.value);
+            pitchAlphaValue.textContent = a.toFixed(1);
+            updateSetting('keyboard_mouse', 'pitch_alpha', a);
+            const f = getFresh();
+            updateCurveChart(charts.pitch, 'Pitch', a, f.pitch_deadzone || 0.10, f.pitch_max_velocity || 0.35, HARDWARE_LIMITS.pitch);
+        });
+    }
+
+    const pitchDeadzoneSlider = document.getElementById('pitch-deadzone');
+    const pitchDeadzoneValue = document.getElementById('pitch-deadzone-value');
+    if (pitchDeadzoneSlider && pitchDeadzoneValue) {
+        const pitchDzPct = Math.round((km.pitch_deadzone || 0.10) * 100);
+        pitchDeadzoneSlider.value = pitchDzPct;
+        pitchDeadzoneValue.textContent = pitchDzPct + '%';
+        pitchDeadzoneSlider.addEventListener('input', (e) => {
+            const pct = parseInt(e.target.value);
+            const dz = pct / 100.0;
+            pitchDeadzoneValue.textContent = pct + '%';
+            updateSetting('keyboard_mouse', 'pitch_deadzone', dz);
+            const f = getFresh();
+            updateCurveChart(charts.pitch, 'Pitch', f.pitch_alpha || 2.0, dz, f.pitch_max_velocity || 0.35, HARDWARE_LIMITS.pitch);
+        });
+    }
+
+    const pitchRampSlider = document.getElementById('pitch-ramp-time');
+    const pitchRampValue = document.getElementById('pitch-ramp-time-value');
+    if (pitchRampSlider && pitchRampValue) {
+        pitchRampSlider.value = km.pitch_ramp_time || 0.8;
+        pitchRampValue.textContent = `${(km.pitch_ramp_time || 0.8).toFixed(1)}s`;
+        pitchRampSlider.addEventListener('input', (e) => {
+            const v = parseFloat(e.target.value);
+            pitchRampValue.textContent = `${v.toFixed(1)}s`;
+            updateSetting('keyboard_mouse', 'pitch_ramp_time', v);
+        });
+    }
+
+    // --- Preset buttons ---
+    const presetButtons = document.querySelectorAll('.preset-btn');
+    updateActivePresetButtonOnControlPage();
+
+    presetButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const preset = button.dataset.preset;
+            if (preset === 'custom') return;
+
+            if (typeof applyPreset === 'function' && applyPreset(preset)) {
+                console.log(`⚙️ Applied ${preset} preset`);
+                updateActivePresetButtonOnControlPage(preset);
+                const updated = loadSettings();
+                updateAllControlPageSliders(updated.keyboard_mouse);
+            }
+        });
+    });
+
+    // --- Reset to defaults button ---
+    const resetBtn = document.getElementById('reset-settings-btn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            if (confirm('Reset all settings to defaults?')) {
+                const defaults = resetSettings();
+                console.log('⚙️ Settings reset to defaults');
+                updateAllControlPageSliders(defaults.keyboard_mouse);
+                updateActivePresetButtonOnControlPage();
+            }
+        });
+    }
+
+    console.log('✅ Settings panel controls initialized');
 }
 
 /**

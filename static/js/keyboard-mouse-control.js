@@ -16,7 +16,8 @@ class KeyboardMouseControl {
         this.currentVelocities = {
             linear: 0.0,
             strafe: 0.0,
-            rotation: 0.0
+            rotation: 0.0,
+            pitch: 0.0  // Current pitch angle (rad)
         };
 
         // Settings (loaded from localStorage)
@@ -34,13 +35,13 @@ class KeyboardMouseControl {
         this.MAX_SPEED = 100;      // Maximum 100% speed
 
         // Mouse scale factor to convert raw pixel movement to normalized input (0-1 range)
-        // This matches the old interface behavior (templates/index.html line 2004)
-        // Old interface used 0.08, which worked well for instant response
-        // Typical mouse movement: 1-50 pixels per interval for normal movement
-        // Fast swipes: 100-200 pixels per interval
-        // With 0.08 scale: 50px * 0.08 * 0.5 sens = 2.0 → clamped to 1.0 (max rotation)
-        //                  100px * 0.08 * 0.5 sens = 4.0 → clamped to 1.0 (max rotation)
-        this.MOUSE_SCALE_FACTOR = 0.08;  // Scale raw pixels to 0-1 range for curve input
+        // Sensitivity is applied POST-CURVE as a velocity multiplier (not pre-curve)
+        // This prevents sensitivity from being swallowed by the [0,1] clamp in applyCurve()
+        // Typical mouse movement per poll (33ms): slow=10px, normal=50px, fast=100-200px
+        // With 0.01 scale: 100px * 0.01 = 1.0 (full curve input)
+        //                  50px * 0.01 = 0.5 (half curve input)
+        //                  10px * 0.01 = 0.1 (deadzone boundary)
+        this.MOUSE_SCALE_FACTOR = 0.01;  // Scale raw pixels to 0-1 range for curve input
 
         // Jump-start behavior constants (fixes "wait-then-jump" deadzone-ramping conflict)
         // When a key is first pressed, snap to minimum viable speed for immediate feedback
@@ -62,25 +63,21 @@ class KeyboardMouseControl {
      * Load settings from localStorage
      */
     loadSettings() {
-        console.log('🔧 [loadSettings] Loading settings from localStorage...');
-
         // Try new settings format first (from landing page settings-manager.js)
         const newSettings = localStorage.getItem('unitree_settings');
-        console.log('🔧 [loadSettings] Raw unitree_settings:', newSettings);
 
         if (newSettings) {
             try {
                 const parsed = JSON.parse(newSettings);
-                console.log('🔧 [loadSettings] Parsed unitree_settings:', parsed);
 
                 if (parsed.keyboard_mouse) {
                     const km = parsed.keyboard_mouse;
-                    const settings = {
+                    return {
                         maxLinear: parseFloat(km.kb_max_linear_velocity || 1.5),
-                        maxStrafe: parseFloat(km.kb_max_strafe_velocity || 0.6),
+                        maxStrafe: parseFloat(km.kb_max_strafe_velocity || 1.5),
                         maxRotation: parseFloat(km.kb_max_rotation_velocity || 3.0),
-                        acceleration: parseFloat(km.acceleration !== undefined ? km.acceleration : 0.15),
-                        deceleration: parseFloat(km.deceleration !== undefined ? km.deceleration : 0.2),
+                        acceleration: parseFloat(km.acceleration !== undefined ? km.acceleration : 1.15),
+                        deceleration: parseFloat(km.deceleration !== undefined ? km.deceleration : 0.5),
                         mouseSensitivity: parseFloat(km.mouse_yaw_sensitivity || 0.5),
                         // Curve parameters - Use !== undefined to correctly handle 0 values
                         linearAlpha: parseFloat(km.linear_alpha !== undefined ? km.linear_alpha : 1.5),
@@ -92,10 +89,14 @@ class KeyboardMouseControl {
                         // Backend slew rate limiter parameters (acceleration ramp-up time)
                         linearRampTime: parseFloat(km.linear_ramp_time !== undefined ? km.linear_ramp_time : 1.0),
                         strafeRampTime: parseFloat(km.strafe_ramp_time !== undefined ? km.strafe_ramp_time : 0.2),
-                        rotationRampTime: parseFloat(km.rotation_ramp_time !== undefined ? km.rotation_ramp_time : 0.9)
+                        rotationRampTime: parseFloat(km.rotation_ramp_time !== undefined ? km.rotation_ramp_time : 0.9),
+                        // Pitch parameters
+                        pitchAlpha: parseFloat(km.pitch_alpha !== undefined ? km.pitch_alpha : 2.0),
+                        pitchDeadzone: parseFloat(km.pitch_deadzone !== undefined ? km.pitch_deadzone : 0.10),
+                        pitchMaxVelocity: parseFloat(km.pitch_max_velocity !== undefined ? km.pitch_max_velocity : 0.35),
+                        pitchRampTime: parseFloat(km.pitch_ramp_time !== undefined ? km.pitch_ramp_time : 0.8),
+                        mousePitchSensitivity: parseFloat(km.mouse_pitch_sensitivity || 2.5)
                     };
-                    console.log('✅ [loadSettings] Loaded settings from unitree_settings:', settings);
-                    return settings;
                 }
             } catch (e) {
                 console.error('❌ [loadSettings] Error parsing unitree_settings:', e);
@@ -103,19 +104,16 @@ class KeyboardMouseControl {
         }
 
         // Fallback to old format (from old index.html)
-        console.log('⚠️ [loadSettings] unitree_settings not found, trying old format...');
         const oldSettings = localStorage.getItem('keyboardMouseSettings');
-        console.log('🔧 [loadSettings] Raw keyboardMouseSettings:', oldSettings);
 
         if (oldSettings) {
             try {
                 const settings = JSON.parse(oldSettings);
-                console.log('🔧 [loadSettings] Parsed keyboardMouseSettings:', settings);
 
                 // IMPORTANT: Don't use keyboard_linear_speed as maxLinear!
                 // keyboard_linear_speed is the keyboard multiplier (0.2), not max velocity
                 // Use kb_max_linear_velocity instead
-                const fallbackSettings = {
+                return {
                     maxLinear: parseFloat(settings.kb_max_linear_velocity || settings.maxLinear || 1.5),
                     maxStrafe: parseFloat(settings.kb_max_strafe_velocity || settings.maxStrafe || 0.6),
                     maxRotation: parseFloat(settings.kb_max_rotation_velocity || settings.maxRotation || 3.0),
@@ -128,18 +126,20 @@ class KeyboardMouseControl {
                     strafeAlpha: 1.2,
                     strafeDeadzone: 0.10,
                     rotationAlpha: 2.5,
-                    rotationDeadzone: 0.10
+                    rotationDeadzone: 0.10,
+                    pitchAlpha: 2.0,
+                    pitchDeadzone: 0.10,
+                    pitchMaxVelocity: 0.35,
+                    pitchRampTime: 0.8,
+                    mousePitchSensitivity: 2.5
                 };
-                console.log('✅ [loadSettings] Loaded settings from keyboardMouseSettings:', fallbackSettings);
-                return fallbackSettings;
             } catch (e) {
                 console.error('❌ [loadSettings] Error parsing keyboardMouseSettings:', e);
             }
         }
 
         // Default settings (match "normal" preset from settings-manager.js)
-        console.log('⚠️ [loadSettings] No settings found, using defaults');
-        const defaultSettings = {
+        return {
             maxLinear: 1.5,
             maxStrafe: 0.6,  // Fixed: hardware limit
             maxRotation: 3.0,
@@ -152,10 +152,13 @@ class KeyboardMouseControl {
             strafeAlpha: 1.2,
             strafeDeadzone: 0.10,
             rotationAlpha: 2.5,
-            rotationDeadzone: 0.10
+            rotationDeadzone: 0.10,
+            pitchAlpha: 2.0,
+            pitchDeadzone: 0.10,
+            pitchMaxVelocity: 0.35,
+            pitchRampTime: 0.8,
+            mousePitchSensitivity: 2.5
         };
-        console.log('✅ [loadSettings] Using default settings:', defaultSettings);
-        return defaultSettings;
     }
 
     /**
@@ -233,7 +236,7 @@ class KeyboardMouseControl {
         // Reset state
         this.keysPressed = {};
         this.mouseMovement = { x: 0, y: 0 };
-        this.currentVelocities = { linear: 0.0, strafe: 0.0, rotation: 0.0 };
+        this.currentVelocities = { linear: 0.0, strafe: 0.0, rotation: 0.0, pitch: 0.0 };
     }
 
     /**
@@ -388,6 +391,9 @@ class KeyboardMouseControl {
         if (!this.enabled) return;
         if (this.commandInFlight) return;
 
+        // Re-read settings from localStorage on every tick so slider changes apply immediately
+        this.settings = this.loadSettings();
+
         // Calculate movement from keyboard
         let forward = 0;
         let strafe = 0;
@@ -398,7 +404,7 @@ class KeyboardMouseControl {
         if (this.keysPressed['a']) strafe -= 1;  // A key = strafe left (negative)
         if (this.keysPressed['d']) strafe += 1;  // D key = strafe right (positive)
 
-        // Calculate rotation from mouse
+        // Calculate rotation from mouse (horizontal movement)
         let rotation = 0;
         if (this.pointerLocked && this.mouseMovement.x !== 0) {
             // CRITICAL: Scale raw pixel movement to normalized range for curve input
@@ -406,8 +412,28 @@ class KeyboardMouseControl {
             // Example: 50 pixels * 0.08 * 0.5 sensitivity = 2.0 → clamped to 1.0 (max rotation)
             //          100 pixels * 0.08 * 0.5 sensitivity = 4.0 → clamped to 1.0 (max rotation)
             // Mouse movement is NOT inverted here - will be inverted when sending to backend
-            rotation = this.mouseMovement.x * this.MOUSE_SCALE_FACTOR * this.settings.mouseSensitivity;
+            const rawPixels = this.mouseMovement.x;
+            // NOTE: Sensitivity is NOT applied here - it's applied post-curve to prevent
+            // the [0,1] clamp in applyCurve() from swallowing the sensitivity effect
+            rotation = rawPixels * this.MOUSE_SCALE_FACTOR;
+
+            // DIAGNOSTIC LOGGING: Track sensitivity through pipeline
+            console.log(`[SENSITIVITY DEBUG Step 1] Raw Pixels: ${rawPixels}, MOUSE_SCALE_FACTOR: ${this.MOUSE_SCALE_FACTOR}, rotation (pre-curve): ${rotation.toFixed(3)}, mouseSensitivity: ${this.settings.mouseSensitivity} (applied post-curve)`);
+
             this.mouseMovement.x = 0; // Reset after reading
+        }
+
+        // Calculate pitch from mouse (vertical movement)
+        let pitch = 0;
+        if (this.pointerLocked && this.mouseMovement.y !== 0) {
+            // Scale vertical mouse movement to normalized range for curve input
+            // Positive mouseMovement.y = mouse moved down → pitch down (negative angle)
+            // Negative mouseMovement.y = mouse moved up → pitch up (positive angle)
+            const rawPixelsY = this.mouseMovement.y;
+            // Invert Y axis: mouse up (negative pixels) = pitch up (positive angle)
+            pitch = -rawPixelsY * this.MOUSE_SCALE_FACTOR;
+
+            this.mouseMovement.y = 0; // Reset after reading
         }
 
         // Apply speed percentage (0-100%) to inputs
@@ -416,26 +442,39 @@ class KeyboardMouseControl {
         forward *= speedMultiplier;
         strafe *= speedMultiplier;
         rotation *= speedMultiplier;
+        pitch *= speedMultiplier;
+
+        // DIAGNOSTIC LOGGING: Track speed multiplier effect (Task 35.1)
+        if (rotation !== 0) {
+            console.log(`[SENSITIVITY DEBUG Step 2] speedPercentage: ${this.speedPercentage}, speedMultiplier: ${speedMultiplier}, rotation (after speed): ${rotation.toFixed(3)}`);
+        }
 
         // RAGE MODE: Bypass all smoothing (curves, ramping, deadzone)
         if (this.rageMode) {
-            const { maxLinear, maxStrafe, maxRotation } = this.settings;
+            const { maxLinear, maxStrafe, maxRotation, pitchMaxVelocity } = this.settings;
+            // Apply sensitivity post-curve (normalized around 5.0 = "normal" preset for yaw, 2.5 for pitch)
+            const sensitivityFactor = this.settings.mouseSensitivity / 5.0;
+            const pitchSensitivityFactor = this.settings.mousePitchSensitivity / 2.5;
             const vx = forward * maxLinear;
             const vy = -strafe * maxStrafe;  // Invert strafe
-            const vyaw = -rotation * maxRotation;  // Invert rotation
+            const vyawRaw = -rotation * maxRotation * sensitivityFactor;
+            const vyaw = Math.max(-maxRotation, Math.min(maxRotation, vyawRaw));
+            const vpitchRaw = pitch * pitchMaxVelocity * pitchSensitivityFactor;
+            const vpitch = Math.max(-pitchMaxVelocity, Math.min(pitchMaxVelocity, vpitchRaw));
 
-            console.log(`🔥 [RAGE MODE] RAW: vx=${vx.toFixed(2)}, vy=${vy.toFixed(2)}, vyaw=${vyaw.toFixed(2)}`);
-            this.sendCommand(vx, vy, vyaw, true);  // Pass rageMode flag
+            console.log(`🔥 [RAGE MODE] RAW: vx=${vx.toFixed(2)}, vy=${vy.toFixed(2)}, vyaw=${vyaw.toFixed(2)}, vpitch=${vpitch.toFixed(2)}`);
+            this.sendCommand(vx, vy, vyaw, vpitch, true);  // Pass rageMode flag
             return;
         }
 
         // Apply velocity ramping (smooth acceleration/deceleration) with exponential curves
         // NOTE: Linear/strafe deadzone removed (keyboard is digital), rotation deadzone kept (mouse is analog)
-        const { maxLinear, maxStrafe, maxRotation, acceleration, deceleration,
-                linearAlpha, strafeAlpha, rotationAlpha } = this.settings;
+        const { maxLinear, maxStrafe, maxRotation, deceleration,
+                linearAlpha, strafeAlpha } = this.settings;
         const linearDeadzone = 0.0;  // Keyboard input - no deadzone needed
         const strafeDeadzone = 0.0;  // Keyboard input - no deadzone needed
-        const rotationDeadzone = this.settings.rotationDeadzone !== undefined ? this.settings.rotationDeadzone : 0.10;  // Mouse input - needs deadzone
+        // NOTE: rotationAlpha and rotationDeadzone no longer used — mouse rotation
+        // bypasses applyCurve() entirely (Solution 3: Direct Linear Mapping)
 
         // Linear velocity (forward/backward) - apply exponential curve
         // Convert input (-1 to 1) to absolute percentage (0 to 1), apply curve, then restore sign
@@ -467,6 +506,8 @@ class KeyboardMouseControl {
             this.currentVelocities.linear += (targetLinear - this.currentVelocities.linear) * this.ACCEL_FACTOR;
         } else {
             this.currentVelocities.linear *= (1 - deceleration);
+            // Snap to zero when below threshold to prevent infinite tiny values (e.g. 1e-214)
+            if (Math.abs(this.currentVelocities.linear) < 0.001) this.currentVelocities.linear = 0;
         }
 
         // Strafe velocity (left/right) - apply exponential curve
@@ -487,24 +528,55 @@ class KeyboardMouseControl {
             this.currentVelocities.strafe += (targetStrafe - this.currentVelocities.strafe) * this.ACCEL_FACTOR;
         } else {
             this.currentVelocities.strafe *= (1 - deceleration);
+            // Snap to zero when below threshold to prevent infinite tiny values (e.g. 1e-214)
+            if (Math.abs(this.currentVelocities.strafe) < 0.001) this.currentVelocities.strafe = 0;
         }
 
-        // Rotation velocity - apply exponential curve
-        const rotationInput = Math.abs(rotation);
-        const curvedRotation = rotationInput > 0
-            ? applyRotationCurve(rotationInput, rotationAlpha, rotationDeadzone, maxRotation) * Math.sign(rotation)
+        // --- MOUSE ROTATION: Direct Linear Mapping (Solution 3 - bypasses applyCurve) ---
+        // Fixes: alpha suppression, [0,1] clamp destroying fast flicks, non-proportional scaling
+        // See docs/analysis/MOUSE_ROTATION_ANALYSIS.md for full analysis
+        //
+        // Speed slider acts as "Global Volume Knob":
+        //   1. Lowers sensitivity (slope) - mouse must move further for same speed
+        //   2. Lowers ceiling (max speed) - even fast flicks hit a lower limit
+        //
+        // rotation = rawPixels * MOUSE_SCALE_FACTOR * speedMultiplier (from lines 418 + 444)
+        // Formula: rotation * mouseSensitivity * maxRotation
+        //        = rawPixels * MOUSE_SCALE_FACTOR * speedMultiplier * mouseSensitivity * maxRotation
+        let targetRadPerSec = rotation * this.settings.mouseSensitivity * maxRotation;
+
+        // Safety ceiling: speed slider controls the maximum velocity
+        const safetyCeiling = maxRotation * speedMultiplier;
+        targetRadPerSec = Math.max(-safetyCeiling, Math.min(safetyCeiling, targetRadPerSec));
+
+        // DIAGNOSTIC LOGGING: Track direct linear mapping
+        if (Math.abs(rotation) > 0.001) {
+            console.log(`[ROTATION Direct Linear] rotation=${rotation.toFixed(4)}, sensitivity=${this.settings.mouseSensitivity}, maxRotation=${maxRotation}, speedMult=${speedMultiplier.toFixed(2)}, target=${targetRadPerSec.toFixed(3)}, ceiling=${safetyCeiling.toFixed(2)}`);
+        }
+
+        // Instant assignment - FPS "Call of Duty" style (no momentum/decay)
+        // Backend slew rate limiter handles smoothing for the physical robot
+        if (Math.abs(targetRadPerSec) > 0.05) {
+            this.currentVelocities.rotation = targetRadPerSec;
+        } else {
+            this.currentVelocities.rotation = 0; // Instant stop
+        }
+
+        // Pitch control - apply exponential curve
+        const pitchInput = Math.abs(pitch);
+        const { pitchAlpha, pitchDeadzone, pitchMaxVelocity, mousePitchSensitivity } = this.settings;
+
+        const curvedPitchRaw = pitchInput > 0
+            ? applyPitchCurve(pitchInput, pitchAlpha, pitchDeadzone, pitchMaxVelocity) * Math.sign(pitch)
             : 0;
-        const targetRotation = curvedRotation;
 
-        // Debug logging for curve output
-        if (rotationInput > 0.01) {
-            console.log(`[applyCurve Rotation] input=${rotationInput.toFixed(3)}, curved=${curvedRotation.toFixed(3)}, maxRotation=${maxRotation}, alpha=${rotationAlpha}, deadzone=${rotationDeadzone}`);
-        }
+        // Apply mouse pitch sensitivity as post-curve multiplier (normalized around 2.5 = "normal" preset)
+        const pitchSensitivityFactor = mousePitchSensitivity / 2.5;
+        const curvedPitch = Math.max(-pitchMaxVelocity, Math.min(pitchMaxVelocity, curvedPitchRaw * pitchSensitivityFactor));
+        const targetPitch = curvedPitch;
 
-        // CRITICAL: Mouse rotation uses INSTANT response (no ramping) for responsive feel
-        // This matches the old interface behavior (templates/index.html line 2061)
-        // Keyboard rotation would use ramping, but we only have mouse rotation here
-        this.currentVelocities.rotation = targetRotation;
+        // Pitch uses INSTANT response (no ramping) like rotation
+        this.currentVelocities.pitch = targetPitch;
 
         // Invert axes to match backend expectations
         // (matching old interface behavior from templates/index.html lines 2064-2066)
@@ -512,18 +584,19 @@ class KeyboardMouseControl {
         const vx = this.currentVelocities.linear;
         const vy = -this.currentVelocities.strafe;  // Backend inverts for correct direction
         const vyaw = -this.currentVelocities.rotation;  // Backend inverts for correct direction
+        const vpitch = this.currentVelocities.pitch;  // Pitch angle (rad), not inverted
 
         // Calculate velocity magnitude for debug logging
         const velocityMagnitude = Math.sqrt(vx * vx + vy * vy + vyaw * vyaw);
 
         // Debug logging (only when there's movement)
-        if (velocityMagnitude > 0.01) {
-            console.log(`[KB/Mouse Poll] forward=${forward}, strafe=${strafe}, rotation=${rotation.toFixed(3)} → vx=${vx.toFixed(2)}, vy=${vy.toFixed(2)}, vyaw=${vyaw.toFixed(2)}`);
+        if (velocityMagnitude > 0.01 || Math.abs(vpitch) > 0.01) {
+            console.log(`[KB/Mouse Poll] forward=${forward}, strafe=${strafe}, rotation=${rotation.toFixed(3)}, pitch=${pitch.toFixed(3)} → vx=${vx.toFixed(2)}, vy=${vy.toFixed(2)}, vyaw=${vyaw.toFixed(2)}, vpitch=${vpitch.toFixed(2)}`);
         }
 
         // CRITICAL: Always send command (even zero velocity) to match old interface behavior
         // This ensures smooth deceleration and immediate stop when keys are released
-        this.sendCommand(vx, vy, vyaw);
+        this.sendCommand(vx, vy, vyaw, vpitch);
 
         this.lastVelocityMagnitude = velocityMagnitude;
     }
@@ -531,26 +604,33 @@ class KeyboardMouseControl {
     /**
      * Send movement command
      */
-    sendCommand(vx, vy, vyaw, rageMode = false) {
+    sendCommand(vx, vy, vyaw, vpitch = 0, rageMode = false) {
         if (this.onCommandSend) {
             // CRITICAL: Normalize velocities and pre-invert axes to match backend expectations
             // Backend inverts lx and rx, so we pre-invert them here
-            const { maxLinear, maxStrafe, maxRotation } = this.settings;
+            const { maxLinear, maxStrafe, maxRotation, pitchMaxVelocity } = this.settings;
 
             const lx = maxStrafe > 0 ? -vy / maxStrafe : 0;  // Backend inverts, so we pre-invert
             const ly = maxLinear > 0 ? vx / maxLinear : 0;
             const rx = maxRotation > 0 ? -vyaw / maxRotation : 0;  // Backend inverts, so we pre-invert
-            const ry = 0;  // Pitch not used for movement
+            const ry = pitchMaxVelocity > 0 ? vpitch / pitchMaxVelocity : 0;  // Pitch angle (normalized)
+
+            // DIAGNOSTIC LOGGING: Track normalization (Task 35.3)
+            if (Math.abs(vyaw) > 0.01) {
+                console.log(`[SENSITIVITY DEBUG Step 4] vyaw (before norm): ${vyaw.toFixed(3)}, maxRotation: ${maxRotation}, rx (normalized): ${rx.toFixed(3)}`);
+            }
 
             const commandData = {
                 lx, ly, rx, ry,
                 max_linear: maxLinear,
                 max_strafe: maxStrafe,
                 max_rotation: maxRotation,
+                max_pitch: pitchMaxVelocity,
                 // Backend slew rate limiter parameters (acceleration ramp-up time)
                 linear_ramp_time: this.settings.linearRampTime || 1.0,
                 strafe_ramp_time: this.settings.strafeRampTime || 0.2,
                 rotation_ramp_time: this.settings.rotationRampTime || 0.9,
+                pitch_ramp_time: this.settings.pitchRampTime || 0.8,
                 // RAGE MODE flag (bypasses backend slew rate limiter)
                 rage_mode: rageMode,
                 source: 'keyboard_mouse'

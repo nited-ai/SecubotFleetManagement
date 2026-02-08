@@ -49,11 +49,13 @@ class TestHTTPMovementCommandRoute:
         control_service = app.config['CONTROL_SERVICE']
 
         # Mock process_movement_command to return success with should_send=True
+        # Includes normalized lx/ly/rx/ry values for WirelessController
         control_service.process_movement_command.return_value = {
             'status': 'success',
             'should_send': True,
             'zero_velocity': False,
-            'velocities': {'vx': 0.3, 'vy': 0.0, 'vyaw': 0.0},
+            'velocities': {'vx': 0.3, 'vy': 0.0, 'vyaw': 0.0, 'pitch': 0.0,
+                           'lx': 0.0, 'ly': 0.5, 'rx': 0.0, 'ry': 0.0},
             'processing_time_ms': 1.5
         }
 
@@ -76,8 +78,9 @@ class TestHTTPMovementCommandRoute:
 
         # Verify both methods were called
         control_service.process_movement_command.assert_called_once()
+        # Now uses normalized values (lx, ly, rx, ry, is_zero_velocity)
         control_service.send_movement_command_sync.assert_called_once_with(
-            0.3, 0.0, 0.0, False
+            0.0, 0.5, 0.0, 0.0, False
         )
 
     def test_gamepad_command_does_not_send_when_should_send_false(self, client, app):
@@ -190,11 +193,13 @@ class TestWebSocketMovementCommandHandler:
         control_service = flask_app.config['CONTROL_SERVICE']
 
         # Mock process_movement_command to return success with should_send=True
+        # Includes normalized lx/ly/rx/ry values for WirelessController
         control_service.process_movement_command.return_value = {
             'status': 'success',
             'should_send': True,
             'zero_velocity': False,
-            'velocities': {'vx': 0.3, 'vy': 0.0, 'vyaw': 0.0},
+            'velocities': {'vx': 0.3, 'vy': 0.0, 'vyaw': 0.0, 'pitch': 0.0,
+                           'lx': 0.0, 'ly': 0.5, 'rx': 0.0, 'ry': 0.0},
             'processing_time_ms': 1.5
         }
 
@@ -211,7 +216,8 @@ class TestWebSocketMovementCommandHandler:
 
         # Verify both methods were called
         control_service.process_movement_command.assert_called_once()
+        # Now uses normalized values (lx, ly, rx, ry, is_zero_velocity)
         control_service.send_movement_command_sync.assert_called_once_with(
-            0.3, 0.0, 0.0, False
+            0.0, 0.5, 0.0, 0.0, False
         )
 
