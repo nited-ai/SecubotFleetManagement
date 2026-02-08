@@ -1,0 +1,449 @@
+{% extends "base.html" %}
+
+{% block title %}Robot Dashboard - SecuBot
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <header class="mb-8">
+        <h1 class="text-4xl font-bold gradient-primary bg-clip-text text-transparent">
+            SecuBot
+        </h1>
+        <p class="text-gray-400 mt-2">Robot Fleet Management Dashboard</p>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="grid grid-cols-1 gap-8">
+        <!-- Robot Dashboard Section -->
+        <section id="robot-dashboard">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-semibold">My Robots</h2>
+                <button id="add-robot-btn" class="btn-primary">
+                    <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    Add Robot
+                </button>
+            </div>
+            
+            <!-- Robot Cards Grid -->
+            <div id="robot-cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Robot cards will be dynamically inserted here -->
+                <div class="card text-center py-12">
+                    <p class="text-gray-400">No robots added yet. Click "Add Robot" to get started.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Panel Section -->
+        <section id="settings-panel" class="card">
+            <div class="flex justify-between items-center cursor-pointer" id="settings-header">
+                <h2 class="text-2xl font-semibold">Settings</h2>
+                <svg class="w-6 h-6 transform transition-transform" id="settings-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </div>
+            
+            <div id="settings-content" class="mt-6 hidden">
+                <!-- Preset Buttons -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-300">Control Presets</h3>
+                    <div class="flex flex-wrap gap-3">
+                        <button id="preset-beginner" class="preset-btn" data-preset="beginner">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Beginner
+                        </button>
+                        <button id="preset-normal" class="preset-btn preset-btn-active" data-preset="normal">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            Normal
+                        </button>
+                        <button id="preset-advanced" class="preset-btn" data-preset="advanced">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                            Advanced
+                        </button>
+                        <button id="preset-sport" class="preset-btn" data-preset="sport">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            Sport
+                        </button>
+                        <button id="preset-custom" class="preset-btn" data-preset="custom">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                            </svg>
+                            Custom
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-400 mt-2">Select a preset to apply settings to both keyboard/mouse and gamepad controls. Custom is automatically selected when you adjust individual sliders.</p>
+                </div>
+
+
+
+                <!-- Response Curve Tuning -->
+                <div class="mb-8">
+                    <h3 class="text-xl font-semibold mb-4 text-unitree-primary">⚙️ Response Curve Tuning</h3>
+                    <p class="text-sm text-gray-400 mb-6">Adjust the exponential response curves for fine-tuned control feel. Higher alpha = smoother acceleration, lower alpha = more responsive.</p>
+
+                    <!-- Curve Controls Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Linear Axis -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-semibold text-unitree-primary">Linear (Forward/Back)</h4>
+
+                            <!-- Linear Graph -->
+                            <div class="bg-unitree-dark-lighter rounded-lg p-4">
+                                <canvas id="linear-curve-chart" height="200"></canvas>
+                            </div>
+
+                            <!-- Max Linear Velocity -->
+                            <div class="form-group">
+                                <label for="kb-max-linear-velocity" class="form-label flex justify-between">
+                                    <span>Max Velocity</span>
+                                    <span id="kb-max-linear-value" class="text-unitree-primary font-mono">1.5 m/s</span>
+                                </label>
+                                <input type="range" id="kb-max-linear-velocity" class="slider" min="0.3" max="10.0" step="0.1" value="1.5"
+                                       title="Maximum forward/backward speed the robot can reach. This is the Y-axis maximum on the graph above. Hardware limit is 5.0 m/s. ⚠️ Values above 5.0 m/s may cause instability. Use with caution.">
+                                <p class="form-help">Hardware limit: 5.0 m/s (max: 10.0 for testing)</p>
+                            </div>
+
+                            <!-- Linear Alpha -->
+                            <div class="form-group">
+                                <label for="linear-alpha" class="form-label flex justify-between">
+                                    <span>Alpha (α)</span>
+                                    <span id="linear-alpha-value" class="text-unitree-primary font-mono">1.5</span>
+                                </label>
+                                <input type="range" id="linear-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="1.5"
+                                       title="Controls the curve shape. Lower values (0.1-1.0) = more responsive at low speeds. Higher values (2.0-4.0) = smoother, more gradual acceleration. See graph above.">
+                                <p class="form-help">Curve steepness (0.1-4.0)</p>
+                            </div>
+
+                            <!-- Linear Acceleration Time (Backend Slew Rate Limiter) -->
+                            <div class="form-group">
+                                <label for="linear-ramp-time" class="form-label flex justify-between">
+                                    <span>Forward/Back Acceleration Time</span>
+                                    <span id="linear-ramp-time-value" class="text-unitree-primary font-mono">1.0s</span>
+                                </label>
+                                <input type="range" id="linear-ramp-time" class="slider" min="0.0" max="2.0" step="0.1" value="1.0"
+                                       title="Time to reach max linear speed from standstill. Lower = snappier response, Higher = smoother acceleration. Backend slew rate limiter prevents jerky movements.">
+                                <p class="form-help">Acceleration ramp-up time (0.0-2.0 seconds)</p>
+                            </div>
+                        </div>
+
+                        <!-- Strafe Axis -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-semibold text-unitree-primary">Strafe (Left/Right)</h4>
+
+                            <!-- Strafe Graph -->
+                            <div class="bg-unitree-dark-lighter rounded-lg p-4">
+                                <canvas id="strafe-curve-chart" height="200"></canvas>
+                            </div>
+
+                            <!-- Max Strafe Velocity -->
+                            <div class="form-group">
+                                <label for="kb-max-strafe-velocity" class="form-label flex justify-between">
+                                    <span>Max Velocity</span>
+                                    <span id="kb-max-strafe-value" class="text-unitree-primary font-mono">0.6 m/s</span>
+                                </label>
+                                <input type="range" id="kb-max-strafe-velocity" class="slider" min="0.1" max="0.6" step="0.05" value="0.6"
+                                       title="Maximum left/right speed the robot can reach. This is the Y-axis maximum on the graph above. Hardware limit is 0.6 m/s.">
+                                <p class="form-help">Hardware limit: 0.6 m/s</p>
+                            </div>
+
+                            <!-- Strafe Alpha -->
+                            <div class="form-group">
+                                <label for="strafe-alpha" class="form-label flex justify-between">
+                                    <span>Alpha (α)</span>
+                                    <span id="strafe-alpha-value" class="text-unitree-primary font-mono">1.2</span>
+                                </label>
+                                <input type="range" id="strafe-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="1.2"
+                                       title="Controls the curve shape. Lower values (0.1-1.0) = more responsive at low speeds. Higher values (2.0-4.0) = smoother, more gradual acceleration. See graph above.">
+                                <p class="form-help">Curve steepness (0.1-4.0)</p>
+                            </div>
+
+                            <!-- Strafe Acceleration Time (Backend Slew Rate Limiter) -->
+                            <div class="form-group">
+                                <label for="strafe-ramp-time" class="form-label flex justify-between">
+                                    <span>Left/Right Acceleration Time</span>
+                                    <span id="strafe-ramp-time-value" class="text-unitree-primary font-mono">0.2s</span>
+                                </label>
+                                <input type="range" id="strafe-ramp-time" class="slider" min="0.0" max="2.0" step="0.1" value="0.2"
+                                       title="Time to reach max strafe speed from standstill. Lower = snappier response, Higher = smoother acceleration. Backend slew rate limiter prevents jerky movements.">
+                                <p class="form-help">Acceleration ramp-up time (0.0-2.0 seconds)</p>
+                            </div>
+                        </div>
+
+                        <!-- Rotation Axis -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-semibold text-unitree-primary">Rotation (Yaw)</h4>
+
+                            <!-- Rotation Graph -->
+                            <div class="bg-unitree-dark-lighter rounded-lg p-4">
+                                <canvas id="rotation-curve-chart" height="200"></canvas>
+                            </div>
+
+                            <!-- Mouse Yaw Sensitivity -->
+                            <div class="form-group">
+                                <label for="mouse-yaw-sensitivity" class="form-label flex justify-between">
+                                    <span>Mouse Yaw Sensitivity</span>
+                                    <span id="mouse-yaw-value" class="text-unitree-primary font-mono">5.0</span>
+                                </label>
+                                <input type="range" id="mouse-yaw-sensitivity" class="slider" min="0.1" max="50.0" step="0.1" value="5.0"
+                                       title="Controls how fast the robot rotates left/right when moving the mouse horizontally. Higher = faster rotation response to mouse movement. Recommended: 5.0-15.0 for precision-flick control.">
+                                <p class="form-help">Horizontal mouse sensitivity (0.1-50.0)</p>
+                            </div>
+
+                            <!-- Mouse Pitch Sensitivity -->
+                            <div class="form-group">
+                                <label for="mouse-pitch-sensitivity" class="form-label flex justify-between">
+                                    <span>Mouse Pitch Sensitivity</span>
+                                    <span id="mouse-pitch-value" class="text-unitree-primary font-mono">2.5</span>
+                                </label>
+                                <input type="range" id="mouse-pitch-sensitivity" class="slider" min="0.1" max="25.0" step="0.1" value="2.5"
+                                       title="Controls how fast the camera tilts up/down when moving the mouse vertically. Higher = faster pitch response to mouse movement. Recommended: 2.5-7.5 for smooth camera control.">
+                                <p class="form-help">Vertical mouse sensitivity (0.1-25.0)</p>
+                            </div>
+
+                            <!-- Max Rotation Velocity -->
+                            <div class="form-group">
+                                <label for="kb-max-rotation-velocity" class="form-label flex justify-between">
+                                    <span>Max Velocity</span>
+                                    <span id="kb-max-rotation-value" class="text-unitree-primary font-mono">3.0 rad/s</span>
+                                </label>
+                                <input type="range" id="kb-max-rotation-velocity" class="slider" min="0.5" max="9.0" step="0.1" value="3.0"
+                                       title="Maximum rotation speed the robot can reach. This is the Y-axis maximum on the graph above. Hardware limit is 3.0 rad/s. ⚠️ Values above 3.0 rad/s may cause instability. Use with caution.">
+                                <p class="form-help">Hardware limit: 3.0 rad/s (max: 9.0 for testing)</p>
+                            </div>
+
+                            <!-- Rotation Alpha -->
+                            <div class="form-group">
+                                <label for="rotation-alpha" class="form-label flex justify-between">
+                                    <span>Alpha (α)</span>
+                                    <span id="rotation-alpha-value" class="text-unitree-primary font-mono">2.5</span>
+                                </label>
+                                <input type="range" id="rotation-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="2.5"
+                                       title="Controls the curve shape. Lower values (0.1-1.0) = more responsive at low speeds. Higher values (2.0-4.0) = smoother, more gradual acceleration. See graph above.">
+                                <p class="form-help">Curve steepness (0.1-4.0)</p>
+                            </div>
+
+                            <!-- Rotation Deadzone (MOUSE INPUT - needs deadzone to prevent drift) -->
+                            <div class="form-group">
+                                <label for="rotation-deadzone" class="form-label flex justify-between">
+                                    <span>Deadzone (Mouse)</span>
+                                    <span id="rotation-deadzone-value" class="text-unitree-primary font-mono">10%</span>
+                                </label>
+                                <input type="range" id="rotation-deadzone" class="slider" min="0" max="30" step="1" value="10"
+                                       title="Ignores small mouse movements below this percentage to prevent drift or unintended rotation. Mouse is analog input and needs deadzone. 10% is typical.">
+                                <p class="form-help">Ignore mouse inputs below this % (0-30%)</p>
+                            </div>
+
+                            <!-- Rotation Acceleration Time (Backend Slew Rate Limiter) -->
+                            <div class="form-group">
+                                <label for="rotation-ramp-time" class="form-label flex justify-between">
+                                    <span>Rotation Acceleration Time</span>
+                                    <span id="rotation-ramp-time-value" class="text-unitree-primary font-mono">0.9s</span>
+                                </label>
+                                <input type="range" id="rotation-ramp-time" class="slider" min="0.0" max="2.0" step="0.1" value="0.9"
+                                       title="Time to reach max rotation speed from standstill. Lower = snappier response, Higher = smoother acceleration. Backend slew rate limiter prevents jerky movements.">
+                                <p class="form-help">Acceleration ramp-up time (0.0-2.0 seconds)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gamepad Settings (Hidden for now) -->
+                <div class="mb-8" style="display: none;">
+                    <h3 class="text-xl font-semibold mb-4 text-unitree-primary">Gamepad</h3>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Deadzone Left Stick -->
+                        <div class="form-group">
+                            <label for="deadzone-left-stick" class="form-label flex justify-between">
+                                <span>Deadzone Left Stick</span>
+                                <span id="deadzone-left-value" class="text-unitree-primary font-mono">0.15</span>
+                            </label>
+                            <input type="range" id="deadzone-left-stick" class="slider" min="0.0" max="0.5" step="0.05" value="0.15">
+                            <p class="form-help">Left stick deadzone threshold</p>
+                        </div>
+
+                        <!-- Deadzone Right Stick -->
+                        <div class="form-group">
+                            <label for="deadzone-right-stick" class="form-label flex justify-between">
+                                <span>Deadzone Right Stick</span>
+                                <span id="deadzone-right-value" class="text-unitree-primary font-mono">0.15</span>
+                            </label>
+                            <input type="range" id="deadzone-right-stick" class="slider" min="0.0" max="0.5" step="0.05" value="0.15">
+                            <p class="form-help">Right stick deadzone threshold</p>
+                        </div>
+
+                        <!-- Sensitivity Linear -->
+                        <div class="form-group">
+                            <label for="sensitivity-linear" class="form-label flex justify-between">
+                                <span>Linear Sensitivity</span>
+                                <span id="sensitivity-linear-value" class="text-unitree-primary font-mono">1.0</span>
+                            </label>
+                            <input type="range" id="sensitivity-linear" class="slider" min="0.1" max="2.0" step="0.1" value="1.0">
+                            <p class="form-help">Forward/backward sensitivity multiplier</p>
+                        </div>
+
+                        <!-- Sensitivity Strafe -->
+                        <div class="form-group">
+                            <label for="sensitivity-strafe" class="form-label flex justify-between">
+                                <span>Strafe Sensitivity</span>
+                                <span id="sensitivity-strafe-value" class="text-unitree-primary font-mono">1.0</span>
+                            </label>
+                            <input type="range" id="sensitivity-strafe" class="slider" min="0.1" max="2.0" step="0.1" value="0.2">
+                            <p class="form-help">Left/right sensitivity multiplier</p>
+                        </div>
+
+                        <!-- Sensitivity Rotation -->
+                        <div class="form-group">
+                            <label for="sensitivity-rotation" class="form-label flex justify-between">
+                                <span>Rotation Sensitivity</span>
+                                <span id="sensitivity-rotation-value" class="text-unitree-primary font-mono">1.0</span>
+                            </label>
+                            <input type="range" id="sensitivity-rotation" class="slider" min="0.1" max="2.0" step="0.1" value="1.0">
+                            <p class="form-help">Rotation sensitivity multiplier</p>
+                        </div>
+
+                        <!-- Speed Multiplier -->
+                        <div class="form-group">
+                            <label for="speed-multiplier" class="form-label flex justify-between">
+                                <span>Speed Multiplier</span>
+                                <span id="speed-multiplier-value" class="text-unitree-primary font-mono">1.0</span>
+                            </label>
+                            <input type="range" id="speed-multiplier" class="slider" min="0.1" max="2.0" step="0.1" value="1.0">
+                            <p class="form-help">Overall speed multiplier</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                        <!-- Max Linear Velocity -->
+                        <div class="form-group">
+                            <label for="gp-max-linear-velocity" class="form-label flex justify-between">
+                                <span>Max Linear</span>
+                                <span id="gp-max-linear-value" class="text-unitree-primary font-mono">0.6 m/s</span>
+                            </label>
+                            <input type="range" id="gp-max-linear-velocity" class="slider" min="0.1" max="1.0" step="0.1" value="0.6">
+                        </div>
+
+                        <!-- Max Strafe Velocity -->
+                        <div class="form-group">
+                            <label for="gp-max-strafe-velocity" class="form-label flex justify-between">
+                                <span>Max Strafe</span>
+                                <span id="gp-max-strafe-value" class="text-unitree-primary font-mono">0.4 m/s</span>
+                            </label>
+                            <input type="range" id="gp-max-strafe-velocity" class="slider" min="0.1" max="1.0" step="0.1" value="0.4">
+                        </div>
+
+                        <!-- Max Rotation Velocity -->
+                        <div class="form-group">
+                            <label for="gp-max-rotation-velocity" class="form-label flex justify-between">
+                                <span>Max Rotation</span>
+                                <span id="gp-max-rotation-value" class="text-unitree-primary font-mono">0.8 rad/s</span>
+                            </label>
+                            <input type="range" id="gp-max-rotation-velocity" class="slider" min="0.1" max="1.5" step="0.1" value="0.8">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reset Button -->
+                <div class="flex justify-end">
+                    <button id="reset-settings-btn" class="btn-secondary">
+                        <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Reset to Defaults
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-12 text-center text-gray-500 text-sm">
+        <p>SecuBot Connect v1.0.0 | &copy; 2026</p>
+    </footer>
+</div>
+
+<!-- Add/Edit Robot Modal -->
+<div id="robot-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modal-title" class="text-2xl font-semibold">Add Robot</h2>
+            <button id="modal-close-btn" class="modal-close-btn">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <form id="robot-form" class="modal-body">
+            <!-- Robot Name -->
+            <div class="form-group">
+                <label for="robot-name" class="form-label">Robot Name</label>
+                <input type="text" id="robot-name" class="input-field" placeholder="e.g., Office Patrol Bot" required>
+            </div>
+
+            <!-- Connection Method -->
+            <div class="form-group">
+                <label for="connection-method" class="form-label">Connection Method</label>
+                <select id="connection-method" class="input-field" required>
+                    <option value="LocalSTA">Local STA (Same Network)</option>
+                    <option value="LocalAP">Local AP (Robot WiFi)</option>
+                    <option value="Remote">Remote (Internet)</option>
+                </select>
+            </div>
+
+            <!-- IP Address -->
+            <div class="form-group">
+                <label for="robot-ip" class="form-label">IP Address <span class="text-gray-500 text-xs">(Optional for LocalSTA if Serial Number provided)</span></label>
+                <input type="text" id="robot-ip" class="input-field font-mono" placeholder="192.168.8.181">
+                <p class="form-help">Enter the robot's IP address (not needed for LocalAP or Remote)</p>
+            </div>
+
+            <!-- Serial Number -->
+            <div class="form-group">
+                <label for="robot-serial" class="form-label">Serial Number <span class="text-gray-500 text-xs">(Required for Remote, optional for LocalSTA)</span></label>
+                <input type="text" id="robot-serial" class="input-field font-mono" placeholder="B42D2000XXXXXXXX">
+                <p class="form-help">Found on the robot's body or documentation</p>
+            </div>
+
+            <!-- Username (Remote only) -->
+            <div id="username-group" class="form-group hidden">
+                <label for="robot-username" class="form-label">Username</label>
+                <input type="text" id="robot-username" class="input-field" placeholder="admin">
+                <p class="form-help">Required for remote connections</p>
+            </div>
+
+            <!-- Password (Remote only) -->
+            <div id="password-group" class="form-group hidden">
+                <label for="robot-password" class="form-label">Password</label>
+                <input type="password" id="robot-password" class="input-field" placeholder="••••••••">
+                <p class="form-help">Required for remote connections</p>
+            </div>
+        </form>
+
+        <div class="modal-footer">
+            <button type="button" id="modal-cancel-btn" class="btn-secondary">Cancel</button>
+            <button type="submit" form="robot-form" id="modal-save-btn" class="btn-primary">Save Robot</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/curve-utils.js') }}?v=1.0.0"></script>
+<script src="{{ url_for('static', filename='js/curve-visualizer.js') }}?v=1.0.0"></script>
+<script src="{{ url_for('static', filename='js/robot-manager.js') }}?v=1.0.3"></script>
+<script src="{{ url_for('static', filename='js/settings-manager.js') }}?v=1.1.0"></script>
+<script src="{{ url_for('static', filename='js/landing.js') }}?v=1.0.3"></script>
+{% endblock %}
+

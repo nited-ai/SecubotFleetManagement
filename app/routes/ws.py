@@ -22,12 +22,20 @@ def register_websocket_handlers(socketio):
         """
         WebSocket handler for gamepad or keyboard/mouse movement commands
         This provides lower latency than HTTP by using persistent WebSocket connection
+
+        Note: Logs at DEBUG level to reduce console spam during high-frequency control (30-60 Hz).
+        Set logging level to DEBUG to see detailed control command flow.
         """
         try:
             state = current_app.config['STATE_SERVICE']
             control_service = current_app.config['CONTROL_SERVICE']
 
+            # Log at DEBUG level to reduce console spam (these messages occur 30-60 times per second)
+            logging.debug(f"[WebSocket] Received control_command: {data}")
+            logging.debug(f"[WebSocket] State - connected: {state.is_connected}, gamepad: {state.gamepad_enabled}, kb/mouse: {state.keyboard_mouse_enabled}")
+
             if not state.is_connected:
+                logging.warning("[WebSocket] Robot not connected")
                 emit('command_response', {
                     'status': 'error',
                     'message': 'Robot not connected'
@@ -35,6 +43,7 @@ def register_websocket_handlers(socketio):
                 return
 
             if not state.gamepad_enabled and not state.keyboard_mouse_enabled:
+                logging.warning("[WebSocket] Control not enabled")
                 emit('command_response', {
                     'status': 'error',
                     'message': 'Control not enabled'
@@ -43,6 +52,7 @@ def register_websocket_handlers(socketio):
 
             # Process movement command
             result = control_service.process_movement_command(data)
+            logging.debug(f"[WebSocket] Process result: {result}")
 
             if result['status'] == 'error':
                 emit('command_response', result)
@@ -51,20 +61,24 @@ def register_websocket_handlers(socketio):
             # If should send, actually send the command to the robot
             if result.get('should_send', False):
                 velocities = result['velocities']
+                # Log actual robot commands at DEBUG level (high frequency)
+                logging.debug(f"[WebSocket] Sending to robot: lx={velocities.get('lx', 0)}, ly={velocities.get('ly', 0)}, rx={velocities.get('rx', 0)}, ry={velocities.get('ry', 0)}")
                 send_result = control_service.send_movement_command_sync(
-                    velocities['vx'],
-                    velocities['vy'],
-                    velocities['vyaw'],
+                    velocities.get('lx', 0.0),
+                    velocities.get('ly', 0.0),
+                    velocities.get('rx', 0.0),
+                    velocities.get('ry', 0.0),
                     result['zero_velocity']
                 )
                 # Merge send result with process result
                 result['send_status'] = send_result['status']
+                logging.debug(f"[WebSocket] Send result: {send_result}")
 
             # Send response back to client
             emit('command_response', result)
 
         except Exception as e:
-            logging.error(f"WebSocket control command error: {e}")
+            logging.error(f"WebSocket control command error: {e}", exc_info=True)
             emit('command_response', {
                 'status': 'error',
                 'message': str(e)

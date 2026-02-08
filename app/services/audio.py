@@ -273,7 +273,16 @@ class MicrophoneAudioTrack(AudioStreamTrack):
             return frame
 
         except Exception as e:
-            logging.error(f"Error reading microphone: {e}")
+            # During disconnect, asyncio.to_thread() may raise "cannot schedule new futures after shutdown"
+            # This is expected behavior when the event loop is shutting down
+            error_msg = str(e).lower()
+            if "cannot schedule" in error_msg or "shutdown" in error_msg:
+                # Expected error during disconnect - log at DEBUG level
+                logging.debug(f"Microphone stream closed (expected during disconnect): {e}")
+            else:
+                # Unexpected error - log at ERROR level
+                logging.error(f"Error reading microphone: {e}")
+
             # Return silence on error
             silence = np.zeros((1, self.samples_per_frame * self.channels), dtype=np.int16)
             frame = AVAudioFrame.from_ndarray(silence, format='s16', layout='stereo')

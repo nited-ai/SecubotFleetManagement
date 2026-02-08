@@ -1,0 +1,516 @@
+{% extends "base.html" %}
+
+{% block title %}Robot Control - SecuBot{% endblock %}
+
+{% block head %}
+<style>
+    /* Fullscreen layout - no scrolling */
+    body {
+        overflow: hidden;
+    }
+
+    /* ===== Settings Slide-In Panel ===== */
+    .settings-panel {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: flex-end;
+        justify-content: stretch;
+        /* Hidden by default using visibility + pointer-events (NOT display:none)
+           This allows CSS transitions to work properly */
+        visibility: hidden;
+        pointer-events: none;
+        transition: visibility 0s 0.3s; /* delay hiding until animation finishes */
+    }
+    .settings-panel.open {
+        visibility: visible;
+        pointer-events: auto;
+        transition: visibility 0s 0s; /* instantly visible when opening */
+    }
+
+    .settings-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        opacity: 0;
+        transition: opacity 0.3s ease-out;
+    }
+    .settings-panel.open .settings-backdrop {
+        opacity: 1;
+    }
+
+    .settings-panel-content {
+        position: relative;
+        width: 100%;
+        max-height: 70vh;
+        background: linear-gradient(135deg, rgba(30, 30, 30, 0.97), rgba(20, 20, 20, 0.97));
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+        overflow-y: auto;
+        transform: translateY(100%);
+        transition: transform 0.3s ease-out;
+    }
+    .settings-panel.open .settings-panel-content {
+        transform: translateY(0);
+    }
+
+    .settings-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        position: sticky;
+        top: 0;
+        background: rgba(30, 30, 30, 0.97);
+        backdrop-filter: blur(8px);
+        z-index: 10;
+    }
+
+    .settings-close-btn {
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+        color: white;
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .settings-close-btn:hover {
+        background: rgba(255, 68, 68, 0.3);
+        transform: scale(1.1);
+    }
+
+    .settings-panel-body {
+        padding: 1.5rem;
+    }
+
+    /* Settings button active state */
+    #quick-settings-btn.settings-active {
+        color: #00E8DA;
+        background: rgba(0, 232, 218, 0.15);
+        border-radius: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Fullscreen Video Container -->
+<div class="relative w-screen h-screen bg-black">
+    <!-- Video Feed -->
+    <img id="video-feed"
+         src="{{ url_for('views.video_feed') }}"
+         class="fullscreen-video"
+         alt="Robot Video Feed">
+
+    <!-- Bottom-Left HUD Group -->
+    <div class="hud-bottom-left">
+        <!-- Speed Slider (Left Side) -->
+        <div class="hud-speed-slider">
+            <input type="range"
+                   id="speed-slider"
+                   min="0"
+                   max="100"
+                   step="5"
+                   value="100"
+                   class="slider-horizontal">
+            <span class="speed-percentage" id="speed-percentage">100%</span>
+            <!-- RAGE MODE Toggle Icon (Running Human) -->
+            <svg id="rage-mode-btn" class="speed-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" style="color: #00E8DA; cursor: pointer; transition: all 0.2s; filter: drop-shadow(0 0 2px black);" title="RAGE MODE: Bypass all smoothing for raw control (DANGEROUS!)">
+                <!--!Font Awesome Free 6.5.1 Person Running Icon-->
+                <path id="rage-mode-icon" d="M320 48a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zM125.7 175.5c9.9-9.9 23.4-15.5 37.5-15.5c1.9 0 3.8 .1 5.6 .3L137.6 254c-9.3 28 1.7 58.8 26.8 74.5l86.2 53.9-25.4 88.8c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l28.7-100.4c5.9-20.6-2.6-42.6-20.7-53.9L238 299l30.9-82.4 5.1 12.3C289 264.7 323.9 288 362.7 288H384c17.7 0 32-14.3 32-32s-14.3-32-32-32H362.7c-12.9 0-24.6-7.8-29.5-19.7l-6.3-15.2c-14.6-35.1-44.1-61.9-80.5-73.1l-48.7-15c-11.1-3.4-22.7-5-34.4-5c-31 0-60.8 12.3-82.7 34.3L57.4 153.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l23.1-23.1zM91.2 352H32c-17.7 0-32 14.3-32 32s14.3 32 32 32h69.6c19 0 36.2-11.2 43.9-28.5L157 361.6l-9.5-6c-17.5-10.9-30.5-26.8-37.9-44.9L91.2 352z"/>
+            </svg>
+        </div>
+
+        <!-- Battery and WiFi Icons -->
+        <div class="hud-icon-group">
+            <!-- Battery Indicator (Vertical) -->
+            <div class="hud-icon-container">
+                <svg class="battery-icon-vertical" id="battery-icon" fill="currentColor" viewBox="0 0 24 24">
+                    <!-- Vertical battery body -->
+                    <rect x="8" y="4" width="8" height="16" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                    <!-- Battery terminal (top) -->
+                    <rect x="10" y="2" width="4" height="2" rx="0.5" fill="currentColor"/>
+                    <!-- Battery fill (dynamic) -->
+                    <rect x="9" y="5" width="6" id="battery-fill" class="battery-fill" rx="0.5"/>
+                </svg>
+                <span class="hud-icon-value" id="battery-level">--%</span>
+            </div>
+
+            <!-- WiFi/Ping Indicator -->
+            <div class="hud-icon-container">
+                <svg class="wifi-icon" id="wifi-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640">
+                    <!--!Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.-->
+                    <path d="M320 160C229.1 160 146.8 196 86.3 254.6C73.6 266.9 53.3 266.6 41.1 253.9C28.9 241.2 29.1 220.9 41.8 208.7C113.7 138.9 211.9 96 320 96C428.1 96 526.3 138.9 598.3 208.7C611 221 611.3 241.3 599 253.9C586.7 266.5 566.4 266.9 553.8 254.6C493.2 196 410.9 160 320 160zM272 496C272 469.5 293.5 448 320 448C346.5 448 368 469.5 368 496C368 522.5 346.5 544 320 544C293.5 544 272 522.5 272 496zM200 390.2C188.3 403.5 168.1 404.7 154.8 393C141.5 381.3 140.3 361.1 152 347.8C193 301.4 253.1 272 320 272C386.9 272 447 301.4 488 347.8C499.7 361.1 498.4 381.3 485.2 393C472 404.7 451.7 403.4 440 390.2C410.6 356.9 367.8 336 320 336C272.2 336 229.4 356.9 200 390.2z"/>
+                </svg>
+                <span class="hud-icon-value" id="ping-value">---</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom-Right HUD Group -->
+    <div class="hud-bottom-right">
+        <!-- Light Level Slider (Right Side) -->
+        <div class="hud-light-slider">
+            <svg class="light-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" fill="none">
+                <!-- License: Apache. Made by lawnchairlauncher: https://github.com/lawnchairlauncher/lawnicons -->
+                <g fill="none" stroke="currentColor" style="stroke-width:12;stroke-dasharray:none">
+                    <path d="M122 22H70c-4.42 0-8 3.58-8 8v30.69c0 2.12.84 4.15 2.34 5.65l11.32 11.32c1.5 1.5 2.34 3.53 2.34 5.65V162c0 4.42 3.58 8 8 8h20c4.42 0 8-3.58 8-8V83.31c0-2.12.84-4.15 2.34-5.65l11.32-11.32c1.5-1.5 2.34-3.53 2.34-5.65V30c0-4.42-3.58-8-8-8z" style="stroke-width:12;stroke-dasharray:none"/>
+                    <path d="M65 46h62" style="stroke-linecap:round;stroke-linejoin:round;stroke-width:12;stroke-dasharray:none"/>
+                    <path stroke-width="8" d="M96 84.873V105" style="stroke-width:12;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"/>
+                </g>
+            </svg>
+            <span class="light-level-value" id="light-level-value">0</span>
+            <input type="range"
+                   id="light-level-slider"
+                   min="0"
+                   max="10"
+                   step="1"
+                   value="0"
+                   class="slider-horizontal">
+        </div>
+
+        <!-- Audio and Settings Controls -->
+        <div class="hud-icon-group">
+            <!-- Microphone Icon (Transmission Toggle - Click or Press 'C' or Hold Right Mouse Button) -->
+            <button id="mic-icon" class="hud-audio-icon mic-inactive" onclick="toggleMicrophoneTransmission()" title="Microphone: Click or press 'C' to toggle ON/OFF, hold right mouse button for push-to-talk">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor">
+                    <!--!Font Awesome Free 6.5.1 Microphone Icon-->
+                    <path d="M192 0C139 0 96 43 96 96V256c0 53 43 96 96 96s96-43 96-96V96c0-53-43-96-96-96zM64 216c0-13.3-10.7-24-24-24s-24 10.7-24 24v40c0 89.1 66.2 162.7 152 174.4V464H120c-13.3 0-24 10.7-24 24s10.7 24 24 24h72 72c13.3 0 24-10.7 24-24s-10.7-24-24-24H216V430.4c85.8-11.7 152-85.3 152-174.4V216c0-13.3-10.7-24-24-24s-24 10.7-24 24v40c0 70.7-57.3 128-128 128s-128-57.3-128-128V216z"/>
+                </svg>
+                <!-- Strikethrough line for inactive state -->
+                <div class="audio-strikethrough"></div>
+            </button>
+
+            <!-- Speaker Icon (Reception Status - Click to Toggle) -->
+            <button id="speaker-icon" class="hud-audio-icon speaker-inactive" onclick="toggleAudioReception()" title="Audio Reception: Click to toggle hearing robot audio">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" fill="currentColor">
+                    <!--!Font Awesome Free 6.5.1 Volume High Icon-->
+                    <path d="M533.6 32.5C598.5 85.2 640 165.8 640 256s-41.5 170.7-106.4 223.5c-10.3 8.4-25.4 6.8-33.8-3.5s-6.8-25.4 3.5-33.8C557.5 398.2 592 331.2 592 256s-34.5-142.2-88.7-186.3c-10.3-8.4-11.8-23.5-3.5-33.8s23.5-11.8 33.8-3.5zM473.1 107c43.2 35.2 70.9 88.9 70.9 149s-27.7 113.8-70.9 149c-10.3 8.4-25.4 6.8-33.8-3.5s-6.8-25.4 3.5-33.8C475.3 341.3 496 301.1 496 256s-20.7-85.3-53.2-111.8c-10.3-8.4-11.8-23.5-3.5-33.8s23.5-11.8 33.8-3.5zm-60.5 74.5C434.1 199.1 448 225.9 448 256s-13.9 56.9-35.4 74.5c-10.3 8.4-25.4 6.8-33.8-3.5s-6.8-25.4 3.5-33.8C393.1 284.4 400 271 400 256s-6.9-28.4-17.7-37.3c-10.3-8.4-11.8-23.5-3.5-33.8s23.5-11.8 33.8-3.5zM301.1 34.8C312.6 40 320 51.4 320 64V448c0 12.6-7.4 24-18.9 29.2s-25 3.1-34.4-5.3L131.8 352H64c-35.3 0-64-28.7-64-64V224c0-35.3 28.7-64 64-64h67.8L266.7 40.1c9.4-8.4 22.9-10.4 34.4-5.3z"/>
+                </svg>
+                <!-- Strikethrough line for inactive state -->
+                <div class="audio-strikethrough"></div>
+            </button>
+
+            <!-- Settings Button -->
+            <button id="quick-settings-btn" class="hud-btn">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+            </button>
+
+            <!-- Disconnect Button -->
+            <button id="exit-btn" class="hud-btn hud-btn-danger">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Speed Indicator Overlay (Mouse Wheel Speed Adjustment) - Temporary popup -->
+    <div id="speedIndicator" class="speed-indicator">
+        <div class="speed-label">Movement Speed</div>
+        <div class="speed-value" id="speedValue">100%</div>
+    </div>
+
+    <!-- RAGE MODE Warning Modal (hidden by default) -->
+    <div id="rage-mode-modal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div style="position: relative; background: #1a1a1a; border-radius: 8px; padding: 24px; max-width: 500px; border: 2px solid #ef4444; z-index: 10;">
+            <h3 style="font-size: 1.5rem; font-weight: bold; color: #ef4444; margin-bottom: 16px;">⚠️ RAGE MODE WARNING</h3>
+            <p style="color: white; margin-bottom: 16px;">
+                RAGE MODE disables ALL safety smoothing (exponential curves, acceleration limiting, deadzone).
+                Robot will respond to raw input instantly, which may cause:
+            </p>
+            <ul style="color: white; margin-bottom: 16px; list-style-type: disc; padding-left: 24px;">
+                <li>Jerky, erratic movements</li>
+                <li>Sudden acceleration/deceleration</li>
+                <li>Potential motor strain</li>
+                <li>Loss of precision control</li>
+            </ul>
+            <p style="color: white; margin-bottom: 24px; font-weight: bold;">Use at your own risk. Recommended for emergency maneuvers only.</p>
+            <div style="display: flex; gap: 16px;">
+                <button id="rage-mode-confirm" style="flex: 1; background: #ef4444; color: white; padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold;">I Understand - Enable RAGE MODE</button>
+                <button id="rage-mode-cancel" style="flex: 1; background: #4b5563; color: white; padding: 12px; border-radius: 8px; border: none; cursor: pointer;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Slide-In Panel -->
+    <div id="settings-panel" class="settings-panel">
+        <!-- Backdrop overlay -->
+        <div id="settings-backdrop" class="settings-backdrop"></div>
+
+        <!-- Panel content -->
+        <div class="settings-panel-content">
+            <!-- Header -->
+            <div class="settings-panel-header">
+                <h2 class="text-2xl font-bold text-unitree-primary">⚙️ Control Settings</h2>
+                <button id="settings-close-btn" class="settings-close-btn">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Settings body -->
+            <div class="settings-panel-body">
+                <!-- Preset Buttons -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-300">Control Presets</h3>
+                    <div class="flex flex-wrap gap-3">
+                        <button id="preset-beginner" class="preset-btn" data-preset="beginner">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Beginner
+                        </button>
+                        <button id="preset-normal" class="preset-btn preset-btn-active" data-preset="normal">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            Normal
+                        </button>
+                        <button id="preset-advanced" class="preset-btn" data-preset="advanced">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                            Advanced
+                        </button>
+                        <button id="preset-sport" class="preset-btn" data-preset="sport">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            Sport
+                        </button>
+                        <button id="preset-custom" class="preset-btn" data-preset="custom">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                            </svg>
+                            Custom
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-400 mt-2">Select a preset or adjust individual sliders below.</p>
+                </div>
+
+                <!-- Response Curve Tuning -->
+                <div class="mb-8">
+                    <h3 class="text-xl font-semibold mb-4 text-unitree-primary">⚙️ Response Curve Tuning</h3>
+                    <p class="text-sm text-gray-400 mb-6">Adjust the exponential response curves for fine-tuned control feel. Higher alpha = smoother acceleration, lower alpha = more responsive.</p>
+
+                    <!-- Curve Controls Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        <!-- Linear Axis -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-semibold text-unitree-primary">Linear (Forward/Back)</h4>
+                            <div class="bg-unitree-dark-lighter rounded-lg p-4">
+                                <canvas id="linear-curve-chart" height="200"></canvas>
+                            </div>
+                            <div class="form-group">
+                                <label for="kb-max-linear-velocity" class="form-label flex justify-between">
+                                    <span>Max Velocity</span>
+                                    <span id="kb-max-linear-value" class="text-unitree-primary font-mono">1.5 m/s</span>
+                                </label>
+                                <input type="range" id="kb-max-linear-velocity" class="slider" min="0.3" max="10.0" step="0.1" value="1.5"
+                                       title="Maximum forward/backward speed. Hardware limit is 5.0 m/s.">
+                                <p class="form-help">Hardware limit: 5.0 m/s (max: 10.0 for testing)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="linear-alpha" class="form-label flex justify-between">
+                                    <span>Alpha (α)</span>
+                                    <span id="linear-alpha-value" class="text-unitree-primary font-mono">1.5</span>
+                                </label>
+                                <input type="range" id="linear-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="1.5"
+                                       title="Curve steepness. Lower = responsive, Higher = smoother.">
+                                <p class="form-help">Curve steepness (0.1-4.0)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="linear-ramp-time" class="form-label flex justify-between">
+                                    <span>Acceleration Time</span>
+                                    <span id="linear-ramp-time-value" class="text-unitree-primary font-mono">1.0s</span>
+                                </label>
+                                <input type="range" id="linear-ramp-time" class="slider" min="0.0" max="2.0" step="0.1" value="1.0"
+                                       title="Time to reach max linear speed from standstill.">
+                                <p class="form-help">Ramp-up time (0.0-2.0s)</p>
+                            </div>
+                        </div>
+
+                        <!-- Strafe Axis -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-semibold text-unitree-primary">Strafe (Left/Right)</h4>
+                            <div class="bg-unitree-dark-lighter rounded-lg p-4">
+                                <canvas id="strafe-curve-chart" height="200"></canvas>
+                            </div>
+                            <div class="form-group">
+                                <label for="kb-max-strafe-velocity" class="form-label flex justify-between">
+                                    <span>Max Velocity</span>
+                                    <span id="kb-max-strafe-value" class="text-unitree-primary font-mono">0.6 m/s</span>
+                                </label>
+                                <input type="range" id="kb-max-strafe-velocity" class="slider" min="0.1" max="0.6" step="0.05" value="0.6"
+                                       title="Maximum left/right speed. Hardware limit is 0.6 m/s.">
+                                <p class="form-help">Hardware limit: 0.6 m/s</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="strafe-alpha" class="form-label flex justify-between">
+                                    <span>Alpha (α)</span>
+                                    <span id="strafe-alpha-value" class="text-unitree-primary font-mono">1.2</span>
+                                </label>
+                                <input type="range" id="strafe-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="1.2"
+                                       title="Curve steepness. Lower = responsive, Higher = smoother.">
+                                <p class="form-help">Curve steepness (0.1-4.0)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="strafe-ramp-time" class="form-label flex justify-between">
+                                    <span>Acceleration Time</span>
+                                    <span id="strafe-ramp-time-value" class="text-unitree-primary font-mono">0.2s</span>
+                                </label>
+                                <input type="range" id="strafe-ramp-time" class="slider" min="0.0" max="2.0" step="0.1" value="0.2"
+                                       title="Time to reach max strafe speed from standstill.">
+                                <p class="form-help">Ramp-up time (0.0-2.0s)</p>
+                            </div>
+                        </div>
+
+                        <!-- Rotation Axis -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-semibold text-unitree-primary">Rotation (Yaw)</h4>
+                            <div class="bg-unitree-dark-lighter rounded-lg p-4">
+                                <canvas id="rotation-curve-chart" height="200"></canvas>
+                            </div>
+                            <div class="form-group">
+                                <label for="mouse-yaw-sensitivity" class="form-label flex justify-between">
+                                    <span>Mouse Yaw Sensitivity</span>
+                                    <span id="mouse-yaw-value" class="text-unitree-primary font-mono">5.0</span>
+                                </label>
+                                <input type="range" id="mouse-yaw-sensitivity" class="slider" min="0.1" max="50.0" step="0.1" value="5.0"
+                                       title="How fast the robot rotates from horizontal mouse movement.">
+                                <p class="form-help">Horizontal mouse sensitivity (0.1-50.0)</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="kb-max-rotation-velocity" class="form-label flex justify-between">
+                                    <span>Max Velocity</span>
+                                    <span id="kb-max-rotation-value" class="text-unitree-primary font-mono">3.0 rad/s</span>
+                                </label>
+                                <input type="range" id="kb-max-rotation-velocity" class="slider" min="0.5" max="9.0" step="0.1" value="3.0"
+                                       title="Maximum rotation speed. Hardware limit is 3.0 rad/s.">
+                                <p class="form-help">Hardware limit: 3.0 rad/s (max: 9.0 for testing)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="rotation-alpha" class="form-label flex justify-between">
+                                    <span>Alpha (α)</span>
+                                    <span id="rotation-alpha-value" class="text-unitree-primary font-mono">2.5</span>
+                                </label>
+                                <input type="range" id="rotation-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="2.5"
+                                       title="Curve steepness. Lower = responsive, Higher = smoother.">
+                                <p class="form-help">Curve steepness (0.1-4.0)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="rotation-deadzone" class="form-label flex justify-between">
+                                    <span>Deadzone (Mouse)</span>
+                                    <span id="rotation-deadzone-value" class="text-unitree-primary font-mono">10%</span>
+                                </label>
+                                <input type="range" id="rotation-deadzone" class="slider" min="0" max="30" step="1" value="10"
+                                       title="Ignores small mouse movements below this percentage.">
+                                <p class="form-help">Ignore mouse inputs below this % (0-30%)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="rotation-ramp-time" class="form-label flex justify-between">
+                                    <span>Acceleration Time</span>
+                                    <span id="rotation-ramp-time-value" class="text-unitree-primary font-mono">0.9s</span>
+                                </label>
+                                <input type="range" id="rotation-ramp-time" class="slider" min="0.0" max="2.0" step="0.1" value="0.9"
+                                       title="Time to reach max rotation speed from standstill.">
+                                <p class="form-help">Ramp-up time (0.0-2.0s)</p>
+                            </div>
+                        </div>
+
+                        <!-- Pitch Axis -->
+                        <div class="space-y-4">
+                            <h4 class="text-lg font-semibold text-unitree-primary">Pitch (Body Tilt)</h4>
+                            <div class="bg-unitree-dark-lighter rounded-lg p-4">
+                                <canvas id="pitch-curve-chart" height="200"></canvas>
+                            </div>
+                            <div class="form-group">
+                                <label for="mouse-pitch-sensitivity" class="form-label flex justify-between">
+                                    <span>Mouse Pitch Sensitivity</span>
+                                    <span id="mouse-pitch-value" class="text-unitree-primary font-mono">2.5</span>
+                                </label>
+                                <input type="range" id="mouse-pitch-sensitivity" class="slider" min="0.1" max="25.0" step="0.1" value="2.5"
+                                       title="How fast the body tilts from vertical mouse movement.">
+                                <p class="form-help">Vertical mouse sensitivity (0.1-25.0)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="pitch-max-velocity" class="form-label flex justify-between">
+                                    <span>Max Pitch Angle</span>
+                                    <span id="pitch-max-value" class="text-unitree-primary font-mono">0.35 rad</span>
+                                </label>
+                                <input type="range" id="pitch-max-velocity" class="slider" min="0.10" max="0.35" step="0.01" value="0.35"
+                                       title="Maximum body tilt angle. Hardware limit is 0.35 rad (~20°).">
+                                <p class="form-help">Hardware limit: 0.35 rad (~20°)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="pitch-alpha" class="form-label flex justify-between">
+                                    <span>Alpha (α)</span>
+                                    <span id="pitch-alpha-value" class="text-unitree-primary font-mono">2.0</span>
+                                </label>
+                                <input type="range" id="pitch-alpha" class="slider" min="0.1" max="4.0" step="0.1" value="2.0"
+                                       title="Curve steepness. Lower = responsive, Higher = smoother.">
+                                <p class="form-help">Curve steepness (0.1-4.0)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="pitch-deadzone" class="form-label flex justify-between">
+                                    <span>Deadzone (Mouse)</span>
+                                    <span id="pitch-deadzone-value" class="text-unitree-primary font-mono">10%</span>
+                                </label>
+                                <input type="range" id="pitch-deadzone" class="slider" min="0" max="30" step="1" value="10"
+                                       title="Ignores small vertical mouse movements below this percentage.">
+                                <p class="form-help">Ignore mouse inputs below this % (0-30%)</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="pitch-ramp-time" class="form-label flex justify-between">
+                                    <span>Acceleration Time</span>
+                                    <span id="pitch-ramp-time-value" class="text-unitree-primary font-mono">0.8s</span>
+                                </label>
+                                <input type="range" id="pitch-ramp-time" class="slider" min="0.0" max="2.0" step="0.1" value="0.8"
+                                       title="Time to reach max pitch angle from neutral position.">
+                                <p class="form-help">Ramp-up time (0.0-2.0s)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reset Button -->
+                <div class="flex justify-end">
+                    <button id="reset-settings-btn" class="btn-secondary">
+                        <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Reset to Defaults
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Socket.IO Client Library -->
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+<!-- Control modules -->
+<script src="{{ url_for('static', filename='js/curve-utils.js') }}?v=1.1.0"></script>
+<script src="{{ url_for('static', filename='js/curve-visualizer.js') }}?v=1.1.0"></script>
+<script src="{{ url_for('static', filename='js/settings-manager.js') }}?v=1.2.0"></script>
+<script src="{{ url_for('static', filename='js/websocket-client.js') }}?v=1.0.2"></script>
+<script src="{{ url_for('static', filename='js/keyboard-mouse-control.js') }}?v=1.5.0"></script>
+<script src="{{ url_for('static', filename='js/gamepad-control.js') }}?v=1.0.1"></script>
+
+<!-- Main control script -->
+<script src="{{ url_for('static', filename='js/control.js') }}?v=1.3.0"></script>
+{% endblock %}
+

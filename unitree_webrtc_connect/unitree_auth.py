@@ -61,21 +61,21 @@ def make_remote_request(path, body, token, method="GET"):
     APP_SIGN_SECRET = "XyvkwK45hp5PHfA8"
     UM_CHANNEL_KEY = "UMENG_CHANNEL"
     BASE_URL = "https://global-robot-api.unitree.com/"
-    
+
     # Current timestamp and nonce
     app_timestamp = str(int(round(time.time() * 1000)))
     app_nonce = hashlib.md5(app_timestamp.encode()).hexdigest()
-    
+
     # Generating app sign
     sign_str = f"{APP_SIGN_SECRET}{app_timestamp}{app_nonce}"
     app_sign = hashlib.md5(sign_str.encode()).hexdigest()
-    
+
     # Get system's timezone offset in seconds and convert it to hours and minutes
     timezone_offset = time.localtime().tm_gmtoff // 3600
     minutes_offset = abs(time.localtime().tm_gmtoff % 3600 // 60)
     sign = "+" if timezone_offset >= 0 else "-"
     app_timezone = f"GMT{sign}{abs(timezone_offset):02d}:{minutes_offset:02d}"
-    
+
     # Headers
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -95,21 +95,83 @@ def make_remote_request(path, body, token, method="GET"):
         "Host": "global-robot-api.unitree.com",
         "User-Agent": "Mozilla/5.0 (Linux; Android 15; SM-S931B Build/AP3A.240905.015.A2; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/127.0.6533.103 Mobile Safari/537.36"
     }
-    
+
     # Full URL
     url = BASE_URL + path
-    
-    if method.upper() == "GET":
-        # Convert body dictionary to query parameters for GET request
-        params = urllib.parse.urlencode(body)
-        response = requests.get(url, params=params, headers=headers)
-    else:
-        # URL-encode the body for POST request
-        encoded_body = urllib.parse.urlencode(body)
-        response = requests.post(url, data=encoded_body, headers=headers)
 
-    # Return the response as JSON
-    return response.json()
+    try:
+        # Log request details for debugging
+        logging.debug(f"API Request: {method} {url}")
+        logging.debug(f"Request Headers: {headers}")
+        if method.upper() != "GET":
+            logging.debug(f"Request Body: {body}")
+
+        if method.upper() == "GET":
+            # Convert body dictionary to query parameters for GET request
+            params = urllib.parse.urlencode(body)
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+        else:
+            # URL-encode the body for POST request
+            encoded_body = urllib.parse.urlencode(body)
+            response = requests.post(url, data=encoded_body, headers=headers, timeout=10)
+
+        # Log response details for debugging
+        logging.debug(f"Response Status Code: {response.status_code}")
+        logging.debug(f"Response Headers: {response.headers}")
+
+        # Check HTTP status code
+        if response.status_code != 200:
+            logging.error(f"Unitree API returned HTTP {response.status_code}")
+            logging.error(f"Response Content-Type: {response.headers.get('content-type', 'unknown')}")
+            logging.error(f"Response body: {response.text[:500]}")  # Log first 500 chars
+
+            # Provide specific error messages for known status codes
+            if response.status_code == 567:
+                # HTTP 567 is a custom error code used by Chinese CDNs (Alibaba Cloud, etc.)
+                # Usually indicates: rate limiting, geo-blocking, WAF blocking, or service unavailable
+                logging.error("HTTP 567 typically indicates: rate limiting, geo-blocking, or service temporarily unavailable")
+                raise ValueError(
+                    "Unitree cloud service is temporarily unavailable (Error 567). "
+                    "This may be due to:\n"
+                    "1. Too many login attempts - wait a few minutes and try again\n"
+                    "2. Geographic restrictions - VPN may be required\n"
+                    "3. Service maintenance - try again later\n"
+                    "4. Network firewall blocking the request"
+                )
+            elif response.status_code == 401:
+                raise ValueError("Authentication failed: Invalid username or password")
+            elif response.status_code == 403:
+                raise ValueError("Access forbidden: Your account may be blocked or suspended")
+            elif response.status_code == 404:
+                raise ValueError(f"API endpoint not found: {path}")
+            elif response.status_code == 429:
+                raise ValueError("Too many requests: Rate limit exceeded. Please wait a few minutes and try again.")
+            elif response.status_code >= 500:
+                raise ValueError(f"Unitree cloud service error (HTTP {response.status_code}): Service temporarily unavailable. Please try again later.")
+            else:
+                raise ValueError(f"Unitree API error: HTTP {response.status_code} - {response.text[:200]}")
+
+        # Attempt to parse JSON response
+        try:
+            return response.json()
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse JSON response from Unitree API")
+            logging.error(f"Response status code: {response.status_code}")
+            logging.error(f"Response content-type: {response.headers.get('content-type', 'unknown')}")
+            logging.error(f"Response body (first 500 chars): {response.text[:500]}")
+            raise ValueError(f"Unitree API returned invalid JSON: {str(e)}. Response: {response.text[:200]}")
+
+    except requests.exceptions.Timeout:
+        logging.error(f"Request to Unitree API timed out: {url}")
+        raise ValueError("Connection to Unitree cloud service timed out. Check your internet connection.")
+
+    except requests.exceptions.ConnectionError as e:
+        logging.error(f"Connection error to Unitree API: {e}")
+        raise ValueError("Cannot connect to Unitree cloud service. Check your internet connection.")
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request error to Unitree API: {e}")
+        raise ValueError(f"Network error while connecting to Unitree cloud service: {str(e)}")
 
 def make_local_request(path, body=None, headers=None):
     try:

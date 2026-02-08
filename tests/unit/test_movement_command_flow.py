@@ -41,15 +41,16 @@ class TestMovementCommandFlow:
         assert result['should_send'] is True
         assert 'velocities' in result
         
-        # Send command
+        # Send command using normalized values for WirelessController
         velocities = result['velocities']
         send_result = control_service.send_movement_command_sync(
-            velocities['vx'],
-            velocities['vy'],
-            velocities['vyaw'],
+            velocities.get('lx', 0.0),
+            velocities.get('ly', 0.0),
+            velocities.get('rx', 0.0),
+            velocities.get('ry', 0.0),
             result['zero_velocity']
         )
-        
+
         # Verify sending succeeded
         assert send_result['status'] == 'success'
         assert 'scheduled' in send_result['message'].lower()
@@ -61,7 +62,7 @@ class TestMovementCommandFlow:
         state.event_loop.is_running.return_value = True
         state.gamepad_enabled = False
         state.keyboard_mouse_enabled = True
-        
+
         # Process command with keyboard/mouse velocity limits
         data = {
             'lx': 0.3, 'ly': 0.5, 'rx': 0.2, 'ry': 0.0,
@@ -71,17 +72,18 @@ class TestMovementCommandFlow:
             'source': 'keyboard_mouse'
         }
         result = control_service.process_movement_command(data)
-        
+
         # Verify processing succeeded
         assert result['status'] == 'success'
         assert result['should_send'] is True
-        
-        # Send command
+
+        # Send command using normalized values for WirelessController
         velocities = result['velocities']
         send_result = control_service.send_movement_command_sync(
-            velocities['vx'],
-            velocities['vy'],
-            velocities['vyaw'],
+            velocities.get('lx', 0.0),
+            velocities.get('ly', 0.0),
+            velocities.get('rx', 0.0),
+            velocities.get('ry', 0.0),
             result['zero_velocity']
         )
         
@@ -115,8 +117,8 @@ class TestMovementCommandFlow:
         state.event_loop = Mock()
         state.event_loop.is_running.return_value = False
         
-        # Try to send command
-        send_result = control_service.send_movement_command_sync(0.5, 0.0, 0.0, False)
+        # Try to send command (lx, ly, rx, ry, is_zero_velocity)
+        send_result = control_service.send_movement_command_sync(0.5, 0.0, 0.0, 0.0, False)
         
         # Verify it fails gracefully
         assert send_result['status'] == 'error'
