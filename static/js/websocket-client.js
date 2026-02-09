@@ -71,7 +71,9 @@ class WebSocketClient {
         // Track start time for latency measurement
         this.currentCommandStartTime = performance.now();
 
-        console.log('[WebSocket] Emitting control_command:', commandData);
+        // High-frequency log (30-60Hz) - commented out to reduce console noise
+        // Uncomment for debugging control flow/latency issues
+        // console.log('[WebSocket] Emitting control_command:', commandData);
 
         // Emit command
         this.socket.emit('control_command', commandData);
@@ -103,7 +105,9 @@ class WebSocketClient {
             });
         }
 
-        console.log(`Latency (${method}): ${latency.toFixed(0)}ms (avg: ${avgLatency.toFixed(0)}ms)`);
+        // High-frequency log (30-60Hz) - commented out to reduce console noise
+        // Uncomment for debugging control flow/latency issues
+        // console.log(`Latency (${method}): ${latency.toFixed(0)}ms (avg: ${avgLatency.toFixed(0)}ms)`);
     }
 
     /**

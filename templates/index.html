@@ -1842,10 +1842,7 @@
             keysPressed[key] = true;
 
             // Handle action keys (non-movement)
-            if (e.key === ' ') {
-                // Emergency stop
-                handleKeyboardAction('emergency_stop');
-            } else if (key === 'e') {
+            if (key === 'e') {
                 // Stand up
                 handleKeyboardAction('stand_up');
             } else if (key === 'q') {

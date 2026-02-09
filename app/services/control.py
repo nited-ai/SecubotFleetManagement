@@ -241,6 +241,29 @@ class ControlService:
             # Update last command time
             self.state.last_command_time = time.time()
 
+            # ═══════════════════════════════════════════════════════════════════
+            # POSE MODE: Position-based control (bypass velocity pipeline)
+            # Frontend sends accumulated joystick position values in [-1, 1].
+            # Pass them directly to WirelessController — no slew rate limiter,
+            # no re-normalization, no axis inversions (already correct from frontend).
+            # ═══════════════════════════════════════════════════════════════════
+            if data.get('pose_mode') or self.state.pose_mode_active:
+                lx = max(-1.0, min(1.0, float(data.get('lx', 0.0))))  # roll
+                ly = max(-1.0, min(1.0, float(data.get('ly', 0.0))))  # height
+                rx = max(-1.0, min(1.0, float(data.get('rx', 0.0))))  # yaw
+                ry = max(-1.0, min(1.0, float(data.get('ry', 0.0))))  # pitch
+
+                is_zero = (abs(lx) < 0.001 and abs(ly) < 0.001 and abs(rx) < 0.001 and abs(ry) < 0.001)
+
+                if not is_zero:
+                    self.logger.info(f"🎯 [POSE MODE] lx(roll)={lx:.3f}, ly(height)={ly:.3f}, rx(yaw)={rx:.3f}, ry(pitch)={ry:.3f}")
+
+                return self.send_movement_command_sync(lx, ly, rx, ry, is_zero)
+
+            # ═══════════════════════════════════════════════════════════════════
+            # NORMAL AI MODE: Velocity-based control (existing pipeline)
+            # ═══════════════════════════════════════════════════════════════════
+
             # Get input values
             lx = float(data.get('lx', 0.0))  # Lateral (strafe)
             ly = float(data.get('ly', 0.0))  # Linear (forward/back)
@@ -525,12 +548,12 @@ class ControlService:
                 )
 
             # Send via WirelessController topic (joystick emulation)
-            # ry is always 0: WirelessController ry does NOT control pitch,
-            # and the Euler API (1007) switches the robot out of AI mode.
-            # Pitch control is disabled until a compatible approach is found.
+            # In normal AI mode: ry is 0 (Euler API breaks AI mode)
+            # In Pose mode (1028): ry controls pitch via WirelessController natively
+            ry_value = round(ry, 4) if self.state.pose_mode_active else 0.0
             self.state.connection.datachannel.pub_sub.publish_without_callback(
                 RTC_TOPIC["WIRELESS_CONTROLLER"],
-                {"lx": round(lx, 4), "ly": round(ly, 4), "rx": round(rx, 4), "ry": 0.0, "keys": 0}
+                {"lx": round(lx, 4), "ly": round(ly, 4), "rx": round(rx, 4), "ry": ry_value, "keys": 0}
             )
 
             # Log zero velocity commands for debugging
@@ -556,7 +579,20 @@ class ControlService:
         if self.state.event_loop and self.state.event_loop.is_running():
             self.logger.info(f"Scheduling robot action: {action}")
             asyncio.run_coroutine_threadsafe(self.send_robot_action(action), self.state.event_loop)
-            return {'status': 'success', 'action': action, 'message': f'Action {action} scheduled'}
+            result = {'status': 'success', 'action': action, 'message': f'Action {action} scheduled'}
+
+            # Height adjustment disabled - BodyHeight API (1013) returns code 3203 in AI mode
+            # height_names = ['low', 'middle', 'high']
+            # if action == 'increase_height':
+            #     predicted = min(self.state.current_body_height + 1, 2)
+            #     result['height_level'] = predicted
+            #     result['height_name'] = height_names[predicted]
+            # elif action == 'decrease_height':
+            #     predicted = max(self.state.current_body_height - 1, 0)
+            #     result['height_level'] = predicted
+            #     result['height_name'] = height_names[predicted]
+
+            return result
         else:
             self.logger.error(
                 f"Event loop not running! state.event_loop={self.state.event_loop}, "
@@ -597,6 +633,15 @@ class ControlService:
                     {"api_id": SPORT_CMD["FreeWalk"]}
                 )
                 self.logger.info("FreeWalk (Agile Mode) command sent - obstacle avoidance enabled")
+
+            elif action == 'leash_mode':
+                # Toggle Leash Mode (Lead Follow mode)
+                # Use LeadFollow API 1045 to toggle the mode
+                await self.state.connection.datachannel.pub_sub.publish_request_new(
+                    RTC_TOPIC["SPORT_MOD"],
+                    {"api_id": SPORT_CMD["LeadFollow"]}
+                )
+                self.logger.info("Leash Mode (Lead Follow) toggle command sent")
 
             elif action == 'stand_up':
                 # Stand up first
@@ -656,6 +701,10 @@ class ControlService:
                         self.logger.warning(f"Body height command may have failed - no response data")
                 except Exception as e:
                     self.logger.error(f"Error changing body height: {e}")
+
+            # Height adjustment disabled - BodyHeight API (1013) returns code 3203 in AI mode
+            # elif action == 'increase_height': ...
+            # elif action == 'decrease_height': ...
 
             elif action == 'lidar_switch':
                 # Toggle lidar using publish_without_callback
@@ -764,6 +813,42 @@ class ControlService:
                     }
                 )
                 self.logger.info(f"FreeAvoid (Avoidance) mode: {'enabled' if self.state.free_avoid_active else 'disabled (returned to Agile Mode)'}")
+
+            elif action == 'enter_pose_mode':
+                # Enter Pose Mode: stop movement, then send Pose API (1028)
+                # WirelessController axes are automatically remapped in Pose mode:
+                #   lx → roll, ly → height, rx → yaw, ry → pitch
+                if self.state.pose_mode_active:
+                    self.logger.warning("Already in Pose Mode - ignoring enter request")
+                    return {'status': 'success', 'action': action, 'message': 'Already in pose mode'}
+
+                # Stop movement first
+                await self.send_movement_command(0.0, 0.0, 0.0, 0.0, True)
+                await asyncio.sleep(0.2)
+
+                # Enter Pose Mode
+                await self.state.connection.datachannel.pub_sub.publish_request_new(
+                    RTC_TOPIC["SPORT_MOD"],
+                    {"api_id": SPORT_CMD["Pose"]}
+                )
+                self.state.pose_mode_active = True
+                self.logger.info("✓ Entered Pose Mode (API 1028) - ry now controls pitch")
+
+            elif action == 'exit_pose_mode':
+                # Exit Pose Mode: RecoveryStand (1006) is the ONLY command that works
+                if not self.state.pose_mode_active:
+                    self.logger.warning("Not in Pose Mode - ignoring exit request")
+                    return {'status': 'success', 'action': action, 'message': 'Not in pose mode'}
+
+                # RecoveryStand restores FreeWalk movement
+                await self.state.connection.datachannel.pub_sub.publish_request_new(
+                    RTC_TOPIC["SPORT_MOD"],
+                    {"api_id": SPORT_CMD["RecoveryStand"]}
+                )
+                await asyncio.sleep(1.0)  # Wait for robot to stabilize
+
+                self.state.pose_mode_active = False
+                self.logger.info("✓ Exited Pose Mode (RecoveryStand 1006) - FreeWalk restored")
 
             elif action == 'toggle_walk_pose':
                 # Toggle between walk and pose mode (legacy - kept for compatibility)

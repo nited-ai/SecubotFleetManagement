@@ -3,6 +3,17 @@
  * Handles WASD keyboard movement and mouse rotation via Pointer Lock API
  */
 
+// ============================================================================
+// DEBUG LEVEL CONFIGURATION
+// ============================================================================
+// Level 0 (SILENT): No debug logs
+// Level 1 (BASIC): Essential logs only (actions, errors)
+// Level 2 (VERBOSE): Include movement commands
+// Level 3 (DEEP_DEBUG): All logs including sensitivity calculations
+// ============================================================================
+const DEBUG_LEVEL = parseInt(localStorage.getItem('DEBUG_LEVEL') || '1');
+
+
 class KeyboardMouseControl {
     constructor() {
         this.enabled = false;
@@ -26,6 +37,10 @@ class KeyboardMouseControl {
         // Speed percentage (0-100%, controlled by speed slider)
         // This represents the percentage along the curve (0% = no movement, 100% = full curve)
         this.speedPercentage = 100; // Default to 100%
+
+        // Precision Mode (Shift key) - temporarily reduces speed to 25%
+        this.precisionMode = false;
+        this.speedBeforeShift = null;  // Store speed before entering precision mode
 
         // Constants
         this.POLL_RATE = 33; // 30Hz
@@ -230,24 +245,24 @@ class KeyboardMouseControl {
      */
     disable() {
         if (!this.enabled) return;
-        
+
         this.enabled = false;
         console.log('❌ Keyboard/Mouse control disabled');
-        
+
         // Stop polling
         if (this.pollingInterval) {
             clearInterval(this.pollingInterval);
             this.pollingInterval = null;
         }
-        
+
         // Remove event listeners
         this.removeEventListeners();
-        
+
         // Exit pointer lock
         if (this.pointerLocked) {
             document.exitPointerLock();
         }
-        
+
         // Reset state
         this.keysPressed = {};
         this.mouseMovement = { x: 0, y: 0 };
@@ -329,7 +344,7 @@ class KeyboardMouseControl {
         const key = e.key.toLowerCase();
 
         // Prevent default for control keys
-        if (['w', 'a', 's', 'd', 'q', 'e', 'r', ' ', 'escape', 'arrowleft', 'arrowright'].includes(key)) {
+        if (['w', 'a', 's', 'd', 'q', 'e', 'r', ' ', 'escape', 'arrowleft', 'arrowright', 'shift'].includes(key)) {
             e.preventDefault();
         }
 
@@ -338,6 +353,39 @@ class KeyboardMouseControl {
         // Debug logging for WASD keys
         if (['w', 'a', 's', 'd'].includes(key)) {
             console.log(`[KB] Key pressed: ${key.toUpperCase()}`);
+        }
+
+        // Handle Shift key for Precision Mode
+        if (key === 'shift') {
+            // Guard against keydown repeat events
+            if (e.repeat) return;
+            // Only activate when pointer is locked
+            if (!this.pointerLocked) return;
+
+            if (!this.precisionMode) {
+                this.precisionMode = true;
+
+                // Store current speed before switching to precision mode
+                this.speedBeforeShift = this.speedPercentage;
+
+                // Set speed to 25% for precision control
+                this.speedPercentage = 25;
+
+                // Update speed slider UI
+                const speedSlider = document.getElementById('speed-slider');
+                const speedPercentageDisplay = document.getElementById('speed-percentage');
+                if (speedSlider) {
+                    speedSlider.value = 25;
+                }
+                if (speedPercentageDisplay) {
+                    speedPercentageDisplay.textContent = '25%';
+                }
+
+                // Show visual feedback
+                this.showSpeedIndicator(25);
+
+                console.log(`🎯 [PRECISION MODE] Activated - Speed reduced to 25% (was ${this.speedBeforeShift}%)`);
+            }
         }
 
         // Handle action keys (non-movement)
@@ -386,6 +434,31 @@ class KeyboardMouseControl {
 
         const key = e.key.toLowerCase();
         this.keysPressed[key] = false;
+
+        // Shift release: Exit Precision Mode
+        if (key === 'shift' && this.precisionMode) {
+            this.precisionMode = false;
+
+            // Restore previous speed
+            const restoredSpeed = this.speedBeforeShift !== null ? this.speedBeforeShift : 100;
+            this.speedPercentage = restoredSpeed;
+            this.speedBeforeShift = null;
+
+            // Update speed slider UI
+            const speedSlider = document.getElementById('speed-slider');
+            const speedPercentageDisplay = document.getElementById('speed-percentage');
+            if (speedSlider) {
+                speedSlider.value = restoredSpeed;
+            }
+            if (speedPercentageDisplay) {
+                speedPercentageDisplay.textContent = `${restoredSpeed}%`;
+            }
+
+            // Show visual feedback
+            this.showSpeedIndicator(restoredSpeed);
+
+            console.log(`🎯 [PRECISION MODE] Deactivated - Speed restored to ${restoredSpeed}%`);
+        }
 
         // SPACE release: Exit Pose Mode
         if (e.key === ' ' && this.poseMode) {
@@ -540,8 +613,10 @@ class KeyboardMouseControl {
             // the [0,1] clamp in applyCurve() from swallowing the sensitivity effect
             rotation = rawPixels * this.MOUSE_SCALE_FACTOR;
 
-            // DIAGNOSTIC LOGGING: Track sensitivity through pipeline
-            console.log(`[SENSITIVITY DEBUG Step 1] Raw Pixels: ${rawPixels}, MOUSE_SCALE_FACTOR: ${this.MOUSE_SCALE_FACTOR}, rotation (pre-curve): ${rotation.toFixed(3)}, mouseSensitivity: ${this.settings.mouseSensitivity} (applied post-curve)`);
+            // DIAGNOSTIC LOGGING: Track sensitivity through pipeline (Level 3: Deep Debug)
+            if (DEBUG_LEVEL >= 3) {
+                console.log(`[SENSITIVITY DEBUG Step 1] Raw Pixels: ${rawPixels}, MOUSE_SCALE_FACTOR: ${this.MOUSE_SCALE_FACTOR}, rotation (pre-curve): ${rotation.toFixed(3)}, mouseSensitivity: ${this.settings.mouseSensitivity} (applied post-curve)`);
+            }
 
             this.mouseMovement.x = 0; // Reset after reading
         }
@@ -567,8 +642,8 @@ class KeyboardMouseControl {
         rotation *= speedMultiplier;
         pitch *= speedMultiplier;
 
-        // DIAGNOSTIC LOGGING: Track speed multiplier effect (Task 35.1)
-        if (rotation !== 0) {
+        // DIAGNOSTIC LOGGING: Track speed multiplier effect (Level 3: Deep Debug)
+        if (DEBUG_LEVEL >= 3 && rotation !== 0) {
             console.log(`[SENSITIVITY DEBUG Step 2] speedPercentage: ${this.speedPercentage}, speedMultiplier: ${speedMultiplier}, rotation (after speed): ${rotation.toFixed(3)}`);
         }
 
@@ -706,8 +781,8 @@ class KeyboardMouseControl {
         // Calculate velocity magnitude for debug logging
         const velocityMagnitude = Math.sqrt(vx * vx + vy * vy + vyaw * vyaw);
 
-        // Debug logging (only when there's movement)
-        if (velocityMagnitude > 0.01 || Math.abs(vpitch) > 0.01) {
+        // Debug logging (Level 2: Verbose)
+        if (DEBUG_LEVEL >= 2 && (velocityMagnitude > 0.01 || Math.abs(vpitch) > 0.01)) {
             console.log(`[KB/Mouse Poll] forward=${forward}, strafe=${strafe}, rotation=${rotation.toFixed(3)}, pitch=${pitch.toFixed(3)} → vx=${vx.toFixed(2)}, vy=${vy.toFixed(2)}, vyaw=${vyaw.toFixed(2)}, vpitch=${vpitch.toFixed(2)}`);
         }
 
@@ -736,8 +811,8 @@ class KeyboardMouseControl {
             const rx = maxRotation > 0 ? -vyaw / maxRotation : 0;  // Backend inverts, so we pre-invert
             const ry = maxPitch > 0 ? vpitch / maxPitch : 0;  // Pitch angle (normalized)
 
-            // DIAGNOSTIC LOGGING: Track normalization (Task 35.3)
-            if (Math.abs(vyaw) > 0.01) {
+            // DIAGNOSTIC LOGGING: Track normalization (Level 3: Deep Debug)
+            if (DEBUG_LEVEL >= 3 && Math.abs(vyaw) > 0.01) {
                 console.log(`[SENSITIVITY DEBUG Step 4] vyaw (before norm): ${vyaw.toFixed(3)}, maxRotation: ${maxRotation}, rx (normalized): ${rx.toFixed(3)}`);
             }
 
@@ -757,8 +832,8 @@ class KeyboardMouseControl {
                 source: 'keyboard_mouse'
             };
 
-            // Enhanced debug logging
-            if (Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01 || Math.abs(vyaw) > 0.01) {
+            // Enhanced debug logging (Level 2: Verbose)
+            if (DEBUG_LEVEL >= 2 && (Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01 || Math.abs(vyaw) > 0.01)) {
                 console.log(`[sendCommand] vx=${vx.toFixed(3)}, vy=${vy.toFixed(3)}, vyaw=${vyaw.toFixed(3)} → Normalized: ly=${ly.toFixed(3)}, lx=${lx.toFixed(3)}, rx=${rx.toFixed(3)} | max_linear=${maxLinear}, max_rotation=${maxRotation}`);
             }
             this.onCommandSend(commandData);

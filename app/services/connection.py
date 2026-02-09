@@ -42,15 +42,17 @@ class ConnectionService:
     - Robot initialization (AI mode, FreeWalk)
     """
     
-    def __init__(self, state_service):
+    def __init__(self, state_service, debug_level=1):
         """
         Initialize ConnectionService.
 
         Args:
             state_service: StateService instance for state management
+            debug_level: Logging verbosity (0=Silent, 1=Basic, 2=Verbose, 3=Deep Debug)
         """
         self.state = state_service
         self.logger = logging.getLogger(__name__)
+        self.debug_level = debug_level
         self._status_polling_task = None  # Background task for status polling
     
     def _run_event_loop(self, loop: asyncio.AbstractEventLoop):
@@ -220,7 +222,7 @@ class ConnectionService:
             import time
 
             def lowstate_callback(message):
-                """Process LOW_STATE data for battery level."""
+                """Process LOW_STATE data for battery level and temperature."""
                 try:
                     data = message['data']
                     bms_state = data.get('bms_state', {})
@@ -230,16 +232,57 @@ class ConnectionService:
                         self.state.battery_level = battery_soc
                         self.state.last_status_update = time.time()
                         self.logger.debug(f"Battery level updated: {battery_soc}%")
+
+                    # Extract all temperature values and store the maximum
+                    temps = []
+
+                    def _append_temp(value):
+                        """Safely append a numeric temperature value, handling lists and non-numeric types."""
+                        if value is None:
+                            return
+                        if isinstance(value, list):
+                            for v in value:
+                                _append_temp(v)
+                            return
+                        if isinstance(value, (int, float)):
+                            temps.append(float(value))
+
+                    # Motor temperatures (12 motors)
+                    motor_state = data.get('motor_state', [])
+                    for motor in motor_state:
+                        if isinstance(motor, dict):
+                            _append_temp(motor.get('temperature', None))
+
+                    # BMS temperatures
+                    _append_temp(bms_state.get('bq_ntc', None))
+                    _append_temp(bms_state.get('mcu_ntc', None))
+
+                    # Additional NTC sensor
+                    _append_temp(data.get('temperature_ntc1', None))
+
+                    # Store maximum temperature
+                    if temps:
+                        max_temp = max(temps)
+                        self.state.max_temperature = max_temp
+                        self.logger.info(f"🌡️ Max temperature: {max_temp}°C (from {len(temps)} sensors, all: {[round(t, 1) for t in temps]})")
+                    else:
+                        self.logger.warning("🌡️ No temperature data found in LOW_STATE message")
                 except Exception as e:
                     self.logger.error(f"Error processing LOW_STATE data: {e}")
+
+            # Track previous state for change detection
+            self._prev_sport_state = {'mode': None, 'gait_type': None, 'body_height': None, 'progress': None}
 
             def sportmode_callback(message):
                 """Process LF_SPORT_MOD_STATE data for mode, gait type, and actual velocities."""
                 try:
                     data = message['data']
 
-                    # Extract gait type (0=idle, 1=trot, 2=climb stairs, 3=trot obstacle)
+                    # Extract key state fields
+                    mode = data.get('mode', None)
                     gait_type = data.get('gait_type', 0)
+                    body_height = data.get('body_height', 0)
+                    progress = data.get('progress', 0)
 
                     # Map gait type to user-friendly names
                     gait_names = {
@@ -251,19 +294,39 @@ class ConnectionService:
 
                     gait_name = gait_names.get(gait_type, f'gait_{gait_type}')
 
-                    # Only log and update if gait changed
+                    # Log ANY state change prominently (for monitoring mode switches)
+                    prev = self._prev_sport_state
+                    changed = False
+                    if mode != prev['mode']:
+                        self.logger.info(f"🔄 [STATE CHANGE] mode: {prev['mode']} → {mode}")
+                        prev['mode'] = mode
+                        changed = True
+                    if gait_type != prev['gait_type']:
+                        self.logger.info(f"🔄 [STATE CHANGE] gait_type: {prev['gait_type']} → {gait_type} ({gait_name})")
+                        prev['gait_type'] = gait_type
+                        changed = True
+                    if prev['body_height'] is not None and abs(body_height - (prev['body_height'] or 0)) > 0.01:
+                        self.logger.info(f"🔄 [STATE CHANGE] body_height: {prev['body_height']:.3f} → {body_height:.3f}")
+                        changed = True
+                    prev['body_height'] = body_height
+                    if progress != prev['progress']:
+                        self.logger.info(f"🔄 [STATE CHANGE] progress: {prev['progress']} → {progress}")
+                        prev['progress'] = progress
+                        changed = True
+
+                    if changed:
+                        self.logger.info(f"📊 [FULL STATE] mode={mode}, gait_type={gait_type} ({gait_name}), body_height={body_height:.3f}, progress={progress}")
+
+                    # Update stored gait mode
                     if gait_name != self.state.current_mode:
-                        self.logger.info(f"Gait type changed: {self.state.current_mode} → {gait_name}")
                         self.state.current_mode = gait_name
 
-                    # CRITICAL DEBUG: Log actual robot velocities
-                    # This shows what the robot is ACTUALLY doing vs what we commanded
-                    velocity = data.get('velocity', [0, 0, 0])  # [vx, vy, vz]
-                    yaw_speed = data.get('yaw_speed', 0)  # Actual rotation speed
-
-                    # Only log when robot is moving (avoid spam)
-                    if abs(yaw_speed) > 0.01 or abs(velocity[0]) > 0.01 or abs(velocity[1]) > 0.01:
-                        self.logger.info(f"🤖 [ROBOT ACTUAL] velocity=[{velocity[0]:.3f}, {velocity[1]:.3f}, {velocity[2]:.3f}] m/s, yaw_speed={yaw_speed:.3f} rad/s")
+                    # Log actual robot velocities when moving (Level 2: Verbose)
+                    if self.debug_level >= 2:
+                        velocity = data.get('velocity', [0, 0, 0])
+                        yaw_speed = data.get('yaw_speed', 0)
+                        if abs(yaw_speed) > 0.01 or abs(velocity[0]) > 0.01 or abs(velocity[1]) > 0.01:
+                            self.logger.info(f"🤖 [ROBOT ACTUAL] velocity=[{velocity[0]:.3f}, {velocity[1]:.3f}, {velocity[2]:.3f}] m/s, yaw_speed={yaw_speed:.3f} rad/s")
 
                 except Exception as e:
                     self.logger.error(f"Error processing LF_SPORT_MOD_STATE data: {e}")

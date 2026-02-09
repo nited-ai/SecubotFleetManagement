@@ -415,6 +415,9 @@ input[type="range"]::-moz-range-thumb:hover {
     font-size: 1.2em;
 }
 
+/* Height Indicator disabled - BodyHeight API (1013) returns code 3203 in AI mode */
+/* .height-indicator { ... } */
+
 /* ============================================================================
    REDESIGNED HUD LAYOUT - Unitree Teal Theme
    ============================================================================ */
@@ -440,6 +443,19 @@ input[type="range"]::-moz-range-thumb:hover {
     flex-direction: column;
     align-items: flex-end;
     gap: 0px;
+    z-index: 100;
+}
+
+/* Bottom-Center HUD Group (Action Buttons) */
+.hud-bottom-center {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
     z-index: 100;
 }
 
@@ -470,23 +486,9 @@ input[type="range"]::-moz-range-thumb:hover {
     filter: drop-shadow(0px 0px 2px black);
 }
 
-/* Battery fill animation */
-.battery-fill {
-    fill: #00E8DA;
-    transition: height 0.5s ease, y 0.5s ease, fill 0.3s ease;
-}
-
-/* Battery color states */
-.battery-icon-vertical.battery-high .battery-fill {
-    fill: #10b981; /* Green */
-}
-
-.battery-icon-vertical.battery-medium .battery-fill {
-    fill: #f59e0b; /* Yellow */
-}
-
-.battery-icon-vertical.battery-low .battery-fill {
-    fill: #ef4444; /* Red */
+/* Battery fill transition (color set directly via JS setAttribute) */
+#battery-fill {
+    transition: height 0.5s ease, y 0.5s ease, fill 0.3s ease, stroke 0.3s ease;
 }
 
 /* Battery text color states */
@@ -502,31 +504,17 @@ input[type="range"]::-moz-range-thumb:hover {
     color: #ef4444 !important; /* Red */
 }
 
-/* WiFi Icon */
+/* WiFi/Signal Icon */
 .wifi-icon {
-    width: 65px;
-    height: 42px;
+    width: 55px;
+    height: 38px;
     color: #00E8DA;
     transition: all 0.3s ease;
     filter: drop-shadow(0px 0px 2px black);
 }
 
-/* WiFi color states based on ping */
-.wifi-icon.ping-excellent {
-    color: #10b981 !important; /* Green <100ms */
-}
-
-.wifi-icon.ping-good {
-    color: #ffee00 !important; /* Yellow <200ms */
-}
-
-.wifi-icon.ping-fair {
-    color: #fb923c !important; /* Orange <300ms */
-}
-
-.wifi-icon.ping-poor {
-    color: #ef4444 !important; /* Red ≥300ms */
-}
+/* WiFi wave colors set directly via JS setAttribute('fill', color) */
+/* Center tower stays teal via inline fill="#00E8DA" */
 
 /* Ping text color states */
 .hud-icon-value.ping-excellent {
@@ -543,6 +531,35 @@ input[type="range"]::-moz-range-thumb:hover {
 
 .hud-icon-value.ping-poor {
     color: #ef4444 !important; /* Red ≥300ms */
+}
+
+/* Temperature Icon */
+.temp-icon {
+    width: 40px;
+    height: 40px;
+    color: #00E8DA;
+    transition: all 0.3s ease;
+    filter: drop-shadow(0px 0px 2px black);
+}
+
+/* Temp fill/outline colors set directly via JS setAttribute('fill'/'stroke', color) */
+/* Outer outline stays teal via inline fill/stroke="#00E8DA" */
+
+/* Temperature text color states */
+.hud-icon-value.temp-excellent {
+    color: #10b981 !important; /* Green <50°C */
+}
+
+.hud-icon-value.temp-good {
+    color: #ffee00 !important; /* Yellow <65°C */
+}
+
+.hud-icon-value.temp-fair {
+    color: #fb923c !important; /* Orange <80°C */
+}
+
+.hud-icon-value.temp-poor {
+    color: #ef4444 !important; /* Red ≥80°C */
 }
 
 /* HUD Icon Value (Text inside icons) */
@@ -609,36 +626,7 @@ input[type="range"]::-moz-range-thumb:hover {
     transition: all 0.3s ease;
 }
 
-/* Strikethrough line for inactive audio states */
-.audio-strikethrough {
-    position: absolute;
-    width: 45px;
-    height: 3px;
-    background: #ef4444;
-    transform: rotate(-45deg);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    filter: drop-shadow(0 0 2px black);
-}
-
-/* Microphone States (Clickable toggle + 'C' key / right mouse button) */
-.mic-active {
-    color: #10b981; /* Green when transmitting */
-}
-
-.mic-active .audio-strikethrough {
-    opacity: 0; /* Hide strikethrough when active */
-}
-
-.mic-inactive {
-    color: #ef4444; /* Red when not transmitting */
-}
-
-.mic-inactive .audio-strikethrough {
-    opacity: 1; /* Show strikethrough when inactive */
-}
-
-/* Hover effects for microphone icon */
+/* Microphone States - strikethrough line is inside SVG, toggled via JS display property */
 .mic-active:hover svg {
     filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.6));
 }
@@ -647,23 +635,7 @@ input[type="range"]::-moz-range-thumb:hover {
     filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
 }
 
-/* Speaker States */
-.speaker-active {
-    color: #10b981; /* Green when audio enabled */
-}
-
-.speaker-active .audio-strikethrough {
-    opacity: 0; /* Hide strikethrough when active */
-}
-
-.speaker-inactive {
-    color: #ef4444; /* Red when audio disabled */
-}
-
-.speaker-inactive .audio-strikethrough {
-    opacity: 1; /* Show strikethrough when inactive */
-}
-
+/* Speaker States - waves/X toggled via JS display property */
 .speaker-active:hover svg {
     filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.6));
 }
@@ -742,8 +714,8 @@ input[type="range"]::-moz-range-thumb:hover {
 
 /* Speed Icon */
 .speed-icon {
-    width: 35px;
-    height: 35px;
+    width: 40px;
+    height: 40px;
     color: #00E8DA;
     filter: drop-shadow(0 0 2px black);
 }

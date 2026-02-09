@@ -4,6 +4,7 @@ Run this script and open http://localhost:5000 in your browser.
 """
 
 import logging
+import os
 from flask import Flask
 from flask_socketio import SocketIO
 
@@ -13,8 +14,23 @@ from app.services import StateService, ConnectionService, VideoService, AudioSer
 # Import route blueprints
 from app.routes import views_bp, api_bp, register_websocket_handlers
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# ============================================================================
+# DEBUG LEVEL CONFIGURATION
+# ============================================================================
+# Level 0 (SILENT): Only errors/warnings
+# Level 1 (BASIC): Essential logs only (connection status, actions, errors)
+# Level 2 (VERBOSE): Include movement commands and state changes
+# Level 3 (DEEP_DEBUG): All logs including sensitivity calculations, normalization
+# ============================================================================
+DEBUG_LEVEL = int(os.getenv('DEBUG_LEVEL', '1'))  # Default to Level 1 (Basic)
+
+# Configure logging based on DEBUG_LEVEL
+if DEBUG_LEVEL == 0:
+    logging.basicConfig(level=logging.WARNING)  # Silent mode
+elif DEBUG_LEVEL == 1:
+    logging.basicConfig(level=logging.INFO)     # Basic mode
+else:
+    logging.basicConfig(level=logging.DEBUG)    # Verbose/Deep Debug mode
 
 # Reduce Werkzeug HTTP request logging verbosity
 # This suppresses routine GET/POST request logs like "/api/robot/status"
@@ -25,6 +41,7 @@ werkzeug_logger.setLevel(logging.WARNING)
 # Create Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'unitree_webrtc_secret_key'
+app.config['DEBUG_LEVEL'] = DEBUG_LEVEL  # Make DEBUG_LEVEL accessible to services
 
 # Initialize SocketIO
 socketio = SocketIO(
@@ -41,7 +58,7 @@ socketio = SocketIO(
 
 # Initialize services
 state = StateService()
-connection_service = ConnectionService(state)
+connection_service = ConnectionService(state, debug_level=DEBUG_LEVEL)
 video_service = VideoService(state)
 audio_service = AudioService(state)
 control_service = ControlService(state)

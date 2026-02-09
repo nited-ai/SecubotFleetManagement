@@ -413,6 +413,9 @@ def robot_status():
         # Get real ping from periodic MOTION_SWITCHER query round-trip time
         ping = state.ping_ms if state.ping_ms is not None else 999
 
+        # Get maximum temperature from all sensors
+        temperature = state.max_temperature if state.max_temperature is not None else 0
+
         # Mode display temporarily disabled - investigating LF_SPORT_MOD_STATE subscription
         # gait = state.current_mode if state.current_mode else 'unknown'
         # gait_display_names = {
@@ -427,6 +430,7 @@ def robot_status():
         status_data = {
             'battery': battery,
             'ping': ping,
+            'temperature': temperature,
             # 'mode': mode_display,  # Temporarily disabled
             'connected': True
         }
@@ -436,6 +440,65 @@ def robot_status():
     except Exception as e:
         logging.error(f"Robot status error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@api_bp.route('/robot/light', methods=['GET'])
+def get_light_level():
+    """
+    Get current robot LED brightness level via VUI API 1006.
+
+    Returns:
+        {
+            "success": true,
+            "level": 5  // 0-10 discrete brightness level
+        }
+    """
+    try:
+        state = current_app.config['STATE_SERVICE']
+
+        if not state.is_connected:
+            return jsonify({'success': False, 'message': 'Robot not connected'}), 400
+
+        from unitree_webrtc_connect.constants import RTC_TOPIC
+        import asyncio
+        import json as json_mod
+
+        async def query_brightness():
+            """Query current brightness from robot via VUI API 1006."""
+            try:
+                response = await state.connection.datachannel.pub_sub.publish_request_new(
+                    RTC_TOPIC["VUI"],
+                    {"api_id": 1006}
+                )
+
+                if response and 'data' in response:
+                    if 'header' in response['data']:
+                        status_code = response['data']['header'].get('status', {}).get('code', -1)
+                        if status_code == 0:
+                            data_str = response['data'].get('data', '{}')
+                            data_parsed = json_mod.loads(data_str) if isinstance(data_str, str) else data_str
+                            brightness = data_parsed.get('brightness', 0)
+                            logging.info(f"💡 Current LED brightness: {brightness}/10")
+                            return brightness
+
+                logging.warning(f"Failed to query LED brightness: {response}")
+                return None
+
+            except Exception as e:
+                logging.error(f"Error querying LED brightness: {e}")
+                return None
+
+        future = asyncio.run_coroutine_threadsafe(query_brightness(), state.event_loop)
+        brightness = future.result(timeout=5)
+
+        if brightness is not None:
+            return jsonify({'success': True, 'level': brightness})
+        else:
+            return jsonify({'success': False, 'message': 'Failed to query brightness'}), 500
+
+    except Exception as e:
+        logging.error(f"Get light level error: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @api_bp.route('/robot/light', methods=['POST'])

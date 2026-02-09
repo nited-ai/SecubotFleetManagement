@@ -1238,3 +1238,58 @@ window.addEventListener('DOMContentLoaded', function() {
     // Initialize microphone icon to inactive state
     updateMicrophoneIcon(false);
 });
+
+/**
+ * Send robot action command
+ */
+async function sendRobotAction(action) {
+    try {
+        const response = await fetch('/api/control/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action })
+        });
+
+        if (!response.ok) {
+            console.error('Action failed:', action);
+        } else {
+            console.log('Action sent:', action);
+        }
+    } catch (error) {
+        console.error('Error sending action:', error);
+    }
+}
+
+/**
+ * Toggle Leash Mode (Lead Follow mode)
+ */
+let leashModeActive = false;
+
+async function toggleLeashMode() {
+    try {
+        // Send leash_mode action to backend
+        const response = await fetch('/api/control/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'leash_mode' })
+        });
+
+        if (response.ok) {
+            // Toggle state
+            leashModeActive = !leashModeActive;
+
+            // Update icon color
+            const icon = document.getElementById('leash-mode-icon');
+            if (icon) {
+                const newColor = leashModeActive ? '#ef4444' : '#00E8DA';
+                icon.setAttribute('fill', newColor);
+            }
+
+            console.log('Leash Mode toggled:', leashModeActive ? 'ACTIVE' : 'INACTIVE');
+        } else {
+            console.error('Leash Mode toggle failed');
+        }
+    } catch (error) {
+        console.error('Error toggling Leash Mode:', error);
+    }
+}

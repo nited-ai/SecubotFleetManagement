@@ -103,7 +103,10 @@ class StateService:
         
         # Keyboard & Mouse control state
         self._keyboard_mouse_enabled = False
-        
+
+        # Pose Mode state
+        self._pose_mode_active = False
+
         # AI Mode Free functions state
         self._speed_level = 0  # -1=slow, 0=normal, 1=fast
         self._free_bound_active = False
@@ -115,6 +118,7 @@ class StateService:
         self._current_mode = None  # Current motion mode (ai, normal, sport)
         self._last_status_update = 0  # Timestamp of last status update
         self._ping_ms = None  # Network round-trip time in milliseconds
+        self._max_temperature = None  # Maximum temperature from all sensors (°C)
 
         # Gamepad settings
         self._gamepad_settings = {
@@ -325,6 +329,16 @@ class StateService:
         self._emergency_stop_active = value
 
     @property
+    def pose_mode_active(self) -> bool:
+        """Get pose mode active state."""
+        return self._pose_mode_active
+
+    @pose_mode_active.setter
+    def pose_mode_active(self, value: bool):
+        """Set pose mode active state."""
+        self._pose_mode_active = value
+
+    @property
     def current_body_height(self) -> int:
         """Get current body height (0=low, 1=middle, 2=high)."""
         return self._current_body_height
@@ -442,6 +456,16 @@ class StateService:
         """Set network ping in milliseconds."""
         self._ping_ms = value
 
+    @property
+    def max_temperature(self) -> Optional[float]:
+        """Get maximum temperature from all sensors (°C)."""
+        return self._max_temperature
+
+    @max_temperature.setter
+    def max_temperature(self, value: Optional[float]):
+        """Set maximum temperature."""
+        self._max_temperature = value
+
     # ========== Gamepad Settings ==========
 
     @property
@@ -518,6 +542,7 @@ class StateService:
         with self._keyboard_mouse_lock:
             self._keyboard_mouse_enabled = False
         self._emergency_stop_active = False
+        self._pose_mode_active = False
         self._last_command_time = 0
         self._zero_velocity_sent = False
 
@@ -550,4 +575,5 @@ class StateService:
         self._current_mode = None
         self._last_status_update = 0
         self._ping_ms = None
+        self._max_temperature = None
 
