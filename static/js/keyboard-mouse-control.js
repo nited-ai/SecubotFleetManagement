@@ -55,6 +55,21 @@ class KeyboardMouseControl {
         // RAGE MODE flag (bypasses all smoothing)
         this.rageMode = false;
 
+        // Pose Mode state (SPACE key hold-to-activate)
+        this.poseMode = false;
+
+        // Pose Mode accumulated angles (position-based control)
+        // In Pose Mode, WirelessController axes are POSITION (spring-centered joystick).
+        // Mouse yaw/pitch ACCUMULATE so the robot holds position when mouse stops.
+        // WASD roll/height are VELOCITY-style: spring back to 0 when keys are released.
+        // Range: [-1, 1] (normalized joystick position)
+        this.poseAngles = { yaw: 0, pitch: 0 };  // Accumulated (mouse) — hold position
+
+        // Pose Mode sensitivity: how fast angles accumulate per poll tick
+        // Mouse sensitivity is scaled by speedMultiplier (speed slider)
+        this.POSE_MOUSE_SENSITIVITY = 0.003;  // Per raw pixel of mouse movement (base)
+        this.POSE_KEY_RATE = 1.0;             // Per poll tick for A/D (roll) and W/S (height) — velocity, not accumulated (1.0 = full joystick range)
+
         // Callbacks
         this.onCommandSend = null; // Callback to send commands
     }
@@ -237,6 +252,7 @@ class KeyboardMouseControl {
         this.keysPressed = {};
         this.mouseMovement = { x: 0, y: 0 };
         this.currentVelocities = { linear: 0.0, strafe: 0.0, rotation: 0.0, pitch: 0.0 };
+        this.poseAngles = { yaw: 0, pitch: 0 };
     }
 
     /**
@@ -313,7 +329,7 @@ class KeyboardMouseControl {
         const key = e.key.toLowerCase();
 
         // Prevent default for control keys
-        if (['w', 'a', 's', 'd', 'q', 'e', 'r', ' ', 'arrowleft', 'arrowright'].includes(key)) {
+        if (['w', 'a', 's', 'd', 'q', 'e', 'r', ' ', 'escape', 'arrowleft', 'arrowright'].includes(key)) {
             e.preventDefault();
         }
 
@@ -326,13 +342,39 @@ class KeyboardMouseControl {
 
         // Handle action keys (non-movement)
         if (e.key === ' ') {
+            // SPACE: Hold-to-activate Pose Mode
+            // Guard against keydown repeat events (held keys fire repeated keydown)
+            if (e.repeat) return;
+            if (!this.poseMode) {
+                this.poseMode = true;
+                this.handleAction('enter_pose_mode');
+                console.log('🎯 [POSE MODE] Entering - SPACE held');
+                this.updatePoseModeIndicator(true);
+            }
+        } else if (key === 'escape') {
+            // ESC: Emergency stop (relocated from SPACE)
             this.handleAction('emergency_stop');
+            // If in pose mode, also exit it
+            if (this.poseMode) {
+                this.poseMode = false;
+                this.poseAngles = { yaw: 0, pitch: 0 };
+                this.handleAction('exit_pose_mode');
+                console.log('🛑 [POSE MODE] Emergency exit via ESC');
+                this.updatePoseModeIndicator(false);
+            }
         } else if (key === 'e') {
             this.handleAction('stand_up');
         } else if (key === 'q') {
             this.handleAction('crouch');
         } else if (key === 'r') {
             this.handleAction('toggle_lidar');
+        // Height adjustment disabled - BodyHeight API (1013) returns code 3203 in AI mode
+        // } else if (key === 'arrowup' && !this.poseMode) {
+        //     if (e.repeat) return;
+        //     this.handleHeightAction('increase_height');
+        // } else if (key === 'arrowdown' && !this.poseMode) {
+        //     if (e.repeat) return;
+        //     this.handleHeightAction('decrease_height');
         }
     }
 
@@ -344,6 +386,15 @@ class KeyboardMouseControl {
 
         const key = e.key.toLowerCase();
         this.keysPressed[key] = false;
+
+        // SPACE release: Exit Pose Mode
+        if (e.key === ' ' && this.poseMode) {
+            this.poseMode = false;
+            this.poseAngles = { yaw: 0, pitch: 0 };
+            this.handleAction('exit_pose_mode');
+            console.log('🎯 [POSE MODE] Exiting - SPACE released');
+            this.updatePoseModeIndicator(false);
+        }
     }
 
     /**
@@ -377,6 +428,10 @@ class KeyboardMouseControl {
         }
     }
 
+    // Height adjustment disabled - BodyHeight API (1013) returns code 3203 in AI mode
+    // async handleHeightAction(action) { ... }
+    // showHeightIndicator(level, name) { ... }
+
     /**
      * Apply deadzone to value
      */
@@ -393,6 +448,74 @@ class KeyboardMouseControl {
 
         // Re-read settings from localStorage on every tick so slider changes apply immediately
         this.settings = this.loadSettings();
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // POSE MODE: Mixed position/velocity control
+        // Mouse yaw/pitch: ACCUMULATED position — robot holds angle when mouse stops
+        // WASD roll/height: VELOCITY (spring-back) — returns to 0 when keys released
+        // Speed slider scales mouse sensitivity for precision control.
+        // ═══════════════════════════════════════════════════════════════════════
+        if (this.poseMode) {
+            // Require pointer lock for Pose Mode control
+            if (!this.pointerLocked) return;
+
+            // Speed slider scales mouse sensitivity (lower speed = more precise)
+            const speedMultiplier = this.speedPercentage / 100;
+
+            // --- Accumulate mouse deltas into yaw/pitch (HOLD position) ---
+            if (this.mouseMovement.x !== 0) {
+                // Mouse right (positive pixels) → increase yaw
+                this.poseAngles.yaw += this.mouseMovement.x * this.POSE_MOUSE_SENSITIVITY * speedMultiplier;
+                this.mouseMovement.x = 0;
+            }
+            if (this.mouseMovement.y !== 0) {
+                // Mouse up (negative pixels) → increase pitch
+                this.poseAngles.pitch += this.mouseMovement.y * this.POSE_MOUSE_SENSITIVITY * speedMultiplier;
+                this.mouseMovement.y = 0;
+            }
+
+            // --- WASD: Velocity-style (spring-back to 0 when released) ---
+            let roll = 0;
+            let height = 0;
+            if (this.keysPressed['a']) roll -= this.POSE_KEY_RATE;
+            if (this.keysPressed['d']) roll += this.POSE_KEY_RATE;
+            if (this.keysPressed['w']) height += this.POSE_KEY_RATE;
+            if (this.keysPressed['s']) height -= this.POSE_KEY_RATE;
+
+            // --- Clamp accumulated angles to [-1, 1] ---
+            this.poseAngles.yaw   = Math.max(-1, Math.min(1, this.poseAngles.yaw));
+            this.poseAngles.pitch = Math.max(-1, Math.min(1, this.poseAngles.pitch));
+
+            // Debug logging (only when values are non-zero)
+            const hasValue = Math.abs(this.poseAngles.yaw) > 0.001 || Math.abs(this.poseAngles.pitch) > 0.001
+                          || Math.abs(roll) > 0.001 || Math.abs(height) > 0.001;
+            if (hasValue) {
+                console.log(`🎯 [POSE] yaw=${this.poseAngles.yaw.toFixed(3)}, pitch=${this.poseAngles.pitch.toFixed(3)}, roll=${roll.toFixed(3)}, height=${height.toFixed(3)}`);
+            }
+
+            // Send: accumulated yaw/pitch + velocity roll/height
+            // WirelessController Pose Mode axis mapping:
+            //   lx = roll, ly = height, rx = yaw, ry = pitch
+            if (this.onCommandSend) {
+                const commandData = {
+                    lx: roll,                    // Velocity (spring-back)
+                    ly: height,                  // Velocity (spring-back)
+                    rx: this.poseAngles.yaw,     // Accumulated (hold position)
+                    ry: this.poseAngles.pitch,   // Accumulated (hold position)
+                    pose_mode: true,   // Flag: bypass backend velocity pipeline
+                    source: 'keyboard_mouse'
+                };
+                this.onCommandSend(commandData);
+                this.commandInFlight = false;
+            }
+            return;  // Skip normal velocity pipeline
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // NORMAL AI MODE: Velocity-based control (existing pipeline)
+        // Require pointer lock for all movement commands
+        // ═══════════════════════════════════════════════════════════════════════
+        if (!this.pointerLocked) return;
 
         // Calculate movement from keyboard
         let forward = 0;
@@ -450,8 +573,12 @@ class KeyboardMouseControl {
         }
 
         // RAGE MODE: Bypass all smoothing (curves, ramping, deadzone)
+        // Use HARDWARE_LIMITS (absolute max) instead of user's slider settings
         if (this.rageMode) {
-            const { maxLinear, maxStrafe, maxRotation, pitchMaxVelocity } = this.settings;
+            const maxLinear = HARDWARE_LIMITS.linear;     // 5.0 m/s
+            const maxStrafe = HARDWARE_LIMITS.strafe;     // 1.0 m/s
+            const maxRotation = HARDWARE_LIMITS.rotation; // 3.0 rad/s
+            const maxPitch = HARDWARE_LIMITS.pitch;       // 0.35 rad
             // Apply sensitivity post-curve (normalized around 5.0 = "normal" preset for yaw, 2.5 for pitch)
             const sensitivityFactor = this.settings.mouseSensitivity / 5.0;
             const pitchSensitivityFactor = this.settings.mousePitchSensitivity / 2.5;
@@ -459,10 +586,10 @@ class KeyboardMouseControl {
             const vy = -strafe * maxStrafe;  // Invert strafe
             const vyawRaw = -rotation * maxRotation * sensitivityFactor;
             const vyaw = Math.max(-maxRotation, Math.min(maxRotation, vyawRaw));
-            const vpitchRaw = pitch * pitchMaxVelocity * pitchSensitivityFactor;
-            const vpitch = Math.max(-pitchMaxVelocity, Math.min(pitchMaxVelocity, vpitchRaw));
+            const vpitchRaw = pitch * maxPitch * pitchSensitivityFactor;
+            const vpitch = Math.max(-maxPitch, Math.min(maxPitch, vpitchRaw));
 
-            console.log(`🔥 [RAGE MODE] RAW: vx=${vx.toFixed(2)}, vy=${vy.toFixed(2)}, vyaw=${vyaw.toFixed(2)}, vpitch=${vpitch.toFixed(2)}`);
+            console.log(`🔥 [RAGE MODE] RAW (HW MAX): vx=${vx.toFixed(2)}, vy=${vy.toFixed(2)}, vyaw=${vyaw.toFixed(2)}, vpitch=${vpitch.toFixed(2)}`);
             this.sendCommand(vx, vy, vyaw, vpitch, true);  // Pass rageMode flag
             return;
         }
@@ -598,12 +725,16 @@ class KeyboardMouseControl {
         if (this.onCommandSend) {
             // CRITICAL: Normalize velocities and pre-invert axes to match backend expectations
             // Backend inverts lx and rx, so we pre-invert them here
-            const { maxLinear, maxStrafe, maxRotation, pitchMaxVelocity } = this.settings;
+            // In RAGE MODE: use hardware limits for normalization and max values
+            const maxLinear = rageMode ? HARDWARE_LIMITS.linear : this.settings.maxLinear;
+            const maxStrafe = rageMode ? HARDWARE_LIMITS.strafe : this.settings.maxStrafe;
+            const maxRotation = rageMode ? HARDWARE_LIMITS.rotation : this.settings.maxRotation;
+            const maxPitch = rageMode ? HARDWARE_LIMITS.pitch : this.settings.pitchMaxVelocity;
 
             const lx = maxStrafe > 0 ? -vy / maxStrafe : 0;  // Backend inverts, so we pre-invert
             const ly = maxLinear > 0 ? vx / maxLinear : 0;
             const rx = maxRotation > 0 ? -vyaw / maxRotation : 0;  // Backend inverts, so we pre-invert
-            const ry = pitchMaxVelocity > 0 ? vpitch / pitchMaxVelocity : 0;  // Pitch angle (normalized)
+            const ry = maxPitch > 0 ? vpitch / maxPitch : 0;  // Pitch angle (normalized)
 
             // DIAGNOSTIC LOGGING: Track normalization (Task 35.3)
             if (Math.abs(vyaw) > 0.01) {
@@ -615,7 +746,7 @@ class KeyboardMouseControl {
                 max_linear: maxLinear,
                 max_strafe: maxStrafe,
                 max_rotation: maxRotation,
-                max_pitch: pitchMaxVelocity,
+                max_pitch: maxPitch,
                 // Backend slew rate limiter parameters (acceleration ramp-up time)
                 linear_ramp_time: this.settings.linearRampTime || 0.20,
                 strafe_ramp_time: this.settings.strafeRampTime || 0.20,
@@ -714,15 +845,56 @@ class KeyboardMouseControl {
 
         // Update UI (SVG element is the button now)
         const btn = document.getElementById('rage-mode-btn');
+        const iconPath = document.getElementById('rage-mode-icon');
         if (btn) {
             if (enabled) {
-                btn.style.color = '#ef4444';  // Red
+                if (iconPath) iconPath.setAttribute('fill', '#ef4444');  // Red
                 btn.style.filter = 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.6))';  // Red glow
             } else {
-                btn.style.color = '#00E8DA';  // Teal (matches other HUD icons)
+                if (iconPath) iconPath.setAttribute('fill', '#00E8DA');  // Teal
                 btn.style.filter = 'drop-shadow(0 0 2px black)';  // Default shadow
             }
         }
+    }
+
+    /**
+     * Update Pose Mode visual indicator on HUD
+     * Changes the running human icon to a standing human icon (green) when active.
+     */
+    updatePoseModeIndicator(active) {
+        const iconPath = document.getElementById('rage-mode-icon');
+        const iconSvg = document.getElementById('rage-mode-btn');
+        if (!iconPath || !iconSvg) return;
+
+        // Standing person SVG path (pose mode active)
+        const STANDING_PERSON_PATH = 'M130.914,61.404c16.928,0,30.701-13.771,30.701-30.699C161.615,13.774,147.842,0,130.914,0c-16.93,0-30.703,13.774-30.703,30.705C100.211,47.633,113.984,61.404,130.914,61.404z M130.914,15c8.657,0,15.701,7.045,15.701,15.705c0,8.656-7.044,15.699-15.701,15.699c-8.659,0-15.703-7.043-15.703-15.699C115.211,22.045,122.255,15,130.914,15z M142.779,68.914h-23.54c-16.518,0-29.956,13.439-29.956,29.959v50.484c0,9.509,4.495,18.307,11.966,23.924v81.238c0,4.143,3.358,7.5,7.5,7.5c4.142,0,7.5-3.357,7.5-7.5v-85.316c0-2.879-1.623-5.376-4.003-6.633c-4.912-2.623-7.963-7.684-7.963-13.213V98.873c0-8.248,6.709-14.959,14.956-14.959h23.54c8.248,0,14.957,6.711,14.957,14.959v50.484c0,5.53-3.054,10.592-7.971,13.216c-2.377,1.258-3.998,3.753-3.998,6.63v85.316c0,4.143,3.358,7.5,7.5,7.5c4.142,0,7.5-3.357,7.5-7.5V173.28c7.473-5.616,11.969-14.415,11.969-23.923V98.873C172.736,82.354,159.298,68.914,142.779,68.914z';
+        // Running person SVG path (normal mode)
+        const RUNNING_PERSON_PATH = 'M13,2 C14.6569,2 16,3.34315 16,5 C16,6.4374176 14.989097,7.6387305 13.6394248,7.93171628 L13.469,7.96356 L14.9049,10.261 L16.6286,9.57152 C17.1414,9.36641 17.7234,9.61583 17.9285,10.1286 C18.11895,10.6047714 17.9175097,11.1406102 17.4771844,11.3789437 L17.3714,11.4285 L15.6477,12.118 C14.8018647,12.4562588 13.842291,12.1788775 13.3046353,11.4607677 L13.2089,11.321 L13.0463,11.0609 L12.4403,13.4851 C12.38606,13.7019 12.298348,13.901548 12.184076,14.0798456 L12.0935,14.2095 L13.7468,15.4376 C14.1430667,15.732 14.4146519,16.161037 14.5132351,16.640361 L14.542,16.8223 L14.895,20 L15,20 C15.5523,20 16,20.4477 16,21 C16,21.51285 15.613973,21.9355092 15.1166239,21.9932725 L15,22 L14.0895,22 C13.5690357,22 13.1258286,21.63665 13.0156081,21.1386974 L12.9962,21.0215 L12.5542,17.0431 L9.40368,14.7028 C9.34671,14.6605 9.29553,14.6132 9.2503,14.5621 C8.69851333,14.1200733 8.40463653,13.4019044 8.52705735,12.6715052 L8.55972,12.5149 L9.35399,9.33783 L7.78454,9.80867 L6.94868,12.3162 C6.77404,12.8402 6.20772,13.1233 5.68377,12.9487 C5.19725429,12.7864786 4.9183499,12.286602 5.0208232,11.7965551 L5.05132,11.6838 L5.88717,9.17621 C6.07583833,8.61019583 6.50617896,8.16078701 7.05678434,7.94576318 L7.20984,7.89302 L10.6474,6.86174 C10.2421,6.3502 10,5.70337 10,5 C10,3.34315 11.3431,2 13,2 Z M8.2,15.4 C8.53137,14.9582 9.15817,14.8686 9.6,15.2 C10.0078154,15.5059077 10.1155314,16.0635172 9.86903487,16.4949808 L9.8,16.6 L8.5838,18.2216 C8.13599375,18.8186938 7.32402148,18.990309 6.67848165,18.6455613 L6.55175,18.5697 L4.62197,17.2832 C4.22939,17.5957 3.65616,17.5704 3.29289,17.2071 C2.93241,16.8466385 2.90468077,16.2793793 3.20970231,15.8871027 L3.29289,15.7929 L3.7871,15.2987 C4.09658182,14.9892455 4.56555124,14.9173942 4.94922239,15.107564 L5.06152,15.1725 L7.26759,16.6432 L8.2,15.4 Z M13,4 C12.4477,4 12,4.44772 12,5 C12,5.55228 12.4477,6 13,6 C13.5523,6 14,5.55228 14,5 C14,4.44772 13.5523,4 13,4 Z';
+
+        if (active) {
+            // Switch to standing person icon — green
+            iconPath.setAttribute('d', STANDING_PERSON_PATH);
+            iconPath.setAttribute('fill', '#00E8DA');
+            iconPath.setAttribute('stroke', '#00E8DA');
+            iconPath.setAttribute('stroke-width', '10');
+            iconPath.setAttribute('stroke-linecap', 'round');
+            iconPath.setAttribute('stroke-linejoin', 'round');
+            iconSvg.setAttribute('viewBox', '0 0 262.02 262.02');
+            iconSvg.style.filter = 'drop-shadow(0 0 6px rgba(34, 197, 94, 0.5))';
+            iconSvg.title = 'POSE MODE ACTIVE — Release SPACE to exit';
+        } else if (!this.rageMode) {
+            // Restore running person icon — teal (only if rage mode is not active)
+            iconPath.setAttribute('d', RUNNING_PERSON_PATH);
+            iconPath.setAttribute('fill', '#00E8DA');
+            iconPath.removeAttribute('stroke');
+            iconPath.removeAttribute('stroke-width');
+            iconPath.removeAttribute('stroke-linecap');
+            iconPath.removeAttribute('stroke-linejoin');
+            iconSvg.setAttribute('viewBox', '0 0 24 24');
+            iconSvg.style.filter = 'drop-shadow(0 0 2px black)';
+            iconSvg.title = 'RAGE MODE: Bypass all smoothing for raw control (DANGEROUS!)';
+        }
+        // If rageMode is active, let toggleRageMode handle the icon color
     }
 }
 

@@ -459,7 +459,8 @@ function initializeSettingsPanelControls() {
 function initializeLightSlider() {
     const lightSlider = document.getElementById('light-level-slider');
     const lightValue = document.getElementById('light-level-value');
-    const lightIcon = document.getElementById('light-icon');
+    const lightIconOn = document.getElementById('light-icon-on');
+    const lightIconOff = document.getElementById('light-icon-off');
 
     if (!lightSlider || !lightValue) return;
 
@@ -467,11 +468,27 @@ function initializeLightSlider() {
     let currentBrightness = parseInt(lightSlider.value);
 
     /**
+     * Toggle flashlight on/off icons based on brightness level
+     */
+    function updateLightIcon(level) {
+        if (lightIconOn && lightIconOff) {
+            if (level > 0) {
+                lightIconOn.style.display = '';
+                lightIconOff.style.display = 'none';
+            } else {
+                lightIconOn.style.display = 'none';
+                lightIconOff.style.display = '';
+            }
+        }
+    }
+
+    /**
      * Update display text to show brightness level as percentage
      */
     function updateDisplay(level) {
         lightValue.textContent = `${level * 10}%`;
         currentBrightness = level;
+        updateLightIcon(level);
     }
 
     /**
@@ -493,13 +510,6 @@ function initializeLightSlider() {
 
             if (response.ok && data.success) {
                 console.log(`✓ Light level set to ${data.level}/10`);
-                // Visual feedback - brief highlight
-                if (lightIcon) {
-                    lightIcon.classList.add('scale-125');
-                    setTimeout(() => {
-                        lightIcon.classList.remove('scale-125');
-                    }, 200);
-                }
             } else {
                 console.error('Failed to set light level:', data.message);
             }
@@ -555,6 +565,27 @@ function initializeLightSlider() {
 
     // Initialize display
     updateDisplay(currentBrightness);
+
+    // Query current brightness from robot on page load
+    async function syncBrightnessFromRobot() {
+        try {
+            const response = await fetch('/api/robot/light');
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                const level = parseInt(data.level);
+                console.log(`💡 Synced light level from robot: ${level}/10`);
+                lightSlider.value = level;
+                updateDisplay(level);
+            }
+        } catch (error) {
+            // Not connected yet or query failed - keep default value
+            console.debug('Could not sync light level from robot:', error.message);
+        }
+    }
+
+    // Sync after a short delay to allow connection to establish
+    setTimeout(syncBrightnessFromRobot, 2000);
 }
 
 /**
@@ -618,29 +649,16 @@ function initializeRageModeToggle() {
     }
 
     let rageModeEnabled = false;
-    let rageModeWarningShown = localStorage.getItem('rage_mode_warning_shown') === 'true';
-    console.log('  - Warning already shown:', rageModeWarningShown);
 
     rageModeBtn.addEventListener('click', (e) => {
         console.log('🔥 RAGE MODE button clicked!');
         console.log('  - Current state:', rageModeEnabled ? 'ENABLED' : 'DISABLED');
-        console.log('  - Warning shown:', rageModeWarningShown);
 
         if (!rageModeEnabled) {
-            // Enabling RAGE MODE
-            if (!rageModeWarningShown) {
-                // Show warning modal on first use
-                console.log('  - Showing warning modal...');
-                rageModeModal.classList.remove('hidden');
-                console.log('  - Modal classes:', rageModeModal.className);
-            } else {
-                // Already seen warning, enable directly
-                console.log('  - Enabling RAGE MODE directly (warning already shown)');
-                rageModeEnabled = true;
-                if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
-                    keyboardMouseControl.toggleRageMode(true);
-                }
-            }
+            // Enabling RAGE MODE — always show warning modal
+            console.log('  - Showing warning modal...');
+            rageModeModal.classList.remove('hidden');
+            console.log('  - Modal classes:', rageModeModal.className);
         } else {
             // Disabling RAGE MODE
             console.log('  - Disabling RAGE MODE');
@@ -655,8 +673,6 @@ function initializeRageModeToggle() {
         rageModeConfirm.addEventListener('click', () => {
             console.log('🔥 RAGE MODE confirmed!');
             rageModeEnabled = true;
-            rageModeWarningShown = true;
-            localStorage.setItem('rage_mode_warning_shown', 'true');
             rageModeModal.classList.add('hidden');
             if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
                 keyboardMouseControl.toggleRageMode(true);
@@ -697,13 +713,20 @@ async function fetchRobotStatus() {
         if (response.ok && data.connected) {
             // Update HUD elements
             document.getElementById('battery-level').textContent = `${data.battery}%`;
-            document.getElementById('ping-value').textContent = `${data.ping}`;
+            document.getElementById('ping-value').textContent = `${data.ping}ms`;
 
             // Update battery fill and color based on level
             updateBatteryDisplay(data.battery);
 
             // Update WiFi/ping color based on latency
             updatePingDisplay(data.ping);
+
+            // Update temperature display
+            if (data.temperature !== undefined) {
+                const tempEl = document.getElementById('temp-value');
+                if (tempEl) tempEl.textContent = `${Math.round(data.temperature)}°C`;
+                updateTemperatureDisplay(data.temperature);
+            }
         } else {
             console.error('Failed to fetch robot status:', data.message);
             // Show disconnected state
@@ -718,69 +741,108 @@ async function fetchRobotStatus() {
 
 /**
  * Update battery icon fill and color based on battery level
+ * Battery rect: x=11, width=2, stroke-width=3 → visible from y=9 (full) to y=17 (empty), max height=8
  */
 function updateBatteryDisplay(batteryLevel) {
-    const batteryIcon = document.getElementById('battery-icon');
     const batteryFill = document.getElementById('battery-fill');
     const batteryText = document.getElementById('battery-level');
 
-    if (!batteryIcon || !batteryFill) return;
+    if (!batteryFill) return;
 
-    // Calculate fill height (battery is 14px tall internally, from y=5 to y=19)
-    const maxHeight = 14;
-    const fillHeight = (batteryLevel / 100) * maxHeight;
-    const fillY = 5 + (maxHeight - fillHeight); // Start from bottom
+    // Calculate fill height (battery inner area: y=9 to y=17, max height=8)
+    const maxHeight = 8;
+    const fillHeight = Math.max(0.5, (batteryLevel / 100) * maxHeight);
+    const fillY = 9 + (maxHeight - fillHeight); // Start from bottom
 
     // Update fill dimensions
     batteryFill.setAttribute('height', fillHeight);
     batteryFill.setAttribute('y', fillY);
 
-    // Remove existing color classes from both icon and text
-    batteryIcon.classList.remove('battery-high', 'battery-medium', 'battery-low');
-    if (batteryText) {
-        batteryText.classList.remove('battery-high', 'battery-medium', 'battery-low');
+    // Determine color based on battery level
+    let color;
+    let textClass;
+    if (batteryLevel > 50) {
+        color = '#10b981'; // Green
+        textClass = 'battery-high';
+    } else if (batteryLevel > 20) {
+        color = '#f59e0b'; // Yellow
+        textClass = 'battery-medium';
+    } else {
+        color = '#ef4444'; // Red
+        textClass = 'battery-low';
     }
 
-    // Add color class based on battery level to both icon and text
-    if (batteryLevel > 50) {
-        batteryIcon.classList.add('battery-high');
-        if (batteryText) batteryText.classList.add('battery-high');
-    } else if (batteryLevel > 20) {
-        batteryIcon.classList.add('battery-medium');
-        if (batteryText) batteryText.classList.add('battery-medium');
-    } else {
-        batteryIcon.classList.add('battery-low');
-        if (batteryText) batteryText.classList.add('battery-low');
+    // Update fill color directly on SVG element
+    batteryFill.setAttribute('fill', color);
+    batteryFill.setAttribute('stroke', color);
+
+    // Update text color class
+    if (batteryText) {
+        batteryText.classList.remove('battery-high', 'battery-medium', 'battery-low');
+        batteryText.classList.add(textClass);
     }
 }
 
 /**
- * Update WiFi icon and ping text color based on ping latency
+ * Update WiFi icon wave colors and ping text based on ping latency.
+ * Sets fill attribute directly on wave path elements.
  */
 function updatePingDisplay(ping) {
-    const wifiIcon = document.getElementById('wifi-icon');
     const pingText = document.getElementById('ping-value');
-    if (!wifiIcon) return;
+    const wavePaths = document.querySelectorAll('#wifi-icon .wifi-waves path');
 
-    // Remove existing color classes from both icon and text
-    wifiIcon.classList.remove('ping-excellent', 'ping-good', 'ping-fair', 'ping-poor');
-    if (pingText) {
-        pingText.classList.remove('ping-excellent', 'ping-good', 'ping-fair', 'ping-poor');
+    // Determine color based on ping
+    let color, textClass;
+    if (ping < 100) {
+        color = '#10b981'; textClass = 'ping-excellent'; // Green
+    } else if (ping < 200) {
+        color = '#ffee00'; textClass = 'ping-good';      // Yellow
+    } else if (ping < 300) {
+        color = '#fb923c'; textClass = 'ping-fair';      // Orange
+    } else {
+        color = '#ef4444'; textClass = 'ping-poor';      // Red
     }
 
-    // Add color class based on ping to both icon and text
-    if (ping < 100) {
-        wifiIcon.classList.add('ping-excellent'); // Green
-        if (pingText) pingText.classList.add('ping-excellent');
-    } else if (ping < 200) {
-        wifiIcon.classList.add('ping-good'); // Yellow
-        if (pingText) pingText.classList.add('ping-good');
-    } else if (ping < 300) {
-        wifiIcon.classList.add('ping-fair'); // Orange
-        if (pingText) pingText.classList.add('ping-fair');
+    // Update wave fill colors directly
+    wavePaths.forEach(path => path.setAttribute('fill', color));
+
+    // Update text color class
+    if (pingText) {
+        pingText.classList.remove('ping-excellent', 'ping-good', 'ping-fair', 'ping-poor');
+        pingText.classList.add(textClass);
+    }
+}
+
+/**
+ * Update temperature icon inner fill color and text based on temperature.
+ * Sets fill/stroke directly on the inner fill path element.
+ */
+function updateTemperatureDisplay(temperature) {
+    const tempFill = document.getElementById('temp-fill');
+    const tempText = document.getElementById('temp-value');
+
+    // Determine color based on temperature
+    let color, textClass;
+    if (temperature < 50) {
+        color = '#10b981'; textClass = 'temp-excellent'; // Green
+    } else if (temperature < 65) {
+        color = '#ffee00'; textClass = 'temp-good';      // Yellow
+    } else if (temperature < 80) {
+        color = '#fb923c'; textClass = 'temp-fair';      // Orange
     } else {
-        wifiIcon.classList.add('ping-poor'); // Red
-        if (pingText) pingText.classList.add('ping-poor');
+        color = '#ef4444'; textClass = 'temp-poor';      // Red
+    }
+
+    // Update inner fill color directly
+    if (tempFill) {
+        tempFill.setAttribute('fill', color);
+        tempFill.setAttribute('stroke', color);
+    }
+
+    // Update text color class
+    if (tempText) {
+        tempText.classList.remove('temp-excellent', 'temp-good', 'temp-fair', 'temp-poor');
+        tempText.classList.add(textClass);
     }
 }
 
@@ -790,6 +852,8 @@ function updatePingDisplay(ping) {
 function handleDisconnectedState() {
     document.getElementById('battery-level').textContent = '--%';
     document.getElementById('ping-value').textContent = '---';
+    const tempEl = document.getElementById('temp-value');
+    if (tempEl) tempEl.textContent = '--°C';
 
     // Reset battery fill
     const batteryFill = document.getElementById('battery-fill');
@@ -848,7 +912,9 @@ function initializeControlModules() {
 async function sendControlCommand(commandData) {
     const startTime = performance.now();
 
-    console.log(`[Control.js] Sending command via ${websocketClient.isConnected() ? 'WebSocket' : 'HTTP'}:`, commandData);
+    // High-frequency log (30-60Hz) - commented out to reduce console noise
+    // Uncomment for debugging control flow/latency issues
+    // console.log(`[Control.js] Sending command via ${websocketClient.isConnected() ? 'WebSocket' : 'HTTP'}:`, commandData);
 
     // Try WebSocket first
     if (websocketClient.isConnected()) {
@@ -886,31 +952,41 @@ function initializeLatencyDisplay() {
 }
 
 /**
- * Update latency display with color coding
+ * Update latency display with color coding.
+ * Sets fill directly on WiFi wave paths + text color class.
  */
 function updateLatencyDisplay(latencyData) {
     const pingElement = document.getElementById('ping-value');
     if (!pingElement) return;
 
-    const { current, average, method } = latencyData;
+    const { current } = latencyData;
 
     // Update display
-    pingElement.textContent = `${Math.round(current)} ms`;
+    pingElement.textContent = `${Math.round(current)}ms`;
 
-    // Color coding based on latency
-    pingElement.classList.remove('text-green-400', 'text-yellow-400', 'text-orange-400', 'text-red-400');
-
+    // Determine color based on latency
+    let color, textClass;
     if (current < 100) {
-        pingElement.classList.add('text-green-400');  // Excellent
+        color = '#10b981'; textClass = 'ping-excellent'; // Green
     } else if (current < 200) {
-        pingElement.classList.add('text-yellow-400'); // Good
+        color = '#ffee00'; textClass = 'ping-good';      // Yellow
     } else if (current < 300) {
-        pingElement.classList.add('text-orange-400'); // Acceptable
+        color = '#fb923c'; textClass = 'ping-fair';      // Orange
     } else {
-        pingElement.classList.add('text-red-400');    // Poor
+        color = '#ef4444'; textClass = 'ping-poor';      // Red
     }
 
-    console.log(`Latency: ${Math.round(current)}ms (avg: ${Math.round(average)}ms) via ${method}`);
+    // Update wave fill colors directly
+    const wavePaths = document.querySelectorAll('#wifi-icon .wifi-waves path');
+    wavePaths.forEach(path => path.setAttribute('fill', color));
+
+    // Update text color class
+    pingElement.classList.remove('ping-excellent', 'ping-good', 'ping-fair', 'ping-poor');
+    pingElement.classList.add(textClass);
+
+    // High-frequency log (30-60Hz) - commented out to reduce console noise
+    // Uncomment for debugging control flow/latency issues
+    // console.log(`Latency: ${Math.round(current)}ms (avg: ${Math.round(average)}ms) via ${method}`);
 }
 
 // ========== AUDIO STREAMING FUNCTIONS ==========
@@ -1043,32 +1119,34 @@ function stopMicrophone() {
 
 function updateMicrophoneIcon(transmitting) {
     const micIcon = document.getElementById('mic-icon');
+    const strikethrough = document.getElementById('mic-strikethrough');
     if (!micIcon) return;
 
-    // Remove existing state classes
+    // Toggle button classes for styling
     micIcon.classList.remove('mic-active', 'mic-inactive');
+    micIcon.classList.add(transmitting ? 'mic-active' : 'mic-inactive');
 
-    // Add appropriate class
-    if (transmitting) {
-        micIcon.classList.add('mic-active');
-    } else {
-        micIcon.classList.add('mic-inactive');
+    // Show/hide the red strikethrough line
+    if (strikethrough) {
+        strikethrough.style.display = transmitting ? 'none' : '';
     }
 }
 
 function updateSpeakerIcon(enabled) {
     const speakerIcon = document.getElementById('speaker-icon');
+    const waveOuter = document.getElementById('speaker-wave-outer');
+    const waveInner = document.getElementById('speaker-wave-inner');
+    const speakerX = document.getElementById('speaker-x');
     if (!speakerIcon) return;
 
-    // Remove existing state classes
+    // Toggle button classes for styling
     speakerIcon.classList.remove('speaker-active', 'speaker-inactive');
+    speakerIcon.classList.add(enabled ? 'speaker-active' : 'speaker-inactive');
 
-    // Add appropriate class
-    if (enabled) {
-        speakerIcon.classList.add('speaker-active');
-    } else {
-        speakerIcon.classList.add('speaker-inactive');
-    }
+    // Show waves + hide X when active, hide waves + show X when inactive
+    if (waveOuter) waveOuter.style.display = enabled ? '' : 'none';
+    if (waveInner) waveInner.style.display = enabled ? '' : 'none';
+    if (speakerX) speakerX.style.display = enabled ? 'none' : '';
 }
 
 // Keyboard event handler for 'C' key toggle
