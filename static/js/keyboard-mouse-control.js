@@ -957,19 +957,27 @@ class KeyboardMouseControl {
             iconSvg.setAttribute('viewBox', '0 0 262.02 262.02');
             iconSvg.style.filter = 'drop-shadow(0 0 6px rgba(34, 197, 94, 0.5))';
             iconSvg.title = 'POSE MODE ACTIVE — Release SPACE to exit';
-        } else if (!this.rageMode) {
-            // Restore running person icon — teal (only if rage mode is not active)
+        } else {
+            // Restore running person icon
             iconPath.setAttribute('d', RUNNING_PERSON_PATH);
-            iconPath.setAttribute('fill', '#00E8DA');
             iconPath.removeAttribute('stroke');
             iconPath.removeAttribute('stroke-width');
             iconPath.removeAttribute('stroke-linecap');
             iconPath.removeAttribute('stroke-linejoin');
             iconSvg.setAttribute('viewBox', '0 0 24 24');
-            iconSvg.style.filter = 'drop-shadow(0 0 2px black)';
             iconSvg.title = 'RAGE MODE: Bypass all smoothing for raw control (DANGEROUS!)';
+
+            // Restore RAGE MODE visual state if active, otherwise restore normal state
+            if (this.rageMode) {
+                // RAGE MODE is active - restore red color and glow
+                iconPath.setAttribute('fill', '#ef4444');  // Red
+                iconSvg.style.filter = 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.6))';  // Red glow
+            } else {
+                // Normal mode - restore teal color and default shadow
+                iconPath.setAttribute('fill', '#00E8DA');  // Teal
+                iconSvg.style.filter = 'drop-shadow(0 0 2px black)';  // Default shadow
+            }
         }
-        // If rageMode is active, let toggleRageMode handle the icon color
     }
 }
 

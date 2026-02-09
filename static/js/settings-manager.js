@@ -299,12 +299,48 @@ function applyPreset(preset) {
 
     if (presets[preset]) {
         const settings = loadSettings();
-        settings.keyboard_mouse = { ...settings.keyboard_mouse, ...presets[preset].keyboard_mouse };
-        settings.gamepad = { ...settings.gamepad, ...presets[preset].gamepad };
+        // Replace entire objects to ensure exact match with preset (not merge)
+        settings.keyboard_mouse = presets[preset].keyboard_mouse;
+        settings.gamepad = presets[preset].gamepad;
         return saveSettings(settings);
     }
     console.error(`Invalid preset: ${preset}`);
     return false;
+}
+
+/**
+ * Deep compare two objects with tolerance for floating-point precision
+ * @param {Object} obj1 - First object
+ * @param {Object} obj2 - Second object
+ * @returns {boolean} True if objects are equal (with floating-point tolerance)
+ */
+function deepCompareSettings(obj1, obj2) {
+    if (obj1 === obj2) return true;
+    if (obj1 == null || obj2 == null) return false;
+    if (typeof obj1 !== 'object' || typeof obj2 !== 'object') return obj1 === obj2;
+
+    const keys1 = Object.keys(obj1);
+    const keys2 = Object.keys(obj2);
+
+    if (keys1.length !== keys2.length) return false;
+
+    for (const key of keys1) {
+        if (!keys2.includes(key)) return false;
+
+        const val1 = obj1[key];
+        const val2 = obj2[key];
+
+        // For numbers, use tolerance comparison (handles floating-point precision)
+        if (typeof val1 === 'number' && typeof val2 === 'number') {
+            if (Math.abs(val1 - val2) > 0.0001) return false;
+        } else if (typeof val1 === 'object' && typeof val2 === 'object') {
+            if (!deepCompareSettings(val1, val2)) return false;
+        } else {
+            if (val1 !== val2) return false;
+        }
+    }
+
+    return true;
 }
 
 /**
@@ -318,8 +354,8 @@ function getCurrentPreset() {
     for (const preset of presets) {
         const presetSettings = getPresetSettings(preset);
         if (presetSettings &&
-            JSON.stringify(settings.keyboard_mouse) === JSON.stringify(presetSettings.keyboard_mouse) &&
-            JSON.stringify(settings.gamepad) === JSON.stringify(presetSettings.gamepad)) {
+            deepCompareSettings(settings.keyboard_mouse, presetSettings.keyboard_mouse) &&
+            deepCompareSettings(settings.gamepad, presetSettings.gamepad)) {
             return preset;
         }
     }
@@ -339,7 +375,18 @@ function getPresetSettings(preset) {
                 mouse_pitch_sensitivity: 2.0,
                 kb_max_linear_velocity: 2.5,
                 kb_max_strafe_velocity: 0.5,
-                kb_max_rotation_velocity: 1.5
+                kb_max_rotation_velocity: 1.5,
+                linear_alpha: 1.2,
+                strafe_alpha: 1.2,
+                rotation_alpha: 1.2,
+                rotation_deadzone: 0.0,
+                linear_ramp_time: 0.40,
+                strafe_ramp_time: 0.40,
+                rotation_ramp_time: 0.40,
+                pitch_alpha: 1.2,
+                pitch_deadzone: 0.0,
+                pitch_max_velocity: 0.20,
+                pitch_ramp_time: 0.40
             },
             gamepad: {
                 deadzone_left_stick: 0.15,
@@ -359,7 +406,18 @@ function getPresetSettings(preset) {
                 mouse_pitch_sensitivity: 3.0,
                 kb_max_linear_velocity: 3.0,
                 kb_max_strafe_velocity: 0.6,
-                kb_max_rotation_velocity: 2.0
+                kb_max_rotation_velocity: 2.0,
+                linear_alpha: 1.0,
+                strafe_alpha: 1.0,
+                rotation_alpha: 1.0,
+                rotation_deadzone: 0.0,
+                linear_ramp_time: 0.20,
+                strafe_ramp_time: 0.20,
+                rotation_ramp_time: 0.20,
+                pitch_alpha: 1.0,
+                pitch_deadzone: 0.0,
+                pitch_max_velocity: 0.30,
+                pitch_ramp_time: 0.20
             },
             gamepad: {
                 deadzone_left_stick: 0.1,
@@ -379,7 +437,18 @@ function getPresetSettings(preset) {
                 mouse_pitch_sensitivity: 5.0,
                 kb_max_linear_velocity: 4.5,
                 kb_max_strafe_velocity: 0.9,
-                kb_max_rotation_velocity: 3.0
+                kb_max_rotation_velocity: 3.0,
+                linear_alpha: 0.9,
+                strafe_alpha: 0.9,
+                rotation_alpha: 0.9,
+                rotation_deadzone: 0.0,
+                linear_ramp_time: 0.10,
+                strafe_ramp_time: 0.10,
+                rotation_ramp_time: 0.10,
+                pitch_alpha: 0.9,
+                pitch_deadzone: 0.0,
+                pitch_max_velocity: 0.35,
+                pitch_ramp_time: 0.10
             },
             gamepad: {
                 deadzone_left_stick: 0.05,
@@ -399,7 +468,18 @@ function getPresetSettings(preset) {
                 mouse_pitch_sensitivity: 7.5,
                 kb_max_linear_velocity: 5.0,
                 kb_max_strafe_velocity: 1.0,
-                kb_max_rotation_velocity: 3.0
+                kb_max_rotation_velocity: 3.0,
+                linear_alpha: 0.8,
+                strafe_alpha: 0.8,
+                rotation_alpha: 0.8,
+                rotation_deadzone: 0.0,
+                linear_ramp_time: 0.05,
+                strafe_ramp_time: 0.05,
+                rotation_ramp_time: 0.05,
+                pitch_alpha: 0.8,
+                pitch_deadzone: 0.0,
+                pitch_max_velocity: 0.35,
+                pitch_ramp_time: 0.05
             },
             gamepad: {
                 deadzone_left_stick: 0.05,

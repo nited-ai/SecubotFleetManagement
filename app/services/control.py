@@ -15,6 +15,7 @@ import logging
 import time
 import asyncio
 from typing import Dict, Any, Optional
+from unitree_webrtc_connect.constants import RTC_TOPIC, VUI_COLOR
 
 
 class ControlService:
@@ -60,7 +61,16 @@ class ControlService:
         self.HARDWARE_LIMIT_STRAFE = 1.0    # m/s - max strafe velocity
         self.HARDWARE_LIMIT_ROTATION = 3.0  # rad/s - max yaw rotation velocity
         self.HARDWARE_LIMIT_PITCH = 0.35    # rad - max pitch angle (~20°)
-        
+
+        # LED Control State
+        self._rage_mode_pulsating_task = None  # Task reference for RAGE MODE pulsating effect
+        self._previous_led_state = None  # Store previous LED state before RAGE MODE
+        self._current_flashlight_brightness = 0  # Track current flashlight brightness (0-10)
+        self._pending_rgb_color = None  # Pending RGB color to apply when flashlight turns off
+        self._pending_rgb_time = 999  # Time parameter for pending RGB color
+        self._rage_mode_paused = False  # Flag to track if RAGE MODE is paused due to flashlight
+        self._current_preset_color = VUI_COLOR.BLUE  # Track current preset color (default: blue)
+
         # Preset configurations
         self.presets = {
             'beginner': {
@@ -886,4 +896,319 @@ class ControlService:
             )
         except Exception as e:
             self.logger.error(f"Error sending camera control command: {e}")
+
+    # ============================================================================
+    # LED CONTROL METHODS (VUI API)
+    # ============================================================================
+
+    async def set_led_color(self, color: str, time: int = 5, flash_cycle: Optional[int] = None, force: bool = False):
+        """
+        Set LED color using VUI API 1007.
+
+        IMPORTANT: If flashlight is on (brightness > 0), this will queue the color change
+        instead of applying it immediately (unless force=True).
+
+        Args:
+            color: LED color (VUI_COLOR.RED, VUI_COLOR.BLUE, etc.)
+            time: Duration in seconds (default: 5)
+            flash_cycle: Optional flash cycle in milliseconds (e.g., 1000 for 1 second)
+            force: If True, apply color change even if flashlight is on (default: False)
+        """
+        try:
+            # Check if flashlight is on (priority #1)
+            if self._current_flashlight_brightness > 0 and not force:
+                # Queue the color change for when flashlight turns off
+                self._pending_rgb_color = color
+                self._pending_rgb_time = time
+                self.logger.info(f"💡 Flashlight is ON - queued RGB color {color} (will apply when flashlight turns off)")
+                return
+
+            # Flashlight is off or force=True - apply color change immediately
+            parameter = {"color": color, "time": time}
+            if flash_cycle is not None:
+                parameter["flash_cycle"] = flash_cycle
+
+            await self.state.connection.datachannel.pub_sub.publish_request_new(
+                RTC_TOPIC["VUI"],
+                {"api_id": 1007, "parameter": parameter}
+            )
+            self.logger.info(f"LED color set to {color} for {time}s" + (f" (flash: {flash_cycle}ms)" if flash_cycle else ""))
+        except Exception as e:
+            self.logger.error(f"Error setting LED color: {e}")
+
+    async def set_led_rgb(self, r: int, g: int, b: int, time: int = 999):
+        """
+        Set LED to custom RGB color using VUI API 1008 (if supported by firmware).
+
+        Args:
+            r: Red value (0-255)
+            g: Green value (0-255)
+            b: Blue value (0-255)
+            time: Duration in seconds (default: 999)
+        """
+        try:
+            await self.state.connection.datachannel.pub_sub.publish_request_new(
+                RTC_TOPIC["VUI"],
+                {
+                    "api_id": 1008,
+                    "parameter": {"r": r, "g": g, "b": b, "time": time}
+                }
+            )
+            self.logger.info(f"LED RGB set to ({r}, {g}, {b}) for {time}s")
+        except Exception as e:
+            self.logger.error(f"Error setting LED RGB: {e}")
+
+    async def set_led_brightness(self, brightness: int):
+        """
+        Set LED brightness (flashlight) using VUI API 1005.
+
+        IMPORTANT: This controls the flashlight/headlight, NOT the RGB status LED.
+        When flashlight is turned on (brightness > 0), RGB LED changes are queued.
+        When flashlight is turned off (brightness = 0), queued RGB changes are applied.
+
+        Args:
+            brightness: Brightness level (0-10)
+        """
+        try:
+            # Store previous brightness to detect on/off transitions
+            previous_brightness = self._current_flashlight_brightness
+
+            # CRITICAL: Update tracked brightness BEFORE any API calls or transitions
+            # This prevents race conditions with RAGE MODE blinking loop
+            self._current_flashlight_brightness = brightness
+
+            # Detect if RAGE MODE was actively blinking when flashlight is turning on
+            rage_mode_was_blinking = (
+                previous_brightness == 0
+                and brightness > 0
+                and self._rage_mode_pulsating_task is not None
+                and not self._rage_mode_pulsating_task.done()
+            )
+
+            # Handle flashlight turning ON - pause RAGE MODE BEFORE sending API call
+            if previous_brightness == 0 and brightness > 0:
+                # Pause RAGE MODE blinking IMMEDIATELY to prevent interference
+                await self._pause_rage_mode_for_flashlight()
+
+            # Send brightness command to robot (after pausing RAGE MODE if needed)
+            await self.state.connection.datachannel.pub_sub.publish_request_new(
+                RTC_TOPIC["VUI"],
+                {"api_id": 1005, "parameter": {"brightness": brightness}}
+            )
+
+            self.logger.info(f"💡 Flashlight brightness set to {brightness}/10")
+
+            # NOTE: Do NOT send API 1007 (LED color) here — it interferes with API 1005
+            # (flashlight) on Go2 firmware, causing the flashlight to turn off.
+            #
+            # However, when RAGE MODE was actively blinking, the last API 1007 command
+            # (with time=1) may still be "live" on the robot. When it expires (~1s),
+            # the robot firmware resets to default state and turns off the flashlight.
+            # To counteract this, we re-send the API 1005 command after a delay so it
+            # takes effect AFTER the expiring LED command has been processed.
+            if rage_mode_was_blinking:
+                async def _resend_brightness_after_led_expiry():
+                    try:
+                        await asyncio.sleep(1.2)
+                        # Only re-send if flashlight is still supposed to be on
+                        if self._current_flashlight_brightness > 0:
+                            await self.state.connection.datachannel.pub_sub.publish_request_new(
+                                RTC_TOPIC["VUI"],
+                                {"api_id": 1005, "parameter": {"brightness": self._current_flashlight_brightness}}
+                            )
+                            self.logger.info(f"💡 Re-sent flashlight brightness {self._current_flashlight_brightness}/10 (after RAGE MODE LED expiry)")
+                    except Exception as e:
+                        self.logger.error(f"Error re-sending flashlight brightness: {e}")
+
+                asyncio.create_task(_resend_brightness_after_led_expiry())
+
+            # Handle flashlight turning OFF - apply pending RGB and resume RAGE MODE
+            if previous_brightness > 0 and brightness == 0:
+                # Flashlight turned OFF - apply pending RGB color and resume RAGE MODE
+                await self._apply_pending_rgb_color()
+                await self._resume_rage_mode_after_flashlight()
+
+        except Exception as e:
+            self.logger.error(f"Error setting LED brightness: {e}")
+
+    async def get_led_brightness(self) -> Optional[int]:
+        """
+        Get current LED brightness using VUI API 1006.
+
+        Returns:
+            Current brightness level (0-10) or None if error
+        """
+        try:
+            response = await self.state.connection.datachannel.pub_sub.publish_request_new(
+                RTC_TOPIC["VUI"],
+                {"api_id": 1006}
+            )
+            if response and 'data' in response:
+                import json
+                data = json.loads(response['data']['data'])
+                brightness = data.get('brightness')
+                # Update tracked brightness
+                if brightness is not None:
+                    self._current_flashlight_brightness = brightness
+                return brightness
+        except Exception as e:
+            self.logger.error(f"Error getting LED brightness: {e}")
+        return None
+
+    async def _apply_pending_rgb_color(self):
+        """
+        Apply pending RGB color change (called when flashlight turns off).
+        Internal helper method.
+        """
+        if self._pending_rgb_color is not None:
+            self.logger.info(f"💡 Flashlight turned OFF - applying pending RGB color {self._pending_rgb_color}")
+            # Use force=True to bypass flashlight check (we know it's off now)
+            await self.set_led_color(self._pending_rgb_color, time=self._pending_rgb_time, force=True)
+            self._pending_rgb_color = None
+            self._pending_rgb_time = 999
+
+    async def _pause_rage_mode_for_flashlight(self):
+        """
+        Pause RAGE MODE blinking when flashlight turns on.
+        Internal helper method.
+
+        IMPORTANT: This method does NOT send any LED color commands to avoid
+        interfering with the flashlight API call that will be sent immediately after.
+        """
+        if self._rage_mode_pulsating_task and not self._rage_mode_pulsating_task.done():
+            self.logger.info("💡 Flashlight turned ON - pausing RAGE MODE blinking")
+            self._rage_mode_paused = True
+            # Cancel the blinking task immediately to prevent any more LED API calls
+            self._rage_mode_pulsating_task.cancel()
+            try:
+                await self._rage_mode_pulsating_task
+            except asyncio.CancelledError:
+                pass
+
+            # Give a delay to ensure the blinking task is fully stopped
+            # and any pending LED color commands have been processed by the robot
+            await asyncio.sleep(0.15)
+
+    async def _resume_rage_mode_after_flashlight(self):
+        """
+        Resume RAGE MODE blinking when flashlight turns off.
+        Internal helper method.
+        """
+        if self._rage_mode_paused:
+            self.logger.info("💡 Flashlight turned OFF - resuming RAGE MODE blinking")
+            self._rage_mode_paused = False
+            # Restart the blinking task
+            await self.start_rage_mode_pulsating()
+
+    async def start_rage_mode_pulsating(self):
+        """
+        Start blinking LED effect for RAGE MODE.
+        Alternates between blue and red colors with 1-second cycle (500ms each).
+
+        IMPORTANT: If flashlight is on, RAGE MODE will be paused until flashlight turns off.
+        """
+        try:
+            # Cancel existing task if any
+            if self._rage_mode_pulsating_task and not self._rage_mode_pulsating_task.done():
+                self._rage_mode_pulsating_task.cancel()
+                try:
+                    await self._rage_mode_pulsating_task
+                except asyncio.CancelledError:
+                    pass
+
+            # Check if flashlight is on - if so, pause RAGE MODE
+            if self._current_flashlight_brightness > 0:
+                self.logger.info("🔥 RAGE MODE requested but flashlight is ON - will start when flashlight turns off")
+                self._rage_mode_paused = True
+                return
+
+            # Store current LED color before starting (if needed for restoration)
+            self._previous_led_state = None  # Could store color if needed
+            self._rage_mode_paused = False
+
+            # Define blinking loop alternating between blue and red
+            async def blink():
+                try:
+                    while True:
+                        # Only blink if flashlight is off
+                        if self._current_flashlight_brightness == 0:
+                            # Blue for 500ms
+                            await self.set_led_color(VUI_COLOR.BLUE, time=1, force=True)
+                            await asyncio.sleep(0.5)
+
+                            # Red for 500ms
+                            await self.set_led_color(VUI_COLOR.RED, time=1, force=True)
+                            await asyncio.sleep(0.5)
+                        else:
+                            # Flashlight turned on during blinking - pause
+                            await asyncio.sleep(0.1)
+                except asyncio.CancelledError:
+                    self.logger.info("RAGE MODE blinking stopped")
+                    raise
+
+            # Start blinking task
+            self._rage_mode_pulsating_task = asyncio.create_task(blink())
+            self.logger.info("🔥 RAGE MODE blinking LED started (blue/red alternating, 1-second cycle)")
+
+        except Exception as e:
+            self.logger.error(f"Error starting RAGE MODE blinking: {e}")
+
+    async def stop_rage_mode_pulsating(self):
+        """
+        Stop RAGE MODE blinking LED effect and restore to preset color.
+        Restores the last preset color (stored in _current_preset_color).
+        """
+        try:
+            # Clear paused flag
+            self._rage_mode_paused = False
+
+            # Cancel blinking task (if using background task)
+            if self._rage_mode_pulsating_task and not self._rage_mode_pulsating_task.done():
+                self._rage_mode_pulsating_task.cancel()
+                try:
+                    await self._rage_mode_pulsating_task
+                except asyncio.CancelledError:
+                    pass
+
+            # Restore LED to preset color (not hardcoded blue)
+            # If flashlight is on, queue this color change
+            await self.set_led_color(self._current_preset_color, time=999)
+            self.logger.info(f"🔥 RAGE MODE blinking LED stopped, restored to {self._current_preset_color}")
+
+        except Exception as e:
+            self.logger.error(f"Error stopping RAGE MODE blinking: {e}")
+
+    async def flash_preset_color(self, preset: str):
+        """
+        Set LED color permanently for sensitivity preset.
+        Also stores the color so it can be restored after RAGE MODE.
+
+        Args:
+            preset: Preset name (beginner, normal, advanced, sport, custom)
+        """
+        try:
+            # Map presets to preset colors
+            preset_colors = {
+                'beginner': VUI_COLOR.CYAN,
+                'normal': VUI_COLOR.BLUE,
+                'advanced': VUI_COLOR.YELLOW,
+                'sport': VUI_COLOR.RED,
+                'custom': VUI_COLOR.PURPLE
+            }
+
+            color = preset_colors.get(preset)
+            if not color:
+                self.logger.warning(f"Unknown preset: {preset}")
+                return
+
+            # Store the preset color for restoration after RAGE MODE
+            self._current_preset_color = color
+
+            # Set the color permanently (999 seconds = ~16.5 minutes)
+            # TODO: Implement refresh mechanism before expiry if needed
+            await self.set_led_color(color, time=999)
+            self.logger.info(f"💡 Set {color} LED for {preset} preset (permanent)")
+
+        except Exception as e:
+            self.logger.error(f"Error setting preset color: {e}")
 

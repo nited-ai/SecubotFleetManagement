@@ -157,6 +157,9 @@ function initializeQuickSettingsButton() {
 
 // ===== Settings Panel Controls =====
 
+// Flag to prevent slider change handlers from triggering during preset application
+let isApplyingPreset = false;
+
 /**
  * Helper: initialize a single slider with value display and change handler
  */
@@ -172,9 +175,25 @@ function initializeSettingsSlider(sliderId, valueId, initialValue, onChange, suf
             valueDisplay.textContent = parseFloat(e.target.value).toFixed(2) + suffix;
         });
 
-        slider.addEventListener('change', (e) => {
+        slider.addEventListener('change', async (e) => {
             onChange(e.target.value);
-            updateActivePresetButtonOnControlPage('custom');
+
+            // Only trigger custom preset if user manually changed slider (not during preset application)
+            if (!isApplyingPreset) {
+                updateActivePresetButtonOnControlPage('custom');
+
+                // Trigger purple LED for custom preset
+                try {
+                    await fetch('/api/led/preset_flash', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ preset: 'custom' })
+                    });
+                    console.log('💡 Set LED to purple for custom preset');
+                } catch (err) {
+                    console.error('Error setting custom preset LED:', err);
+                }
+            }
         });
     }
 }
@@ -437,15 +456,36 @@ function initializeSettingsPanelControls() {
     updateActivePresetButtonOnControlPage();
 
     presetButtons.forEach(button => {
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => {
             const preset = button.dataset.preset;
             if (preset === 'custom') return;
 
             if (typeof applyPreset === 'function' && applyPreset(preset)) {
                 console.log(`⚙️ Applied ${preset} preset`);
+
+                // Set flag to prevent slider change handlers from triggering
+                isApplyingPreset = true;
+
                 updateActivePresetButtonOnControlPage(preset);
                 const updated = loadSettings();
                 updateAllControlPageSliders(updated.keyboard_mouse);
+
+                // Reset flag after a short delay to allow all slider updates to complete
+                setTimeout(() => {
+                    isApplyingPreset = false;
+                }, 100);
+
+                // Set LED color for preset
+                try {
+                    await fetch('/api/led/preset_flash', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ preset })
+                    });
+                    console.log(`💡 Set LED for ${preset} preset`);
+                } catch (err) {
+                    console.error('Error setting preset LED:', err);
+                }
             }
         });
     });
@@ -650,7 +690,7 @@ function initializeRageModeToggle() {
 
     let rageModeEnabled = false;
 
-    rageModeBtn.addEventListener('click', (e) => {
+    rageModeBtn.addEventListener('click', async () => {
         console.log('🔥 RAGE MODE button clicked!');
         console.log('  - Current state:', rageModeEnabled ? 'ENABLED' : 'DISABLED');
 
@@ -666,17 +706,29 @@ function initializeRageModeToggle() {
             if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
                 keyboardMouseControl.toggleRageMode(false);
             }
+            // Stop LED pulsating
+            await fetch('/api/led/rage_mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: false })
+            }).catch(err => console.error('Error stopping RAGE MODE LED:', err));
         }
     });
 
     if (rageModeConfirm) {
-        rageModeConfirm.addEventListener('click', () => {
+        rageModeConfirm.addEventListener('click', async () => {
             console.log('🔥 RAGE MODE confirmed!');
             rageModeEnabled = true;
             rageModeModal.classList.add('hidden');
             if (typeof keyboardMouseControl !== 'undefined' && keyboardMouseControl) {
                 keyboardMouseControl.toggleRageMode(true);
             }
+            // Start LED pulsating
+            await fetch('/api/led/rage_mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: true })
+            }).catch(err => console.error('Error starting RAGE MODE LED:', err));
         });
     }
 

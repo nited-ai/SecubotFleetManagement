@@ -504,7 +504,10 @@ def get_light_level():
 @api_bp.route('/robot/light', methods=['POST'])
 def set_light_level():
     """
-    Set robot LED brightness level.
+    Set robot LED brightness level (flashlight/headlight).
+
+    IMPORTANT: This uses the new set_led_brightness() method which handles
+    flashlight/RGB LED interaction (pausing RAGE MODE, queuing RGB changes, etc.)
 
     Request body:
         {
@@ -518,6 +521,7 @@ def set_light_level():
         }
     """
     try:
+        control_service = current_app.config['CONTROL_SERVICE']
         state = current_app.config['STATE_SERVICE']
 
         if not state.is_connected:
@@ -530,44 +534,16 @@ def set_light_level():
         if not isinstance(brightness, int) or brightness < 0 or brightness > 10:
             return jsonify({'success': False, 'message': 'Brightness must be between 0 and 10'}), 400
 
-        # Schedule the async VUI command in the event loop
-        from unitree_webrtc_connect.constants import RTC_TOPIC
+        # Use the control service method which handles flashlight/RGB interaction
         import asyncio
 
-        async def set_brightness():
-            """Send VUI brightness command to robot."""
-            try:
-                response = await state.connection.datachannel.pub_sub.publish_request_new(
-                    RTC_TOPIC["VUI"],
-                    {
-                        "api_id": 1005,
-                        "parameter": {"brightness": brightness}
-                    }
-                )
+        future = asyncio.run_coroutine_threadsafe(
+            control_service.set_led_brightness(brightness),
+            state.event_loop
+        )
+        future.result(timeout=5)
 
-                # Check if command was successful
-                if response and 'data' in response:
-                    if 'header' in response['data']:
-                        status_code = response['data']['header'].get('status', {}).get('code', -1)
-                        if status_code == 0:
-                            logging.info(f"✓ LED brightness set to {brightness}/10")
-                            return True
-
-                logging.warning(f"LED brightness command may have failed: {response}")
-                return False
-
-            except Exception as e:
-                logging.error(f"Error setting LED brightness: {e}")
-                return False
-
-        # Execute the async function in the event loop
-        future = asyncio.run_coroutine_threadsafe(set_brightness(), state.event_loop)
-        success = future.result(timeout=5)
-
-        if success:
-            return jsonify({'success': True, 'level': brightness})
-        else:
-            return jsonify({'success': False, 'message': 'Failed to set brightness'}), 500
+        return jsonify({'success': True, 'level': brightness})
 
     except Exception as e:
         logging.error(f"Light level error: {e}")
@@ -603,5 +579,72 @@ def webrtc_test_direct_command():
 
     except Exception as e:
         logging.error(f"WebRTC test command error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# ============================================================================
+# LED CONTROL ENDPOINTS (VUI API)
+# ============================================================================
+
+@api_bp.route('/led/rage_mode', methods=['POST'])
+def led_rage_mode():
+    """Start or stop RAGE MODE pulsating LED effect"""
+    try:
+        control_service = current_app.config['CONTROL_SERVICE']
+        state = current_app.config['STATE_SERVICE']
+
+        if not state.is_connected:
+            return jsonify({'status': 'error', 'message': 'Robot not connected'}), 400
+
+        data = request.json
+        enabled = data.get('enabled', False)
+
+        # Schedule async LED control in event loop (fire-and-forget)
+        if state.event_loop and state.event_loop.is_running():
+            if enabled:
+                asyncio.run_coroutine_threadsafe(
+                    control_service.start_rage_mode_pulsating(),
+                    state.event_loop
+                )
+                return jsonify({'status': 'success', 'message': 'RAGE MODE LED started'})
+            else:
+                asyncio.run_coroutine_threadsafe(
+                    control_service.stop_rage_mode_pulsating(),
+                    state.event_loop
+                )
+                return jsonify({'status': 'success', 'message': 'RAGE MODE LED stopped'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Event loop not running'}), 500
+
+    except Exception as e:
+        logging.error(f"LED RAGE MODE error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@api_bp.route('/led/preset_flash', methods=['POST'])
+def led_preset_flash():
+    """Flash LED color for sensitivity preset selection"""
+    try:
+        control_service = current_app.config['CONTROL_SERVICE']
+        state = current_app.config['STATE_SERVICE']
+
+        if not state.is_connected:
+            return jsonify({'status': 'error', 'message': 'Robot not connected'}), 400
+
+        data = request.json
+        preset = data.get('preset', 'normal')
+
+        # Schedule async LED control in event loop (fire-and-forget)
+        if state.event_loop and state.event_loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                control_service.flash_preset_color(preset),
+                state.event_loop
+            )
+            return jsonify({'status': 'success', 'preset': preset})
+        else:
+            return jsonify({'status': 'error', 'message': 'Event loop not running'}), 500
+
+    except Exception as e:
+        logging.error(f"LED preset flash error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
