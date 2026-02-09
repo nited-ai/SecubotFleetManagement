@@ -12,7 +12,7 @@
  */
 const HARDWARE_LIMITS = {
     linear: 5.0,    // m/s - Maximum linear (forward/back) velocity
-    strafe: 0.6,    // m/s - Maximum strafe (left/right) velocity
+    strafe: 1.0,    // m/s - Maximum strafe (left/right) velocity
     rotation: 3.0,  // rad/s - Maximum rotation (yaw) velocity
     pitch: 0.35     // rad - Maximum pitch angle (~20°)
 };

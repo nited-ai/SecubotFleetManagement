@@ -226,18 +226,14 @@ function updateAllControlPageSliders(km) {
     setVal('rotation-alpha', km.rotation_alpha);
     setTxt('rotation-alpha-value', (km.rotation_alpha || 2.5).toFixed(1));
 
-    const dzPercent = Math.round((km.rotation_deadzone || 0.10) * 100);
-    setVal('rotation-deadzone', dzPercent);
-    setTxt('rotation-deadzone-value', dzPercent + '%');
-
     setVal('linear-ramp-time', km.linear_ramp_time);
-    setTxt('linear-ramp-time-value', `${(km.linear_ramp_time || 1.0).toFixed(1)}s`);
+    setTxt('linear-ramp-time-value', `${(km.linear_ramp_time || 0.20).toFixed(2)}s`);
 
     setVal('strafe-ramp-time', km.strafe_ramp_time);
-    setTxt('strafe-ramp-time-value', `${(km.strafe_ramp_time || 0.2).toFixed(1)}s`);
+    setTxt('strafe-ramp-time-value', `${(km.strafe_ramp_time || 0.20).toFixed(2)}s`);
 
     setVal('rotation-ramp-time', km.rotation_ramp_time);
-    setTxt('rotation-ramp-time-value', `${(km.rotation_ramp_time || 0.9).toFixed(1)}s`);
+    setTxt('rotation-ramp-time-value', `${(km.rotation_ramp_time || 0.20).toFixed(2)}s`);
 
     // Pitch sliders
     setVal('pitch-max-velocity', km.pitch_max_velocity);
@@ -246,21 +242,17 @@ function updateAllControlPageSliders(km) {
     setVal('pitch-alpha', km.pitch_alpha);
     setTxt('pitch-alpha-value', (km.pitch_alpha || 2.0).toFixed(1));
 
-    const pitchDzPercent = Math.round((km.pitch_deadzone || 0.10) * 100);
-    setVal('pitch-deadzone', pitchDzPercent);
-    setTxt('pitch-deadzone-value', pitchDzPercent + '%');
-
     setVal('pitch-ramp-time', km.pitch_ramp_time);
-    setTxt('pitch-ramp-time-value', `${(km.pitch_ramp_time || 0.8).toFixed(1)}s`);
+    setTxt('pitch-ramp-time-value', `${(km.pitch_ramp_time || 0.20).toFixed(2)}s`);
 
     // Update curve charts
     if (charts.linear && charts.strafe && charts.rotation) {
         updateCurveChart(charts.linear, 'Linear', km.linear_alpha, 0.0, km.kb_max_linear_velocity, HARDWARE_LIMITS.linear);
         updateCurveChart(charts.strafe, 'Strafe', km.strafe_alpha, 0.0, km.kb_max_strafe_velocity, HARDWARE_LIMITS.strafe);
-        updateCurveChart(charts.rotation, 'Rotation', km.rotation_alpha, km.rotation_deadzone, km.kb_max_rotation_velocity, HARDWARE_LIMITS.rotation);
+        updateCurveChart(charts.rotation, 'Rotation', km.rotation_alpha, 0.0, km.kb_max_rotation_velocity, HARDWARE_LIMITS.rotation);
     }
     if (charts.pitch) {
-        updateCurveChart(charts.pitch, 'Pitch', km.pitch_alpha, km.pitch_deadzone, km.pitch_max_velocity, HARDWARE_LIMITS.pitch);
+        updateCurveChart(charts.pitch, 'Pitch', km.pitch_alpha, 0.0, km.pitch_max_velocity, HARDWARE_LIMITS.pitch);
     }
 }
 
@@ -287,11 +279,11 @@ function initializeSettingsPanelControls() {
     charts.linear = createCurveChart('linear-curve-chart', 'Linear', 'm/s',
         km.linear_alpha || 1.5, 0.0, km.kb_max_linear_velocity || 1.5, HARDWARE_LIMITS.linear);
     charts.strafe = createCurveChart('strafe-curve-chart', 'Strafe', 'm/s',
-        km.strafe_alpha || 1.2, 0.0, km.kb_max_strafe_velocity || 0.6, HARDWARE_LIMITS.strafe);
+        km.strafe_alpha || 1.2, 0.0, km.kb_max_strafe_velocity || 1.0, HARDWARE_LIMITS.strafe);
     charts.rotation = createCurveChart('rotation-curve-chart', 'Rotation', 'rad/s',
-        km.rotation_alpha || 2.5, km.rotation_deadzone || 0.10, km.kb_max_rotation_velocity || 3.0, HARDWARE_LIMITS.rotation);
+        km.rotation_alpha || 2.5, 0.0, km.kb_max_rotation_velocity || 3.0, HARDWARE_LIMITS.rotation);
     charts.pitch = createCurveChart('pitch-curve-chart', 'Pitch', 'rad',
-        km.pitch_alpha || 2.0, km.pitch_deadzone || 0.10, km.pitch_max_velocity || 0.35, HARDWARE_LIMITS.pitch);
+        km.pitch_alpha || 2.0, 0.0, km.pitch_max_velocity || 0.35, HARDWARE_LIMITS.pitch);
 
     // --- Helper to get fresh settings ---
     const getFresh = () => loadSettings().keyboard_mouse;
@@ -321,7 +313,7 @@ function initializeSettingsPanelControls() {
         updateSetting('keyboard_mouse', 'kb_max_rotation_velocity', parseFloat(v));
         if (charts.rotation) {
             const f = getFresh();
-            updateCurveChart(charts.rotation, 'Rotation', f.rotation_alpha || 2.5, f.rotation_deadzone || 0.10, parseFloat(v), HARDWARE_LIMITS.rotation);
+            updateCurveChart(charts.rotation, 'Rotation', f.rotation_alpha || 2.5, 0.0, parseFloat(v), HARDWARE_LIMITS.rotation);
         }
     }, ' rad/s');
 
@@ -350,7 +342,7 @@ function initializeSettingsPanelControls() {
             strafeAlphaValue.textContent = a.toFixed(1);
             updateSetting('keyboard_mouse', 'strafe_alpha', a);
             const f = getFresh();
-            updateCurveChart(charts.strafe, 'Strafe', a, 0.0, f.kb_max_strafe_velocity || 0.6, HARDWARE_LIMITS.strafe);
+            updateCurveChart(charts.strafe, 'Strafe', a, 0.0, f.kb_max_strafe_velocity || 1.0, HARDWARE_LIMITS.strafe);
         });
     }
 
@@ -364,24 +356,7 @@ function initializeSettingsPanelControls() {
             rotationAlphaValue.textContent = a.toFixed(1);
             updateSetting('keyboard_mouse', 'rotation_alpha', a);
             const f = getFresh();
-            updateCurveChart(charts.rotation, 'Rotation', a, f.rotation_deadzone || 0.10, f.kb_max_rotation_velocity || 3.0, HARDWARE_LIMITS.rotation);
-        });
-    }
-
-    // --- Rotation deadzone slider ---
-    const rotDeadzoneSlider = document.getElementById('rotation-deadzone');
-    const rotDeadzoneValue = document.getElementById('rotation-deadzone-value');
-    if (rotDeadzoneSlider && rotDeadzoneValue) {
-        const dzPct = Math.round((km.rotation_deadzone || 0.10) * 100);
-        rotDeadzoneSlider.value = dzPct;
-        rotDeadzoneValue.textContent = dzPct + '%';
-        rotDeadzoneSlider.addEventListener('input', (e) => {
-            const pct = parseInt(e.target.value);
-            const dz = pct / 100.0;
-            rotDeadzoneValue.textContent = pct + '%';
-            updateSetting('keyboard_mouse', 'rotation_deadzone', dz);
-            const f = getFresh();
-            updateCurveChart(charts.rotation, 'Rotation', f.rotation_alpha || 2.5, dz, f.kb_max_rotation_velocity || 3.0, HARDWARE_LIMITS.rotation);
+            updateCurveChart(charts.rotation, 'Rotation', a, 0.0, f.kb_max_rotation_velocity || 3.0, HARDWARE_LIMITS.rotation);
         });
     }
 
@@ -389,11 +364,11 @@ function initializeSettingsPanelControls() {
     const linearRampSlider = document.getElementById('linear-ramp-time');
     const linearRampValue = document.getElementById('linear-ramp-time-value');
     if (linearRampSlider && linearRampValue) {
-        linearRampSlider.value = km.linear_ramp_time || 1.0;
-        linearRampValue.textContent = `${(km.linear_ramp_time || 1.0).toFixed(1)}s`;
+        linearRampSlider.value = km.linear_ramp_time || 0.20;
+        linearRampValue.textContent = `${(km.linear_ramp_time || 0.20).toFixed(2)}s`;
         linearRampSlider.addEventListener('input', (e) => {
             const v = parseFloat(e.target.value);
-            linearRampValue.textContent = `${v.toFixed(1)}s`;
+            linearRampValue.textContent = `${v.toFixed(2)}s`;
             updateSetting('keyboard_mouse', 'linear_ramp_time', v);
         });
     }
@@ -401,11 +376,11 @@ function initializeSettingsPanelControls() {
     const strafeRampSlider = document.getElementById('strafe-ramp-time');
     const strafeRampValue = document.getElementById('strafe-ramp-time-value');
     if (strafeRampSlider && strafeRampValue) {
-        strafeRampSlider.value = km.strafe_ramp_time || 0.2;
-        strafeRampValue.textContent = `${(km.strafe_ramp_time || 0.2).toFixed(1)}s`;
+        strafeRampSlider.value = km.strafe_ramp_time || 0.20;
+        strafeRampValue.textContent = `${(km.strafe_ramp_time || 0.20).toFixed(2)}s`;
         strafeRampSlider.addEventListener('input', (e) => {
             const v = parseFloat(e.target.value);
-            strafeRampValue.textContent = `${v.toFixed(1)}s`;
+            strafeRampValue.textContent = `${v.toFixed(2)}s`;
             updateSetting('keyboard_mouse', 'strafe_ramp_time', v);
         });
     }
@@ -413,11 +388,11 @@ function initializeSettingsPanelControls() {
     const rotRampSlider = document.getElementById('rotation-ramp-time');
     const rotRampValue = document.getElementById('rotation-ramp-time-value');
     if (rotRampSlider && rotRampValue) {
-        rotRampSlider.value = km.rotation_ramp_time || 0.9;
-        rotRampValue.textContent = `${(km.rotation_ramp_time || 0.9).toFixed(1)}s`;
+        rotRampSlider.value = km.rotation_ramp_time || 0.20;
+        rotRampValue.textContent = `${(km.rotation_ramp_time || 0.20).toFixed(2)}s`;
         rotRampSlider.addEventListener('input', (e) => {
             const v = parseFloat(e.target.value);
-            rotRampValue.textContent = `${v.toFixed(1)}s`;
+            rotRampValue.textContent = `${v.toFixed(2)}s`;
             updateSetting('keyboard_mouse', 'rotation_ramp_time', v);
         });
     }
@@ -427,7 +402,7 @@ function initializeSettingsPanelControls() {
         updateSetting('keyboard_mouse', 'pitch_max_velocity', parseFloat(v));
         if (charts.pitch) {
             const f = getFresh();
-            updateCurveChart(charts.pitch, 'Pitch', f.pitch_alpha || 2.0, f.pitch_deadzone || 0.10, parseFloat(v), HARDWARE_LIMITS.pitch);
+            updateCurveChart(charts.pitch, 'Pitch', f.pitch_alpha || 2.0, 0.0, parseFloat(v), HARDWARE_LIMITS.pitch);
         }
     }, ' rad');
 
@@ -441,34 +416,18 @@ function initializeSettingsPanelControls() {
             pitchAlphaValue.textContent = a.toFixed(1);
             updateSetting('keyboard_mouse', 'pitch_alpha', a);
             const f = getFresh();
-            updateCurveChart(charts.pitch, 'Pitch', a, f.pitch_deadzone || 0.10, f.pitch_max_velocity || 0.35, HARDWARE_LIMITS.pitch);
-        });
-    }
-
-    const pitchDeadzoneSlider = document.getElementById('pitch-deadzone');
-    const pitchDeadzoneValue = document.getElementById('pitch-deadzone-value');
-    if (pitchDeadzoneSlider && pitchDeadzoneValue) {
-        const pitchDzPct = Math.round((km.pitch_deadzone || 0.10) * 100);
-        pitchDeadzoneSlider.value = pitchDzPct;
-        pitchDeadzoneValue.textContent = pitchDzPct + '%';
-        pitchDeadzoneSlider.addEventListener('input', (e) => {
-            const pct = parseInt(e.target.value);
-            const dz = pct / 100.0;
-            pitchDeadzoneValue.textContent = pct + '%';
-            updateSetting('keyboard_mouse', 'pitch_deadzone', dz);
-            const f = getFresh();
-            updateCurveChart(charts.pitch, 'Pitch', f.pitch_alpha || 2.0, dz, f.pitch_max_velocity || 0.35, HARDWARE_LIMITS.pitch);
+            updateCurveChart(charts.pitch, 'Pitch', a, 0.0, f.pitch_max_velocity || 0.35, HARDWARE_LIMITS.pitch);
         });
     }
 
     const pitchRampSlider = document.getElementById('pitch-ramp-time');
     const pitchRampValue = document.getElementById('pitch-ramp-time-value');
     if (pitchRampSlider && pitchRampValue) {
-        pitchRampSlider.value = km.pitch_ramp_time || 0.8;
-        pitchRampValue.textContent = `${(km.pitch_ramp_time || 0.8).toFixed(1)}s`;
+        pitchRampSlider.value = km.pitch_ramp_time || 0.20;
+        pitchRampValue.textContent = `${(km.pitch_ramp_time || 0.20).toFixed(2)}s`;
         pitchRampSlider.addEventListener('input', (e) => {
             const v = parseFloat(e.target.value);
-            pitchRampValue.textContent = `${v.toFixed(1)}s`;
+            pitchRampValue.textContent = `${v.toFixed(2)}s`;
             updateSetting('keyboard_mouse', 'pitch_ramp_time', v);
         });
     }
@@ -490,19 +449,6 @@ function initializeSettingsPanelControls() {
             }
         });
     });
-
-    // --- Reset to defaults button ---
-    const resetBtn = document.getElementById('reset-settings-btn');
-    if (resetBtn) {
-        resetBtn.addEventListener('click', () => {
-            if (confirm('Reset all settings to defaults?')) {
-                const defaults = resetSettings();
-                console.log('⚙️ Settings reset to defaults');
-                updateAllControlPageSliders(defaults.keyboard_mouse);
-                updateActivePresetButtonOnControlPage();
-            }
-        });
-    }
 
     console.log('✅ Settings panel controls initialized');
 }

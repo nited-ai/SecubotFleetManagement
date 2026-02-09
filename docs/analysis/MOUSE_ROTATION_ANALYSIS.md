@@ -72,10 +72,12 @@ This approach **bypasses** the `applyCurve()` function used by keyboard/gamepad 
 │  ───────────────────────────                                            │
 │  vyaw = clamp(current_vyaw, -max_rotation, +max_rotation)               │
 │                                                                         │
-│  Step 11: Re-normalize → Robot                                          │
-│  ─────────────────────────────                                          │
-│  rx_norm = clamp(-vyaw / max_rotation, -1.0, 1.0)                      │
+│  Step 11: Re-normalize → Robot (using HARDWARE LIMITS)                   │
+│  ──────────────────────────────────────────────────────                  │
+│  rx_norm = clamp(-vyaw / HARDWARE_LIMIT_ROTATION, -1.0, 1.0)           │
 │  Publish to WirelessController topic: {"rx": rx_norm, ...}              │
+│  NOTE: Divides by hardware limit (3.0 rad/s), NOT slider value.        │
+│  This preserves the slider's speed-limiting effect.                     │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -178,8 +180,69 @@ By bypassing `applyCurve()` for mouse rotation:
 - Small movements produce small, usable rotation (no exponential suppression)
 - The `rotationAlpha` and `rotationDeadzone` settings have no effect on mouse rotation (they still apply to keyboard/gamepad)
 
+## Future-Proofing Notes
+
+### 1. The High-DPI Mouse Factor
+
+The formula relies on `movementX` (pixels). The number of pixels generated per physical inch of mouse movement depends on the mouse's DPI setting:
+
+| Mouse Type | DPI | Pixels per 1 inch of movement |
+|---|---|---|
+| Standard office mouse | 800 | ~800 |
+| Mid-range gaming mouse | 3,200 | ~3,200 |
+| High-end gaming mouse | 16,000 | ~16,000 |
+
+**The risk:** A user with a high-DPI gaming mouse could find the robot "spins like a top" even at the lowest sensitivity setting, because their `rawPixels` count is 20× higher than an office mouse for the same physical hand movement.
+
+**Current mitigation:** The `mouseSensitivity` slider (range 0.1–50) and speed slider provide enough range to compensate in most cases.
+
+**Fix if needed later:** Expose `MOUSE_SCALE_FACTOR` as a user-adjustable setting, or normalize `movementX` based on a DPI reference value. Note that browsers report `movementX` in CSS/logical pixels (not raw hardware counts), so OS-level pointer acceleration and DPI scaling already partially normalize this — but high-DPI mice still produce significantly more pixels per inch than standard mice.
+
+## Max Velocity Slider Bug & Fix
+
+### The Bug
+
+The `kb_max_rotation_velocity` slider had **no effect** on actual robot rotation speed. Setting the slider to minimum still resulted in full-speed rotation.
+
+### Root Cause: Re-normalization Cancellation
+
+The backend re-normalization step divided by `max_rotation` (the user's slider value) — the same value used to de-normalize the input. This created a perfect round-trip that cancelled the slider:
+
+```
+Frontend: vyaw = 2.0 rad/s → rx = -2.0 / 2.0 = -1.0     (normalize by slider)
+Backend:  raw_target = 1.0 × 2.0 = 2.0                     (de-normalize by slider)
+Backend:  rx_norm = -2.0 / 2.0 = -1.0                      (re-normalize by slider) ← BUG
+Robot:    receives rx = -1.0 → full rotation, regardless of slider
+```
+
+### The Fix: Re-normalize by Hardware Limits
+
+Re-normalization now divides by the **hardware limit** constant (3.0 rad/s) instead of the slider value:
+
+```python
+# BEFORE (bug): slider cancels out
+rx_norm = -vyaw / max_rotation             # max_rotation = slider value (e.g., 2.0)
+
+# AFTER (fix): slider effect preserved
+rx_norm = -vyaw / HARDWARE_LIMIT_ROTATION  # HARDWARE_LIMIT_ROTATION = 3.0 (constant)
+```
+
+### Verification
+
+| Slider Value | Hardware Limit | Robot Receives | Result |
+|---|---|---|---|
+| 1.5 rad/s | 3.0 rad/s | `rx = 0.50` | 50% rotation ✅ |
+| 2.0 rad/s | 3.0 rad/s | `rx = 0.67` | 67% rotation ✅ |
+| 3.0 rad/s | 3.0 rad/s | `rx = 1.00` | Full rotation ✅ |
+
+This fix applies to **all axes** (linear, strafe, rotation, pitch). Hardware limit constants are defined in:
+- Frontend: `HARDWARE_LIMITS` in `static/js/curve-utils.js`
+- Backend: `self.HARDWARE_LIMIT_ROTATION` in `app/services/control.py`
+
+These must always stay in sync.
+
 ## Files
 
 - `static/js/keyboard-mouse-control.js` — Mouse rotation implementation (lines ~534-563 in `poll()`)
-- `static/js/curve-utils.js` — Exponential curve functions (still used for keyboard/gamepad, **not** for mouse rotation)
-- `app/services/control.py` — Backend slew rate limiter and WirelessController normalization
+- `static/js/curve-utils.js` — Exponential curve functions (still used for keyboard/gamepad, **not** for mouse rotation), `HARDWARE_LIMITS`
+- `app/services/control.py` — Backend slew rate limiter, hardware limit constants, WirelessController re-normalization

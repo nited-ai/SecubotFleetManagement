@@ -43,11 +43,11 @@ class KeyboardMouseControl {
         //                  10px * 0.01 = 0.1 (deadzone boundary)
         this.MOUSE_SCALE_FACTOR = 0.01;  // Scale raw pixels to 0-1 range for curve input
 
-        // Jump-start behavior constants (fixes "wait-then-jump" deadzone-ramping conflict)
-        // When a key is first pressed, snap to minimum viable speed for immediate feedback
-        // This bypasses the deadzone wait and provides instant visual response
-        this.MIN_START_SPEED = 0.15;  // 15% - instant jump-start velocity
-        this.ACCEL_FACTOR = 0.05;     // Lower = smoother ramp (tune this)
+        // REMOVED: Frontend smoothing constants (Option B - Direct Assignment)
+        // Jump-start (MIN_START_SPEED) and exponential ramping (ACCEL_FACTOR) were removed
+        // because the backend's asymmetric slew rate limiter handles all physics smoothing.
+        // ACCEL_FACTOR=0.05 was a 2-second anchor that made ramp_time settings meaningless.
+        // See docs/analysis/STRAFE_ANALYSIS.md for full analysis.
 
         // Speed indicator timeout
         this.speedIndicatorTimeout = null;
@@ -78,24 +78,24 @@ class KeyboardMouseControl {
                         maxRotation: parseFloat(km.kb_max_rotation_velocity || 3.0),
                         acceleration: parseFloat(km.acceleration !== undefined ? km.acceleration : 1.15),
                         deceleration: parseFloat(km.deceleration !== undefined ? km.deceleration : 0.5),
-                        mouseSensitivity: parseFloat(km.mouse_yaw_sensitivity || 0.5),
+                        mouseSensitivity: parseFloat(km.mouse_yaw_sensitivity || 6.0),
                         // Curve parameters - Use !== undefined to correctly handle 0 values
-                        linearAlpha: parseFloat(km.linear_alpha !== undefined ? km.linear_alpha : 1.5),
+                        linearAlpha: parseFloat(km.linear_alpha !== undefined ? km.linear_alpha : 1.0),
                         linearDeadzone: parseFloat(km.linear_deadzone !== undefined ? km.linear_deadzone : 0.10),
-                        strafeAlpha: parseFloat(km.strafe_alpha !== undefined ? km.strafe_alpha : 1.2),
+                        strafeAlpha: parseFloat(km.strafe_alpha !== undefined ? km.strafe_alpha : 1.0),
                         strafeDeadzone: parseFloat(km.strafe_deadzone !== undefined ? km.strafe_deadzone : 0.10),
-                        rotationAlpha: parseFloat(km.rotation_alpha !== undefined ? km.rotation_alpha : 2.5),
-                        rotationDeadzone: parseFloat(km.rotation_deadzone !== undefined ? km.rotation_deadzone : 0.10),
+                        rotationAlpha: parseFloat(km.rotation_alpha !== undefined ? km.rotation_alpha : 1.0),
+                        rotationDeadzone: parseFloat(km.rotation_deadzone !== undefined ? km.rotation_deadzone : 0.0),
                         // Backend slew rate limiter parameters (acceleration ramp-up time)
-                        linearRampTime: parseFloat(km.linear_ramp_time !== undefined ? km.linear_ramp_time : 1.0),
-                        strafeRampTime: parseFloat(km.strafe_ramp_time !== undefined ? km.strafe_ramp_time : 0.2),
-                        rotationRampTime: parseFloat(km.rotation_ramp_time !== undefined ? km.rotation_ramp_time : 0.9),
+                        linearRampTime: parseFloat(km.linear_ramp_time !== undefined ? km.linear_ramp_time : 0.20),
+                        strafeRampTime: parseFloat(km.strafe_ramp_time !== undefined ? km.strafe_ramp_time : 0.20),
+                        rotationRampTime: parseFloat(km.rotation_ramp_time !== undefined ? km.rotation_ramp_time : 0.20),
                         // Pitch parameters
-                        pitchAlpha: parseFloat(km.pitch_alpha !== undefined ? km.pitch_alpha : 2.0),
-                        pitchDeadzone: parseFloat(km.pitch_deadzone !== undefined ? km.pitch_deadzone : 0.10),
-                        pitchMaxVelocity: parseFloat(km.pitch_max_velocity !== undefined ? km.pitch_max_velocity : 0.35),
-                        pitchRampTime: parseFloat(km.pitch_ramp_time !== undefined ? km.pitch_ramp_time : 0.8),
-                        mousePitchSensitivity: parseFloat(km.mouse_pitch_sensitivity || 2.5)
+                        pitchAlpha: parseFloat(km.pitch_alpha !== undefined ? km.pitch_alpha : 1.0),
+                        pitchDeadzone: parseFloat(km.pitch_deadzone !== undefined ? km.pitch_deadzone : 0.0),
+                        pitchMaxVelocity: parseFloat(km.pitch_max_velocity !== undefined ? km.pitch_max_velocity : 0.30),
+                        pitchRampTime: parseFloat(km.pitch_ramp_time !== undefined ? km.pitch_ramp_time : 0.20),
+                        mousePitchSensitivity: parseFloat(km.mouse_pitch_sensitivity || 3.0)
                     };
                 }
             } catch (e) {
@@ -115,23 +115,23 @@ class KeyboardMouseControl {
                 // Use kb_max_linear_velocity instead
                 return {
                     maxLinear: parseFloat(settings.kb_max_linear_velocity || settings.maxLinear || 1.5),
-                    maxStrafe: parseFloat(settings.kb_max_strafe_velocity || settings.maxStrafe || 0.6),
+                    maxStrafe: parseFloat(settings.kb_max_strafe_velocity || settings.maxStrafe || 1.0),
                     maxRotation: parseFloat(settings.kb_max_rotation_velocity || settings.maxRotation || 3.0),
                     acceleration: parseFloat(settings.acceleration || 0.15),
                     deceleration: parseFloat(settings.deceleration || 0.2),
                     mouseSensitivity: parseFloat(settings.mouse_yaw_sensitivity || settings.mouseSensitivity || 0.5),
                     // Default curve parameters (not in old format)
-                    linearAlpha: 1.5,
+                    linearAlpha: 1.0,
                     linearDeadzone: 0.10,
-                    strafeAlpha: 1.2,
+                    strafeAlpha: 1.0,
                     strafeDeadzone: 0.10,
-                    rotationAlpha: 2.5,
-                    rotationDeadzone: 0.10,
-                    pitchAlpha: 2.0,
-                    pitchDeadzone: 0.10,
-                    pitchMaxVelocity: 0.35,
-                    pitchRampTime: 0.8,
-                    mousePitchSensitivity: 2.5
+                    rotationAlpha: 1.0,
+                    rotationDeadzone: 0.0,
+                    pitchAlpha: 1.0,
+                    pitchDeadzone: 0.0,
+                    pitchMaxVelocity: 0.30,
+                    pitchRampTime: 0.20,
+                    mousePitchSensitivity: 3.0
                 };
             } catch (e) {
                 console.error('❌ [loadSettings] Error parsing keyboardMouseSettings:', e);
@@ -140,24 +140,24 @@ class KeyboardMouseControl {
 
         // Default settings (match "normal" preset from settings-manager.js)
         return {
-            maxLinear: 1.5,
-            maxStrafe: 0.6,  // Fixed: hardware limit
+            maxLinear: 3.0,
+            maxStrafe: 1.0,
             maxRotation: 3.0,
             acceleration: 0.15,
             deceleration: 0.2,
-            mouseSensitivity: 0.5,
+            mouseSensitivity: 6.0,
             // Default curve parameters (Normal preset)
-            linearAlpha: 1.5,
+            linearAlpha: 1.0,
             linearDeadzone: 0.10,
-            strafeAlpha: 1.2,
+            strafeAlpha: 1.0,
             strafeDeadzone: 0.10,
-            rotationAlpha: 2.5,
-            rotationDeadzone: 0.10,
-            pitchAlpha: 2.0,
-            pitchDeadzone: 0.10,
-            pitchMaxVelocity: 0.35,
-            pitchRampTime: 0.8,
-            mousePitchSensitivity: 2.5
+            rotationAlpha: 1.0,
+            rotationDeadzone: 0.0,
+            pitchAlpha: 1.0,
+            pitchDeadzone: 0.0,
+            pitchMaxVelocity: 0.30,
+            pitchRampTime: 0.20,
+            mousePitchSensitivity: 3.0
         };
     }
 
@@ -467,69 +467,59 @@ class KeyboardMouseControl {
             return;
         }
 
-        // Apply velocity ramping (smooth acceleration/deceleration) with exponential curves
+        // Apply exponential curves to keyboard input, then direct-assign to backend
         // NOTE: Linear/strafe deadzone removed (keyboard is digital), rotation deadzone kept (mouse is analog)
-        const { maxLinear, maxStrafe, maxRotation, deceleration,
+        // NOTE: 'deceleration' no longer destructured — frontend smoothing removed (Option B).
+        //        Backend asymmetric slew rate limiter handles all acceleration/deceleration.
+        const { maxLinear, maxStrafe, maxRotation,
                 linearAlpha, strafeAlpha } = this.settings;
         const linearDeadzone = 0.0;  // Keyboard input - no deadzone needed
         const strafeDeadzone = 0.0;  // Keyboard input - no deadzone needed
         // NOTE: rotationAlpha and rotationDeadzone no longer used — mouse rotation
         // bypasses applyCurve() entirely (Solution 3: Direct Linear Mapping)
 
-        // Linear velocity (forward/backward) - apply exponential curve
-        // Convert input (-1 to 1) to absolute percentage (0 to 1), apply curve, then restore sign
+        // --- LINEAR: Direct Assignment (Option B - bypasses frontend smoothing) ---
+        // Same pattern as strafe: backend asymmetric slew rate limiter handles all physics.
+        // Frontend smoothing (ACCEL_FACTOR=0.05) was a 2-second anchor that made
+        // linear_ramp_time meaningless. Removing it lets the backend setting work.
         const linearInput = Math.abs(forward);
         const curvedLinear = linearInput > 0
             ? applyLinearCurve(linearInput, linearAlpha, linearDeadzone, maxLinear) * Math.sign(forward)
             : 0;
-        const targetLinear = curvedLinear;
 
         // Debug logging for curve output
         if (linearInput > 0.01) {
             console.log(`[applyCurve Linear] input=${linearInput.toFixed(3)}, curved=${curvedLinear.toFixed(3)}, maxLinear=${maxLinear}, alpha=${linearAlpha}, deadzone=${linearDeadzone}`);
         }
 
-        // Jump-start logic: When starting from standstill, snap to minimum viable speed
-        // This fixes the "wait-then-jump" deadzone-ramping conflict
-        // CRITICAL: Jump-start velocity must be a PERCENTAGE of maxLinear, not absolute value
-        // Before: W key → 0.0 → 0.005 (blocked by deadzone) → 0.009 (blocked) → 0.011 (move!) = 500ms delay
-        // After: W key → snap to 15% of maxLinear (move immediately!) → ramp to 100% = 0ms delay
-        if (Math.abs(targetLinear) > 0.001 && Math.abs(this.currentVelocities.linear) < 0.001) {
-            // Jump-start: snap to minimum viable speed (percentage of max velocity)
-            // Example: maxLinear=3.0 → 0.15*3.0 = 0.45 m/s, maxLinear=5.0 → 0.15*5.0 = 0.75 m/s
-            this.currentVelocities.linear = Math.sign(targetLinear) * this.MIN_START_SPEED * maxLinear;
-            console.log(`🚀 [Jump-Start Linear] Snapped to ${this.currentVelocities.linear.toFixed(3)} (${(this.MIN_START_SPEED*100).toFixed(0)}% of ${maxLinear})`);
-        }
-
-        // Apply exponential ramping (smooth acceleration/deceleration)
-        if (Math.abs(targetLinear) > 0.01) {
-            this.currentVelocities.linear += (targetLinear - this.currentVelocities.linear) * this.ACCEL_FACTOR;
+        // Direct assignment: send curve output straight to backend
+        // No jump-start needed (no slow ramp to overcome)
+        // No exponential ramping (backend slew rate limiter handles smoothing)
+        if (Math.abs(curvedLinear) > 0.001) {
+            this.currentVelocities.linear = curvedLinear;
         } else {
-            this.currentVelocities.linear *= (1 - deceleration);
-            // Snap to zero when below threshold to prevent infinite tiny values (e.g. 1e-214)
-            if (Math.abs(this.currentVelocities.linear) < 0.001) this.currentVelocities.linear = 0;
+            this.currentVelocities.linear = 0;  // Instant stop on key release
         }
 
-        // Strafe velocity (left/right) - apply exponential curve
+        // --- STRAFE: Direct Assignment (Option B - bypasses frontend smoothing) ---
+        // The backend's asymmetric slew rate limiter handles all physics:
+        //   - Acceleration: smooth ramp controlled by strafe_ramp_time setting
+        //   - Deceleration: instant (FPS convention)
+        // Frontend smoothing (ACCEL_FACTOR=0.05) was a 2-second anchor that made
+        // strafe_ramp_time meaningless. Removing it lets the backend setting work.
+        // See docs/analysis/STRAFE_ANALYSIS.md for full analysis.
         const strafeInput = Math.abs(strafe);
         const curvedStrafe = strafeInput > 0
             ? applyStrafeCurve(strafeInput, strafeAlpha, strafeDeadzone, maxStrafe) * Math.sign(strafe)
             : 0;
-        const targetStrafe = curvedStrafe;
 
-        // Jump-start logic for strafe (same as linear - percentage of max velocity)
-        if (Math.abs(targetStrafe) > 0.001 && Math.abs(this.currentVelocities.strafe) < 0.001) {
-            this.currentVelocities.strafe = Math.sign(targetStrafe) * this.MIN_START_SPEED * maxStrafe;
-            console.log(`🚀 [Jump-Start Strafe] Snapped to ${this.currentVelocities.strafe.toFixed(3)} (${(this.MIN_START_SPEED*100).toFixed(0)}% of ${maxStrafe})`);
-        }
-
-        // Apply exponential ramping
-        if (Math.abs(targetStrafe) > 0.01) {
-            this.currentVelocities.strafe += (targetStrafe - this.currentVelocities.strafe) * this.ACCEL_FACTOR;
+        // Direct assignment: send curve output straight to backend
+        // No jump-start needed (no slow ramp to overcome)
+        // No exponential ramping (backend slew rate limiter handles smoothing)
+        if (Math.abs(curvedStrafe) > 0.001) {
+            this.currentVelocities.strafe = curvedStrafe;
         } else {
-            this.currentVelocities.strafe *= (1 - deceleration);
-            // Snap to zero when below threshold to prevent infinite tiny values (e.g. 1e-214)
-            if (Math.abs(this.currentVelocities.strafe) < 0.001) this.currentVelocities.strafe = 0;
+            this.currentVelocities.strafe = 0;  // Instant stop on key release
         }
 
         // --- MOUSE ROTATION: Direct Linear Mapping (Solution 3 - bypasses applyCurve) ---
@@ -627,10 +617,10 @@ class KeyboardMouseControl {
                 max_rotation: maxRotation,
                 max_pitch: pitchMaxVelocity,
                 // Backend slew rate limiter parameters (acceleration ramp-up time)
-                linear_ramp_time: this.settings.linearRampTime || 1.0,
-                strafe_ramp_time: this.settings.strafeRampTime || 0.2,
-                rotation_ramp_time: this.settings.rotationRampTime || 0.9,
-                pitch_ramp_time: this.settings.pitchRampTime || 0.8,
+                linear_ramp_time: this.settings.linearRampTime || 0.20,
+                strafe_ramp_time: this.settings.strafeRampTime || 0.20,
+                rotation_ramp_time: this.settings.rotationRampTime || 0.20,
+                pitch_ramp_time: this.settings.pitchRampTime || 0.20,
                 // RAGE MODE flag (bypasses backend slew rate limiter)
                 rage_mode: rageMode,
                 source: 'keyboard_mouse'

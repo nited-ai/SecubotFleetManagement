@@ -51,6 +51,15 @@ class ControlService:
         self.MAX_STRAFE_ACCEL = 3.0   # m/s² (tune for strafe movement smoothness)
         self.MAX_YAW_ACCEL = 10.0     # rad/s² (tune for rotation smoothness)
         self.MAX_PITCH_ACCEL = 0.5    # rad/s² (tune for pitch smoothness)
+
+        # Hardware limits: the robot's physical maximum capabilities
+        # These MUST match HARDWARE_LIMITS in static/js/curve-utils.js
+        # Used for re-normalization when sending to WirelessController topic
+        # WirelessController expects normalized [-1, 1] values where 1.0 = robot's full speed
+        self.HARDWARE_LIMIT_LINEAR = 5.0    # m/s - max forward/back velocity
+        self.HARDWARE_LIMIT_STRAFE = 1.0    # m/s - max strafe velocity
+        self.HARDWARE_LIMIT_ROTATION = 3.0  # rad/s - max yaw rotation velocity
+        self.HARDWARE_LIMIT_PITCH = 0.35    # rad - max pitch angle (~20°)
         
         # Preset configurations
         self.presets = {
@@ -334,27 +343,42 @@ class ControlService:
                 if dt > 0.1:
                     dt = 0.033  # Use typical 30Hz polling rate as fallback
 
-                # Apply slew rate limiter to each axis
-                # Formula: new_velocity = current_velocity + clamp(delta_velocity, -max_step, +max_step)
-                # where max_step = MAX_ACCEL * dt
+                # Apply ASYMMETRIC slew rate limiter to each axis
+                # Acceleration: ramp up smoothly using configured ramp_time
+                # Deceleration: instant response (follow frontend target directly)
+                # This implements FPS convention: instant stop on key release,
+                # smooth start on key press. The ramp_time setting only controls
+                # how fast the robot accelerates, never how fast it decelerates.
 
                 # Linear (Forward/Back)
-                delta_vx = raw_target_vx - self.current_vx
-                max_step_vx = MAX_LINEAR_ACCEL * dt
-                safe_delta_vx = max(-max_step_vx, min(max_step_vx, delta_vx))
-                self.current_vx += safe_delta_vx
+                if abs(raw_target_vx) < abs(self.current_vx):
+                    # Decelerating (target closer to zero): instant response
+                    self.current_vx = raw_target_vx
+                else:
+                    # Accelerating (target further from zero): apply slew rate limiter
+                    delta_vx = raw_target_vx - self.current_vx
+                    max_step_vx = MAX_LINEAR_ACCEL * dt
+                    self.current_vx += max(-max_step_vx, min(max_step_vx, delta_vx))
 
                 # Strafe (Left/Right)
-                delta_vy = raw_target_vy - self.current_vy
-                max_step_vy = MAX_STRAFE_ACCEL * dt
-                safe_delta_vy = max(-max_step_vy, min(max_step_vy, delta_vy))
-                self.current_vy += safe_delta_vy
+                if abs(raw_target_vy) < abs(self.current_vy):
+                    # Decelerating: instant response
+                    self.current_vy = raw_target_vy
+                else:
+                    # Accelerating: apply slew rate limiter
+                    delta_vy = raw_target_vy - self.current_vy
+                    max_step_vy = MAX_STRAFE_ACCEL * dt
+                    self.current_vy += max(-max_step_vy, min(max_step_vy, delta_vy))
 
                 # Rotation (Yaw)
-                delta_vyaw = raw_target_vyaw - self.current_vyaw
-                max_step_vyaw = MAX_YAW_ACCEL * dt
-                safe_delta_vyaw = max(-max_step_vyaw, min(max_step_vyaw, delta_vyaw))
-                self.current_vyaw += safe_delta_vyaw
+                if abs(raw_target_vyaw) < abs(self.current_vyaw):
+                    # Decelerating: instant response
+                    self.current_vyaw = raw_target_vyaw
+                else:
+                    # Accelerating: apply slew rate limiter
+                    delta_vyaw = raw_target_vyaw - self.current_vyaw
+                    max_step_vyaw = MAX_YAW_ACCEL * dt
+                    self.current_vyaw += max(-max_step_vyaw, min(max_step_vyaw, delta_vyaw))
 
                 # Pitch (Body Tilt) - only apply slew rate for gamepad
                 if is_keyboard_mouse:
@@ -403,11 +427,18 @@ class ControlService:
             self.state.zero_velocity_sent = is_zero_velocity
 
             # Re-normalize for WirelessController (joystick values -1 to 1)
-            # These reverse the scaling done earlier (raw_target_vy = -lx * max_strafe, etc.)
-            ly_norm = round(vx / max_linear, 4) if max_linear > 0 else 0.0
-            lx_norm = round(-vy / max_strafe, 4) if max_strafe > 0 else 0.0
-            rx_norm = round(-vyaw / max_rotation, 4) if max_rotation > 0 else 0.0
-            ry_norm = round(pitch / max_pitch, 4) if max_pitch > 0 else 0.0
+            # BUG FIX: Previously divided by max_linear/max_strafe/max_rotation (the user's
+            # slider values), which cancelled out the slider effect entirely:
+            #   lx_norm = vy / max_strafe = (input * max_strafe) / max_strafe = input
+            # The robot always saw ±1.0 regardless of slider position.
+            #
+            # FIX: Divide by HARDWARE LIMITS (the robot's physical maximum capability).
+            # Now when user sets max_strafe=0.6 and hardware limit is 1.2:
+            #   lx_norm = 0.6 / 1.2 = 0.5 → robot runs at 50% of its full strafe speed
+            ly_norm = round(vx / self.HARDWARE_LIMIT_LINEAR, 4) if self.HARDWARE_LIMIT_LINEAR > 0 else 0.0
+            lx_norm = round(-vy / self.HARDWARE_LIMIT_STRAFE, 4) if self.HARDWARE_LIMIT_STRAFE > 0 else 0.0
+            rx_norm = round(-vyaw / self.HARDWARE_LIMIT_ROTATION, 4) if self.HARDWARE_LIMIT_ROTATION > 0 else 0.0
+            ry_norm = round(pitch / self.HARDWARE_LIMIT_PITCH, 4) if self.HARDWARE_LIMIT_PITCH > 0 else 0.0
 
             # Clamp normalized values to [-1, 1] for safety
             ly_norm = max(-1.0, min(1.0, ly_norm))

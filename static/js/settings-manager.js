@@ -12,26 +12,25 @@ const SETTINGS_STORAGE_KEY = 'unitree_settings';
 function getDefaultSettings() {
     return {
         keyboard_mouse: {
-            mouse_yaw_sensitivity: 5.0,  // Increased for precision-flick control
-            mouse_pitch_sensitivity: 2.5,  // Increased proportionally
-            kb_max_linear_velocity: 1.5,
-            kb_max_strafe_velocity: 0.6,  // Fixed: hardware limit
-            kb_max_rotation_velocity: 3.0,
+            mouse_yaw_sensitivity: 6.0,  // Balanced for precision-flick control
+            mouse_pitch_sensitivity: 3.0,  // Proportional to yaw
+            kb_max_linear_velocity: 3.0,   // ~60% of 5.0 hardware limit
+            kb_max_strafe_velocity: 0.6,   // ~60% of 1.0 hardware limit
+            kb_max_rotation_velocity: 2.0, // ~67% of 3.0 hardware limit
             // Exponential curve settings (Normal preset defaults)
-            // NOTE: Linear/strafe deadzone removed (keyboard is digital), but rotation deadzone kept (mouse is analog)
-            linear_alpha: 1.5,
-            strafe_alpha: 1.2,
-            rotation_alpha: 2.5,
-            rotation_deadzone: 0.10,  // Mouse rotation needs deadzone to prevent drift
+            linear_alpha: 1.0,    // Linear response
+            strafe_alpha: 1.0,
+            rotation_alpha: 1.0,
+            rotation_deadzone: 0.0,  // Deadzone removed (mouse rotation bypasses curve)
             // Backend slew rate limiter settings (acceleration ramp-up time)
-            linear_ramp_time: 1.0,    // seconds - time to reach max linear speed
-            strafe_ramp_time: 0.2,    // seconds - time to reach max strafe speed
-            rotation_ramp_time: 0.9,  // seconds - time to reach max rotation speed
+            linear_ramp_time: 0.20,    // seconds - time to reach max linear speed
+            strafe_ramp_time: 0.20,    // seconds - time to reach max strafe speed
+            rotation_ramp_time: 0.20,  // seconds - time to reach max rotation speed
             // Pitch (body tilt) curve settings
-            pitch_alpha: 2.0,           // Exponential curve factor for pitch
-            pitch_deadzone: 0.10,       // Mouse pitch deadzone (prevents drift)
-            pitch_max_velocity: 0.35,   // Max pitch angle in rad (~20°)
-            pitch_ramp_time: 0.8        // seconds - time to reach max pitch angle
+            pitch_alpha: 1.0,           // Linear response
+            pitch_deadzone: 0.0,        // Deadzone removed (mouse pitch bypasses curve)
+            pitch_max_velocity: 0.30,   // Max pitch angle in rad (~17°)
+            pitch_ramp_time: 0.20       // seconds - time to reach max pitch angle
         },
         gamepad: {
             deadzone_left_stick: 0.15,
@@ -162,25 +161,25 @@ function applyPreset(preset) {
     const presets = {
         beginner: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 3.0,  // Lower for beginners, but still allows fast flicks
-                mouse_pitch_sensitivity: 1.5,  // Proportionally lower
-                kb_max_linear_velocity: 1.0,
-                kb_max_strafe_velocity: 0.6,  // Fixed: was 0.8, exceeds 0.6 m/s hardware limit
-                kb_max_rotation_velocity: 2.0,
-                // Beginner curve: Smooth, forgiving (linear/strafe deadzone removed, rotation deadzone kept)
-                linear_alpha: 1.8,
-                strafe_alpha: 1.5,
-                rotation_alpha: 3.0,  // High exponential suppresses jitter from sensitivity
-                rotation_deadzone: 0.15,  // Higher deadzone for beginners to prevent accidental rotation
-                // Beginner ramp-up time: Slower acceleration for smoother feel
-                linear_ramp_time: 1.5,
-                strafe_ramp_time: 1.2,
-                rotation_ramp_time: 1.2,
+                mouse_yaw_sensitivity: 4.5,   // Moderate for beginners
+                mouse_pitch_sensitivity: 2.0,  // Proportional to yaw
+                kb_max_linear_velocity: 2.5,   // ~50% of 5.0 hardware limit
+                kb_max_strafe_velocity: 0.5,   // ~50% of 1.0 hardware limit
+                kb_max_rotation_velocity: 1.5, // ~50% of 3.0 hardware limit
+                // Beginner curve: Linear to slightly convex (gentle start)
+                linear_alpha: 1.2,
+                strafe_alpha: 1.2,
+                rotation_alpha: 1.2,
+                rotation_deadzone: 0.0,
+                // Beginner ramp-up time: Smooth acceleration
+                linear_ramp_time: 0.40,
+                strafe_ramp_time: 0.40,
+                rotation_ramp_time: 0.40,
                 // Beginner pitch: Smooth, limited range
-                pitch_alpha: 2.5,
-                pitch_deadzone: 0.15,
+                pitch_alpha: 1.2,
+                pitch_deadzone: 0.0,
                 pitch_max_velocity: 0.20,
-                pitch_ramp_time: 1.2
+                pitch_ramp_time: 0.40
             },
             gamepad: {
                 deadzone_left_stick: 0.15,
@@ -196,25 +195,25 @@ function applyPreset(preset) {
         },
         normal: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 5.0,  // Balanced for precision-flick control
-                mouse_pitch_sensitivity: 2.5,  // Proportional to yaw
-                kb_max_linear_velocity: 1.5,
-                kb_max_strafe_velocity: 0.6,  // Fixed: was 1.2, exceeds 0.6 m/s hardware limit
-                kb_max_rotation_velocity: 3.0,
-                // Normal curve: Balanced, default values (linear/strafe deadzone removed, rotation deadzone kept)
-                linear_alpha: 1.5,
-                strafe_alpha: 1.2,
-                rotation_alpha: 2.5,  // Exponential curve for smooth precision-flick
-                rotation_deadzone: 0.10,  // Mouse rotation needs deadzone to prevent drift
-                // Normal ramp-up time: Current defaults
-                linear_ramp_time: 1.0,
-                strafe_ramp_time: 0.2,
-                rotation_ramp_time: 0.9,
+                mouse_yaw_sensitivity: 6.0,   // Balanced for precision-flick control
+                mouse_pitch_sensitivity: 3.0,  // Proportional to yaw
+                kb_max_linear_velocity: 3.0,   // ~60% of 5.0 hardware limit
+                kb_max_strafe_velocity: 0.6,   // ~60% of 1.0 hardware limit
+                kb_max_rotation_velocity: 2.0, // ~67% of 3.0 hardware limit
+                // Normal curve: Linear response
+                linear_alpha: 1.0,
+                strafe_alpha: 1.0,
+                rotation_alpha: 1.0,
+                rotation_deadzone: 0.0,
+                // Normal ramp-up time: Balanced
+                linear_ramp_time: 0.20,
+                strafe_ramp_time: 0.20,
+                rotation_ramp_time: 0.20,
                 // Normal pitch: Balanced
-                pitch_alpha: 2.0,
-                pitch_deadzone: 0.10,
-                pitch_max_velocity: 0.35,
-                pitch_ramp_time: 0.8
+                pitch_alpha: 1.0,
+                pitch_deadzone: 0.0,
+                pitch_max_velocity: 0.30,
+                pitch_ramp_time: 0.20
             },
             gamepad: {
                 deadzone_left_stick: 0.1,
@@ -230,25 +229,25 @@ function applyPreset(preset) {
         },
         advanced: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 8.0,  // Higher for advanced users
-                mouse_pitch_sensitivity: 4.0,  // Proportional to yaw
-                kb_max_linear_velocity: 1.8,
-                kb_max_strafe_velocity: 0.6,  // Fixed: was 1.5, exceeds 0.6 m/s hardware limit
-                kb_max_rotation_velocity: 3.0,  // Fixed: was 3.5, exceeds 3.0 rad/s hardware limit
-                // Advanced curve: More responsive (linear/strafe deadzone removed, rotation deadzone kept)
-                linear_alpha: 1.2,
-                strafe_alpha: 1.0,
-                rotation_alpha: 2.0,  // Lower exponential for more linear response
-                rotation_deadzone: 0.05,  // Lower deadzone for advanced users (more responsive)
-                // Advanced ramp-up time: Faster acceleration for snappier response
-                linear_ramp_time: 0.5,
-                strafe_ramp_time: 0.3,
-                rotation_ramp_time: 0.4,
-                // Advanced pitch: More responsive
-                pitch_alpha: 1.5,
-                pitch_deadzone: 0.05,
+                mouse_yaw_sensitivity: 10.0,  // High for advanced users
+                mouse_pitch_sensitivity: 5.0,  // Proportional to yaw
+                kb_max_linear_velocity: 4.5,   // ~90% of 5.0 hardware limit
+                kb_max_strafe_velocity: 0.9,   // ~90% of 1.0 hardware limit
+                kb_max_rotation_velocity: 3.0, // 100% of 3.0 hardware limit
+                // Advanced curve: Slightly concave (fast start, responsive)
+                linear_alpha: 0.9,
+                strafe_alpha: 0.9,
+                rotation_alpha: 0.9,
+                rotation_deadzone: 0.0,
+                // Advanced ramp-up time: Snappy acceleration
+                linear_ramp_time: 0.10,
+                strafe_ramp_time: 0.10,
+                rotation_ramp_time: 0.10,
+                // Advanced pitch: Responsive
+                pitch_alpha: 0.9,
+                pitch_deadzone: 0.0,
                 pitch_max_velocity: 0.35,
-                pitch_ramp_time: 0.4
+                pitch_ramp_time: 0.10
             },
             gamepad: {
                 deadzone_left_stick: 0.05,
@@ -264,25 +263,25 @@ function applyPreset(preset) {
         },
         sport: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 12.0,  // Highest for sport/competitive use
-                mouse_pitch_sensitivity: 6.0,  // Proportional to yaw
-                kb_max_linear_velocity: 2.0,
-                kb_max_strafe_velocity: 0.6,  // Fixed: was 1.8, exceeds 0.6 m/s hardware limit
-                kb_max_rotation_velocity: 3.0,  // Fixed: was 4.0, exceeds 3.0 rad/s hardware limit
-                // Sport curve: Linear/aggressive (linear/strafe deadzone removed, rotation deadzone kept)
-                linear_alpha: 1.0,
+                mouse_yaw_sensitivity: 15.0,  // Highest for sport/competitive use
+                mouse_pitch_sensitivity: 7.5,  // Proportional to yaw
+                kb_max_linear_velocity: 5.0,   // 100% of 5.0 hardware limit
+                kb_max_strafe_velocity: 1.0,   // 100% of 1.0 hardware limit
+                kb_max_rotation_velocity: 3.0, // 100% of 3.0 hardware limit
+                // Sport curve: Concave (fast start, aggressive)
+                linear_alpha: 0.8,
                 strafe_alpha: 0.8,
-                rotation_alpha: 1.5,  // Lower exponential for near-linear response
-                rotation_deadzone: 0.05,  // Minimal deadzone for sport/competitive use
-                // Sport ramp-up time: Minimal acceleration for instant response
-                linear_ramp_time: 0.2,
-                strafe_ramp_time: 0.1,
-                rotation_ramp_time: 0.2,
+                rotation_alpha: 0.8,
+                rotation_deadzone: 0.0,
+                // Sport ramp-up time: Near-instant for competitive response
+                linear_ramp_time: 0.05,
+                strafe_ramp_time: 0.05,
+                rotation_ramp_time: 0.05,
                 // Sport pitch: Near-instant, full range
-                pitch_alpha: 1.2,
-                pitch_deadzone: 0.05,
+                pitch_alpha: 0.8,
+                pitch_deadzone: 0.0,
                 pitch_max_velocity: 0.35,
-                pitch_ramp_time: 0.2
+                pitch_ramp_time: 0.05
             },
             gamepad: {
                 deadzone_left_stick: 0.05,
@@ -336,11 +335,11 @@ function getPresetSettings(preset) {
     const presets = {
         beginner: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 0.3,
-                mouse_pitch_sensitivity: 0.15,
-                kb_max_linear_velocity: 1.0,
-                kb_max_strafe_velocity: 0.8,
-                kb_max_rotation_velocity: 2.0
+                mouse_yaw_sensitivity: 4.5,
+                mouse_pitch_sensitivity: 2.0,
+                kb_max_linear_velocity: 2.5,
+                kb_max_strafe_velocity: 0.5,
+                kb_max_rotation_velocity: 1.5
             },
             gamepad: {
                 deadzone_left_stick: 0.15,
@@ -356,11 +355,11 @@ function getPresetSettings(preset) {
         },
         normal: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 0.5,
-                mouse_pitch_sensitivity: 0.25,
-                kb_max_linear_velocity: 1.5,
-                kb_max_strafe_velocity: 1.2,
-                kb_max_rotation_velocity: 3.0
+                mouse_yaw_sensitivity: 6.0,
+                mouse_pitch_sensitivity: 3.0,
+                kb_max_linear_velocity: 3.0,
+                kb_max_strafe_velocity: 0.6,
+                kb_max_rotation_velocity: 2.0
             },
             gamepad: {
                 deadzone_left_stick: 0.1,
@@ -376,11 +375,11 @@ function getPresetSettings(preset) {
         },
         advanced: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 0.8,
-                mouse_pitch_sensitivity: 0.4,
-                kb_max_linear_velocity: 1.8,
-                kb_max_strafe_velocity: 1.5,
-                kb_max_rotation_velocity: 3.5
+                mouse_yaw_sensitivity: 10.0,
+                mouse_pitch_sensitivity: 5.0,
+                kb_max_linear_velocity: 4.5,
+                kb_max_strafe_velocity: 0.9,
+                kb_max_rotation_velocity: 3.0
             },
             gamepad: {
                 deadzone_left_stick: 0.05,
@@ -396,11 +395,11 @@ function getPresetSettings(preset) {
         },
         sport: {
             keyboard_mouse: {
-                mouse_yaw_sensitivity: 1.2,
-                mouse_pitch_sensitivity: 0.6,
-                kb_max_linear_velocity: 2.0,
-                kb_max_strafe_velocity: 1.8,
-                kb_max_rotation_velocity: 4.0
+                mouse_yaw_sensitivity: 15.0,
+                mouse_pitch_sensitivity: 7.5,
+                kb_max_linear_velocity: 5.0,
+                kb_max_strafe_velocity: 1.0,
+                kb_max_rotation_velocity: 3.0
             },
             gamepad: {
                 deadzone_left_stick: 0.05,

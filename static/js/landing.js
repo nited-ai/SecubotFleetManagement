@@ -7,15 +7,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Landing page loaded');
 
-    // Initialize settings panel toggle
-    initializeSettingsPanel();
-
-    // Initialize preset buttons
-    initializePresetButtons();
-
-    // Initialize settings sliders
-    initializeSettingsSliders();
-
     // Initialize add robot button
     initializeAddRobotButton();
 
@@ -24,9 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load and render robot cards
     renderRobotCards();
-
-    // Initialize curve charts
-    initializeCurveCharts();
 });
 
 /**
@@ -980,7 +968,7 @@ function initializeCurveCharts() {
         'm/s',
         km.strafe_alpha || 1.2,
         0.0,  // Keyboard deadzone removed
-        km.kb_max_strafe_velocity || 0.6,
+        km.kb_max_strafe_velocity || 1.0,
         HARDWARE_LIMITS.strafe
     );
 
@@ -1057,7 +1045,7 @@ function initializeCurveSliders() {
                 'Strafe',
                 alpha,
                 0.0,  // Keyboard deadzone removed (Task 34.2)
-                fresh.kb_max_strafe_velocity !== undefined ? fresh.kb_max_strafe_velocity : 0.6,
+                fresh.kb_max_strafe_velocity !== undefined ? fresh.kb_max_strafe_velocity : 1.0,
                 HARDWARE_LIMITS.strafe
             );
         });
