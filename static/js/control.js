@@ -873,10 +873,13 @@ function initializeWebSocket() {
 
     websocketClient.initialize();
 
-    // Set latency update callback
-    websocketClient.onLatencyUpdate = (latencyData) => {
-        updateLatencyDisplay(latencyData);
-    };
+    // WebSocket latency callback DISABLED to prevent overwriting robot ping display
+    // The WebSocket latency (3-6ms) measures browser ↔ server communication only,
+    // NOT the actual robot network latency (14-30ms measured server ↔ robot).
+    // Only the robot ping from fetchRobotStatus() should update the HUD display.
+    // websocketClient.onLatencyUpdate = (latencyData) => {
+    //     updateLatencyDisplay(latencyData);
+    // };
 
     console.log('✅ WebSocket client initialized');
 }
