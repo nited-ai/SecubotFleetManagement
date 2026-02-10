@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Button styles */
+  .btn-primary {
+    @apply bg-gradient-to-r from-unitree-primary to-unitree-secondary text-white font-semibold py-2 px-4 rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply bg-unitree-dark-lighter text-white font-semibold py-2 px-4 rounded-lg border border-gray-600 hover:border-unitree-primary hover:bg-gray-800 transition-all duration-200;
+  }
+
+  .btn-danger {
+    @apply bg-unitree-danger text-white font-semibold py-2 px-4 rounded-lg shadow-lg hover:bg-red-600 transform hover:-translate-y-0.5 transition-all duration-200;
+  }
+
+  .btn-success {
+    @apply bg-unitree-success text-white font-semibold py-2 px-4 rounded-lg shadow-lg hover:bg-green-600 transform hover:-translate-y-0.5 transition-all duration-200;
+  }
+
+  .btn-icon-secondary {
+    @apply bg-gray-700 text-gray-300 p-2 rounded-lg hover:bg-gray-600 hover:text-white transition-colors duration-200;
+  }
+
+  .btn-icon-danger {
+    @apply bg-red-900 bg-opacity-30 text-red-400 p-2 rounded-lg hover:bg-red-800 hover:bg-opacity-50 hover:text-red-300 transition-colors duration-200;
+  }
+
+  /* Badge styles */
+  .badge {
+    @apply inline-block px-3 py-1 rounded-full text-sm font-semibold;
+  }
+
+  .badge-success {
+    @apply bg-unitree-success bg-opacity-20 text-unitree-success border border-unitree-success;
+  }
+
+  .badge-warning {
+    @apply bg-unitree-warning bg-opacity-20 text-unitree-warning border border-unitree-warning;
+  }
+
+  .badge-danger {
+    @apply bg-unitree-danger bg-opacity-20 text-unitree-danger border border-unitree-danger;
+  }
+
+  .badge-info {
+    @apply bg-unitree-info bg-opacity-20 text-unitree-info border border-unitree-info;
+  }
+
+  /* Status HUD */
+  .status-hud {
+    @apply fixed top-5 left-5 bg-black bg-opacity-70 rounded-lg p-4 border border-gray-600 backdrop-blur-sm;
+  }
+
+  /* Slider styles */
+  input[type="range"] {
+    @apply w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    @apply appearance-none w-4 h-4 rounded-full cursor-pointer;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    @apply w-4 h-4 rounded-full cursor-pointer border-0;
+  }
+
+  /* Floating button */
+  .floating-btn {
+    @apply fixed p-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-110 cursor-pointer transition-all duration-200;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    @apply w-full h-2 bg-gray-700 rounded-full overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full bg-gradient-to-r from-unitree-primary to-unitree-secondary transition-all duration-300;
+  }
+}
+

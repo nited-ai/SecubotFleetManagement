@@ -94,11 +94,11 @@
     box-shadow: 0 0 0 3px rgba(0, 232, 218, 0.1);
 }
 
-/* Modal styles with glass-morphism */
+/* Modal styles with glass-morphism - High z-index to appear above all HUD elements */
 .modal {
     position: fixed;
     inset: 0;
-    z-index: 50;
+    z-index: 9999;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -114,6 +114,7 @@
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(8px);
     transition: opacity 0.3s ease;
+    z-index: 9998;
 }
 
 .modal-content {
@@ -130,7 +131,7 @@
                 0 0 0 1px rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(10px);
     transition: all 0.3s ease;
-    z-index: 10;
+    z-index: 9999;
 }
 
 .modal-header {
@@ -415,8 +416,58 @@ input[type="range"]::-moz-range-thumb:hover {
     font-size: 1.2em;
 }
 
-/* Height Indicator disabled - BodyHeight API (1013) returns code 3203 in AI mode */
-/* .height-indicator { ... } */
+/* Height Indicator - Testing with MCF_CMD (firmware 1.1.7+) */
+.height-indicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 30px 50px;
+    border-radius: 15px;
+    z-index: 10000;
+    display: none;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    animation: fadeIn 0.2s ease-in-out;
+    text-align: center;
+    min-width: 250px;
+    transition: opacity 0.3s ease;
+}
+
+.height-indicator .height-label {
+    font-size: 1.2em;
+    color: #aaa;
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.height-indicator .height-bars {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.height-indicator .height-bar {
+    width: 40px;
+    height: 60px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+    transition: all 0.3s ease;
+}
+
+.height-indicator .height-bar.active {
+    background: #00E8DA;
+    box-shadow: 0 0 10px rgba(0, 232, 218, 0.5);
+}
+
+.height-indicator .height-value {
+    color: #00E8DA;
+    font-size: 2em;
+    font-weight: bold;
+}
 
 /* ============================================================================
    REDESIGNED HUD LAYOUT - Unitree Teal Theme
@@ -426,7 +477,7 @@ input[type="range"]::-moz-range-thumb:hover {
 .hud-bottom-left {
     position: fixed;
     bottom: 40px;
-    left: 250px;
+    left: 150px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -438,7 +489,7 @@ input[type="range"]::-moz-range-thumb:hover {
 .hud-bottom-right {
     position: fixed;
     bottom: 40px;
-    right: 250px;
+    right: 150px;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
@@ -644,11 +695,11 @@ input[type="range"]::-moz-range-thumb:hover {
     filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
 }
 
-/* Horizontal Sliders */
-.slider-horizontal {
+/* Horizontal Sliders - Higher specificity to override input[type="range"] */
+input[type="range"].slider-horizontal {
     -webkit-appearance: none;
     appearance: none;
-    width: 400px;
+    width: 260px !important; /* !important to override w-full from input[type="range"] */
     height: 8px;
     background: rgba(30, 30, 30, 0.9);
     border: 1px solid rgba(0, 232, 218, 0.3);
@@ -659,17 +710,17 @@ input[type="range"]::-moz-range-thumb:hover {
     filter: drop-shadow(0px 0px 0px black);
 }
 
-.slider-horizontal:hover {
+input[type="range"].slider-horizontal:hover {
     border-color: rgba(0, 232, 218, 0.5);
 }
 
-.slider-horizontal:focus {
+input[type="range"].slider-horizontal:focus {
     border-color: #00E8DA;
     box-shadow: 0 0 0 2px rgba(0, 232, 218, 0.2);
 }
 
 /* Webkit slider thumb */
-.slider-horizontal::-webkit-slider-thumb {
+input[type="range"].slider-horizontal::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 24px;
@@ -681,13 +732,13 @@ input[type="range"]::-moz-range-thumb:hover {
     box-shadow: 0 0px 2px rgba(0, 232, 218, 0.5);
 }
 
-.slider-horizontal::-webkit-slider-thumb:hover {
+input[type="range"].slider-horizontal::-webkit-slider-thumb:hover {
     transform: scale(1.15);
     box-shadow: 0 0px 2px rgba(0, 232, 218, 0.7);
 }
 
 /* Firefox slider thumb */
-.slider-horizontal::-moz-range-thumb {
+input[type="range"].slider-horizontal::-moz-range-thumb {
     width: 24px;
     height: 24px;
     background: linear-gradient(135deg, #00E8DA 0%, #00B8AD 100%);
@@ -698,7 +749,7 @@ input[type="range"]::-moz-range-thumb:hover {
     box-shadow: 0 0px 2px rgba(0, 232, 218, 0.5);
 }
 
-.slider-horizontal::-moz-range-thumb:hover {
+input[type="range"].slider-horizontal::-moz-range-thumb:hover {
     transform: scale(1.15);
     box-shadow: 0 0px 2px rgba(0, 232, 218, 0.7);
 }
