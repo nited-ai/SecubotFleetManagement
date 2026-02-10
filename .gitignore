@@ -80,3 +80,18 @@ local_*
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Ignore Node.js dependencies (for Tailwind CSS)
+node_modules/
+package-lock.json
+
+# Ignore Tailwind CSS standalone CLI executable
+tailwindcss.exe
+tailwindcss
+
+# Note: We DO commit the following Tailwind files:
+# - package.json (npm dependencies - needed for reproducible builds)
+# - tailwind.config.js (configuration)
+# - static/css/tailwind.input.css (source file)
+# - static/css/tailwind.output.css (generated CSS - committed for deployment)
+# - build-css.ps1 and build-css.sh (build scripts)
