@@ -42,18 +42,38 @@ class ConnectionService:
     - Robot initialization (AI mode, FreeWalk)
     """
     
-    def __init__(self, state_service, debug_level=1):
+    def __init__(self, state_service, debug_level=1, socketio=None):
         """
         Initialize ConnectionService.
 
         Args:
             state_service: StateService instance for state management
             debug_level: Logging verbosity (0=Silent, 1=Basic, 2=Verbose, 3=Deep Debug)
+            socketio: Flask-SocketIO instance for emitting progress updates (optional)
         """
         self.state = state_service
         self.logger = logging.getLogger(__name__)
         self.debug_level = debug_level
+        self.socketio = socketio
         self._status_polling_task = None  # Background task for status polling
+
+    def emit_progress(self, stage: str, message: str = None):
+        """
+        Emit connection progress update via Socket.IO.
+
+        Args:
+            stage: Progress stage ('establishing', 'video', 'audio', 'robot', 'complete')
+            message: Optional custom message
+        """
+        if self.socketio:
+            try:
+                self.socketio.emit('connection_progress', {
+                    'stage': stage,
+                    'message': message
+                })
+                self.logger.debug(f"Progress update emitted: {stage}")
+            except Exception as e:
+                self.logger.error(f"Error emitting progress: {e}")
     
     def _run_event_loop(self, loop: asyncio.AbstractEventLoop):
         """
@@ -138,14 +158,14 @@ class ConnectionService:
     ):
         """
         Setup WebRTC connection with video and audio tracks.
-        
+
         This async function:
         1. Connects to robot via WebRTC
         2. Enables video streaming with callback
         3. Initializes PyAudio for audio reception (using asyncio.to_thread)
         4. Adds microphone track for audio transmission
         5. Enables audio reception with callback
-        
+
         Args:
             conn: UnitreeWebRTCConnection instance
             video_callback: Callback for video frames (recv_camera_stream)
@@ -158,15 +178,18 @@ class ConnectionService:
                 - frames_per_buffer: Buffer size (e.g., 8192)
         """
         try:
-            # Connect to robot
+            # Stage 1: Establishing connection
+            self.emit_progress('establishing')
             await conn.connect()
-            
-            # Setup video (always enabled)
+
+            # Stage 2: Setup video
+            self.emit_progress('video')
             conn.video.switchVideoChannel(True)
             conn.video.add_track_callback(video_callback)
             self.logger.info("📹 Video streaming enabled")
 
-            # Setup audio (ALWAYS initialize, but muted by default)
+            # Stage 3: Setup audio
+            self.emit_progress('audio')
             # Initialize PyAudio for audio reception
             # Use asyncio.to_thread() to prevent blocking the event loop
             self.state.pyaudio_instance = await asyncio.to_thread(pyaudio.PyAudio)
@@ -207,6 +230,9 @@ class ConnectionService:
 
         except Exception as e:
             self.logger.error(f"Error connecting to robot: {e}")
+            # Emit error event
+            if self.socketio:
+                self.socketio.emit('connection_error', {'message': str(e)})
             raise
 
     def subscribe_to_robot_status(self):
@@ -426,6 +452,8 @@ class ConnectionService:
         - Event loop running
         """
         try:
+            # Stage 4: Initialize robot
+            self.emit_progress('robot')
             self.logger.info(">>> initialize_robot() function started <<<")
 
             # First, check and set motion mode
@@ -470,8 +498,16 @@ class ConnectionService:
             await asyncio.sleep(1)
             self.logger.info("Robot initialized successfully (AI mode + FreeWalk)")
 
+            # Emit completion event
+            self.emit_progress('complete')
+            if self.socketio:
+                self.socketio.emit('connection_complete', {'status': 'success'})
+
         except Exception as e:
             self.logger.error(f"Error initializing robot: {e}")
+            # Emit error event
+            if self.socketio:
+                self.socketio.emit('connection_error', {'message': str(e)})
             raise
 
     async def disconnect_connection(self):
