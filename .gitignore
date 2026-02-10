@@ -85,9 +85,10 @@ Desktop.ini
 node_modules/
 package-lock.json
 
-# Ignore Tailwind CSS standalone CLI executable
+# Ignore Tailwind CSS standalone CLI executable and download scripts
 tailwindcss.exe
 tailwindcss
+download-tailwind.ps1
 
 # Note: We DO commit the following Tailwind files:
 # - package.json (npm dependencies - needed for reproducible builds)
