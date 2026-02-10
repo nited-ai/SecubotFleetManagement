@@ -3,9 +3,50 @@
  * Handles robot dashboard, add/edit/delete functionality, and settings panel
  */
 
+// Socket.IO connection for real-time progress updates
+let socket = null;
+let currentConnectionRobotId = null;
+
+// Progress messages for each stage
+const PROGRESS_STAGES = {
+    'establishing': {
+        progress: 25,
+        message: 'Establishing connection...',
+        detail: 'Waking up the robot... 🤖',
+        stepId: 'step-establishing'
+    },
+    'video': {
+        progress: 50,
+        message: 'Initializing video stream...',
+        detail: 'Teaching it to see... 👀',
+        stepId: 'step-video'
+    },
+    'audio': {
+        progress: 75,
+        message: 'Setting up audio...',
+        detail: 'Calibrating the good boy sensors... 🎧',
+        stepId: 'step-audio'
+    },
+    'robot': {
+        progress: 90,
+        message: 'Entering AI mode...',
+        detail: 'Activating big brain mode... 🧠',
+        stepId: 'step-robot'
+    },
+    'complete': {
+        progress: 100,
+        message: 'Connection successful!',
+        detail: 'Ready to roll! 🎉',
+        stepId: null
+    }
+};
+
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Landing page loaded');
+
+    // Initialize Socket.IO
+    initializeSocketIO();
 
     // Initialize add robot button
     initializeAddRobotButton();
@@ -13,9 +54,217 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize modal event listeners
     initializeModalEventListeners();
 
+    // Initialize loading screen event listeners
+    initializeLoadingScreenListeners();
+
     // Load and render robot cards
     renderRobotCards();
 });
+
+/**
+ * Initialize Socket.IO connection for real-time progress updates
+ */
+function initializeSocketIO() {
+    if (typeof io === 'undefined') {
+        console.error('Socket.IO library not loaded');
+        return;
+    }
+
+    socket = io();
+
+    socket.on('connect', () => {
+        console.log('✅ Socket.IO connected');
+    });
+
+    socket.on('disconnect', () => {
+        console.log('❌ Socket.IO disconnected');
+    });
+
+    socket.on('connection_progress', (data) => {
+        console.log('Connection progress:', data);
+        updateConnectionProgress(data.stage, data.message);
+    });
+
+    socket.on('connection_complete', (data) => {
+        console.log('Connection complete:', data);
+        handleConnectionSuccess();
+    });
+
+    socket.on('connection_error', (data) => {
+        console.error('Connection error:', data);
+        handleConnectionError(data.message || 'Unknown error occurred');
+    });
+}
+
+/**
+ * Initialize loading screen event listeners
+ */
+function initializeLoadingScreenListeners() {
+    const retryBtn = document.getElementById('error-retry-btn');
+    const cancelBtn = document.getElementById('error-cancel-btn');
+
+    if (retryBtn) {
+        retryBtn.addEventListener('click', () => {
+            if (currentConnectionRobotId) {
+                hideLoadingScreen();
+                // Retry connection after a brief delay
+                setTimeout(() => {
+                    handleConnectRobot(currentConnectionRobotId);
+                }, 100);
+            }
+        });
+    }
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            currentConnectionRobotId = null;
+            hideLoadingScreen();
+        });
+    }
+}
+
+/**
+ * Show loading screen modal
+ */
+function showLoadingScreen() {
+    const modal = document.getElementById('connection-loading-modal');
+    const loadingState = document.getElementById('loading-state');
+    const errorState = document.getElementById('error-state');
+
+    if (modal) {
+        // Reset to loading state
+        loadingState.classList.remove('hidden');
+        errorState.classList.add('hidden');
+
+        // Reset progress
+        updateConnectionProgress('establishing');
+
+        // Show modal
+        modal.classList.remove('hidden');
+    }
+}
+
+/**
+ * Hide loading screen modal
+ */
+function hideLoadingScreen() {
+    const modal = document.getElementById('connection-loading-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+/**
+ * Update connection progress
+ * @param {string} stage - Progress stage key
+ * @param {string} customMessage - Optional custom message
+ */
+function updateConnectionProgress(stage, customMessage) {
+    const stageData = PROGRESS_STAGES[stage];
+    if (!stageData) {
+        console.warn('Unknown progress stage:', stage);
+        return;
+    }
+
+    // Update progress bar
+    const progressBar = document.getElementById('connection-progress-bar');
+    if (progressBar) {
+        progressBar.style.width = `${stageData.progress}%`;
+    }
+
+    // Update status message
+    const statusMessage = document.getElementById('connection-status-message');
+    if (statusMessage) {
+        statusMessage.textContent = customMessage || stageData.message;
+    }
+
+    // Update status detail
+    const statusDetail = document.getElementById('connection-status-detail');
+    if (statusDetail) {
+        statusDetail.textContent = stageData.detail;
+    }
+
+    // Update step indicators
+    updateStepIndicators(stage);
+}
+
+/**
+ * Update step indicators to show progress
+ * @param {string} currentStage - Current progress stage
+ */
+function updateStepIndicators(currentStage) {
+    const stages = ['establishing', 'video', 'audio', 'robot'];
+    const currentIndex = stages.indexOf(currentStage);
+
+    stages.forEach((stage, index) => {
+        const stepElement = document.getElementById(`step-${stage}`);
+        if (!stepElement) return;
+
+        const icon = stepElement.querySelector('svg');
+        const text = stepElement.querySelector('span');
+
+        if (index < currentIndex) {
+            // Completed step - green checkmark
+            stepElement.classList.remove('text-gray-400');
+            stepElement.classList.add('text-green-500');
+            icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>';
+        } else if (index === currentIndex) {
+            // Current step - blue spinner
+            stepElement.classList.remove('text-gray-400');
+            stepElement.classList.add('text-unitree-primary');
+            icon.classList.add('animate-spin');
+            icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>';
+        } else {
+            // Pending step - gray circle
+            stepElement.classList.add('text-gray-400');
+            stepElement.classList.remove('text-green-500', 'text-unitree-primary');
+            icon.classList.remove('animate-spin');
+            icon.innerHTML = '<circle cx="12" cy="12" r="10" stroke-width="2"></circle>';
+        }
+    });
+}
+
+/**
+ * Handle successful connection
+ */
+function handleConnectionSuccess() {
+    // Update to complete stage
+    updateConnectionProgress('complete');
+
+    // Wait a moment to show success, then redirect
+    setTimeout(() => {
+        if (currentConnectionRobotId) {
+            // Update last connected timestamp
+            updateLastConnected(currentConnectionRobotId);
+
+            // Store robot ID in sessionStorage for control page
+            sessionStorage.setItem('current_robot_id', currentConnectionRobotId);
+
+            // Redirect to control page
+            window.location.href = '/control';
+        }
+    }, 1000);
+}
+
+/**
+ * Handle connection error
+ * @param {string} errorMessage - Error message to display
+ */
+function handleConnectionError(errorMessage) {
+    const modal = document.getElementById('connection-loading-modal');
+    const loadingState = document.getElementById('loading-state');
+    const errorState = document.getElementById('error-state');
+    const errorMessageElement = document.getElementById('error-message');
+
+    if (modal && loadingState && errorState && errorMessageElement) {
+        // Hide loading state, show error state
+        loadingState.classList.add('hidden');
+        errorState.classList.remove('hidden');
+
+        // Set error message
+        errorMessageElement.textContent = errorMessage;
+    }
+}
 
 /**
  * Initialize collapsible settings panel
@@ -857,17 +1106,11 @@ async function handleConnectRobot(robotId) {
 
     console.log('Connecting to robot:', robot);
 
-    // Show loading state on the connect button
-    const connectBtn = document.querySelector(`[data-robot-id="${robotId}"] .connect-btn`);
-    if (connectBtn) {
-        connectBtn.disabled = true;
-        connectBtn.innerHTML = `
-            <svg class="animate-spin w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-            </svg>
-            Connecting...
-        `;
-    }
+    // Store robot ID for retry functionality
+    currentConnectionRobotId = robotId;
+
+    // Show loading screen modal
+    showLoadingScreen();
 
     try {
         // Prepare connection request
@@ -894,45 +1137,15 @@ async function handleConnectRobot(robotId) {
 
         if (response.ok && result.status === 'success') {
             console.log('Connection successful:', result);
-
-            // Update last connected timestamp
-            updateLastConnected(robotId);
-
-            // Store robot ID in sessionStorage for control page
-            sessionStorage.setItem('current_robot_id', robotId);
-
-            // Redirect to control page
-            window.location.href = '/control';
+            // Success will be handled by Socket.IO event 'connection_complete'
         } else {
             // Connection failed
             console.error('Connection failed:', result);
-            alert(`Failed to connect to robot: ${result.message || 'Unknown error'}`);
-
-            // Restore connect button
-            if (connectBtn) {
-                connectBtn.disabled = false;
-                connectBtn.innerHTML = `
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                    </svg>
-                    Connect
-                `;
-            }
+            handleConnectionError(result.message || 'Unknown error');
         }
     } catch (error) {
         console.error('Connection error:', error);
-        alert(`Connection error: ${error.message}`);
-
-        // Restore connect button
-        if (connectBtn) {
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = `
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                </svg>
-                Connect
-            `;
-        }
+        handleConnectionError(error.message || 'Network error occurred');
     }
 }
 

@@ -21,7 +21,12 @@ def connect():
         connection_service = current_app.config['CONNECTION_SERVICE']
         video_service = current_app.config['VIDEO_SERVICE']
         audio_service = current_app.config['AUDIO_SERVICE']
-        
+        socketio = current_app.config.get('SOCKETIO')
+
+        # Set socketio instance in connection service for progress updates
+        if socketio:
+            connection_service.socketio = socketio
+
         data = request.json
         connection_method = data.get('connection_method')
         ip = data.get('ip', '')
@@ -51,6 +56,9 @@ def connect():
             timeout=30
         )
 
+        # Initialize robot (AI mode + FreeWalk) - this will emit progress updates
+        connection_service.initialize_robot_sync()
+
         return jsonify({
             'status': 'success',
             'message': 'Connected to robot successfully',
@@ -60,6 +68,11 @@ def connect():
     except Exception as e:
         logging.error(f"Connection error: {e}", exc_info=True)
         error_msg = str(e)
+
+        # Emit error via Socket.IO if available
+        socketio = current_app.config.get('SOCKETIO')
+        if socketio:
+            socketio.emit('connection_error', {'message': error_msg})
 
         # Provide user-friendly error messages based on error type
         if "already connected" in error_msg.lower() or "busy" in error_msg.lower():

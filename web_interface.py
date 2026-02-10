@@ -69,6 +69,7 @@ app.config['CONNECTION_SERVICE'] = connection_service
 app.config['VIDEO_SERVICE'] = video_service
 app.config['AUDIO_SERVICE'] = audio_service
 app.config['CONTROL_SERVICE'] = control_service
+app.config['SOCKETIO'] = socketio  # Store socketio for progress updates
 
 # Register blueprints
 app.register_blueprint(views_bp)
