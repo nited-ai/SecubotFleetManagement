@@ -290,7 +290,9 @@ class ConnectionService:
                     if temps:
                         max_temp = max(temps)
                         self.state.max_temperature = max_temp
-                        self.logger.info(f"🌡️ Max temperature: {max_temp}°C (from {len(temps)} sensors, all: {[round(t, 1) for t in temps]})")
+                        # Only log temperature details at DEBUG_LEVEL >= 2 (Verbose)
+                        if self.debug_level >= 2:
+                            self.logger.debug(f"🌡️ Max temperature: {max_temp}°C (from {len(temps)} sensors, all: {[round(t, 1) for t in temps]})")
                     else:
                         self.logger.warning("🌡️ No temperature data found in LOW_STATE message")
                 except Exception as e:

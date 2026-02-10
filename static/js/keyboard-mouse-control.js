@@ -278,6 +278,7 @@ class KeyboardMouseControl {
         document.addEventListener('keyup', this.handleKeyUp);
         document.addEventListener('pointerlockchange', this.handlePointerLockChange);
         document.addEventListener('mousemove', this.handleMouseMove);
+        document.addEventListener('mousedown', this.handleMouseDown);
         document.addEventListener('wheel', this.handleMouseWheel, { passive: false });
 
         // Request pointer lock when clicking on video feed
@@ -298,6 +299,7 @@ class KeyboardMouseControl {
         document.removeEventListener('keyup', this.handleKeyUp);
         document.removeEventListener('pointerlockchange', this.handlePointerLockChange);
         document.removeEventListener('mousemove', this.handleMouseMove);
+        document.removeEventListener('mousedown', this.handleMouseDown);
         document.removeEventListener('wheel', this.handleMouseWheel);
 
         const videoFeed = document.getElementById('video-feed');
@@ -478,6 +480,27 @@ class KeyboardMouseControl {
 
         this.mouseMovement.x += e.movementX;
         this.mouseMovement.y += e.movementY;
+    }
+
+    /**
+     * Handle mouse button clicks
+     */
+    handleMouseDown = (e) => {
+        // Only respond to left mouse button (button 0)
+        if (e.button !== 0) return;
+
+        // Check that keyboard/mouse control is enabled
+        if (!this.enabled) return;
+
+        // Check that pointer lock is active
+        if (!this.pointerLocked) return;
+
+        // Prevent default action
+        e.preventDefault();
+
+        // Send "Hello" action (wave gesture)
+        this.handleAction('hello');
+        console.log('🖱️ Left mouse click - sending Hello gesture');
     }
 
     /**

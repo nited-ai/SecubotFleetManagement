@@ -1345,3 +1345,44 @@ async function toggleLeashMode() {
         console.error('Error toggling Leash Mode:', error);
     }
 }
+
+/**
+ * Toggle Obstacle Avoidance Mode
+ */
+let obstacleAvoidActive = false;
+
+async function toggleObstacleAvoidance() {
+    try {
+        // Send switch_avoid_mode action to backend
+        const response = await fetch('/api/control/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'switch_avoid_mode' })
+        });
+
+        if (response.ok) {
+            // Toggle state
+            obstacleAvoidActive = !obstacleAvoidActive;
+
+            // Update button class and icon color
+            const button = document.getElementById('obstacle-avoid-btn');
+            const icon = document.getElementById('obstacle-avoid-icon');
+
+            if (button) {
+                button.classList.remove('obstacle-avoid-active', 'obstacle-avoid-inactive');
+                button.classList.add(obstacleAvoidActive ? 'obstacle-avoid-active' : 'obstacle-avoid-inactive');
+            }
+
+            if (icon) {
+                const newColor = obstacleAvoidActive ? '#00E8DA' : '#ef4444';
+                icon.querySelector('path').setAttribute('fill', newColor);
+            }
+
+            console.log('Obstacle Avoidance toggled:', obstacleAvoidActive ? 'ON (Active)' : 'OFF (Inactive)');
+        } else {
+            console.error('Obstacle Avoidance toggle failed');
+        }
+    } catch (error) {
+        console.error('Error toggling Obstacle Avoidance:', error);
+    }
+}

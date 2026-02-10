@@ -165,6 +165,13 @@
                 </svg>
                 <span class="hud-icon-value" id="temp-value">--°C</span>
             </div>
+
+            <!-- Obstacle Avoidance Toggle Button -->
+            <button id="obstacle-avoid-btn" class="hud-audio-icon obstacle-avoid-inactive" onclick="toggleObstacleAvoidance()" title="Obstacle Avoidance: Click to toggle ON/OFF">
+                <svg id="obstacle-avoid-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="width: 32px; height: 32px;">
+                    <path d="M44,22H41.9A18.1,18.1,0,0,0,26,6.1V4a2,2,0,0,0-4,0V6.1A18.1,18.1,0,0,0,6.1,22H4a2,2,0,0,0,0,4H6.1A18.1,18.1,0,0,0,22,41.9V44a2,2,0,0,0,4,0V41.9A18.1,18.1,0,0,0,41.9,26H44a2,2,0,0,0,0-4ZM26,37.8V34a2,2,0,0,0-4,0v3.8A13.8,13.8,0,0,1,10.2,26H14a2,2,0,0,0,0-4H10.2A13.8,13.8,0,0,1,22,10.2V14a2,2,0,0,0,4,0V10.2A13.8,13.8,0,0,1,37.8,22H34a2,2,0,0,0,0,4h3.8A13.8,13.8,0,0,1,26,37.8Z" fill="#ef4444"/>
+                </svg>
+            </button>
         </div>
     </div>
 
@@ -540,7 +547,8 @@
 
 {% block scripts %}
 <!-- Socket.IO Client Library -->
-<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<!-- Use local copy instead of CDN for offline/firewall environments -->
+<script src="{{ url_for('static', filename='vendor/socket.io.min.js') }}"></script>
 
 <!-- Control modules -->
 <script src="{{ url_for('static', filename='js/curve-utils.js') }}?v=1.1.0"></script>

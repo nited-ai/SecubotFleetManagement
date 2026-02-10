@@ -44,8 +44,9 @@ class WebRTCDataChannelPubSub:
 
             channel.send(message)
 
-            # Log the message being published
-            logging.info(f"> message sent: {message}")
+            # Log the message being published at DEBUG level to reduce console spam
+            # All message sent logs are now DEBUG level (only visible at DEBUG_LEVEL >= 2)
+            logging.debug(f"> message sent: {message}")
 
             # Store the future so it can be completed when the response is received
             uuid = (
@@ -78,8 +79,9 @@ class WebRTCDataChannelPubSub:
                 
             self.channel.send(message)
 
-            # Log the message being published
-            logging.info(f"> message sent: {message}")
+            # Log the message being published at DEBUG level to reduce console spam
+            # All message sent logs are now DEBUG level (only visible at DEBUG_LEVEL >= 2)
+            logging.debug(f"> message sent: {message}")
         else:
             Exception("Data channel is not open")
         

@@ -695,6 +695,15 @@ input[type="range"]::-moz-range-thumb:hover {
     filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
 }
 
+/* Obstacle Avoidance States - icon color toggled via JS setAttribute('fill', color) */
+.obstacle-avoid-active:hover svg {
+    filter: drop-shadow(0 0 8px rgba(0, 232, 218, 0.6));
+}
+
+.obstacle-avoid-inactive:hover svg {
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
+}
+
 /* Horizontal Sliders - Higher specificity to override input[type="range"] */
 input[type="range"].slider-horizontal {
     -webkit-appearance: none;

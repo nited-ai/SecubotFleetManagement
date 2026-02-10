@@ -199,7 +199,8 @@
 
 {% block scripts %}
 <!-- Socket.IO for real-time connection progress -->
-<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<!-- Use local copy instead of CDN for offline/firewall environments -->
+<script src="{{ url_for('static', filename='vendor/socket.io.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/curve-utils.js') }}?v=1.0.0"></script>
 <script src="{{ url_for('static', filename='js/curve-visualizer.js') }}?v=1.0.0"></script>
 <script src="{{ url_for('static', filename='js/robot-manager.js') }}?v=1.0.3"></script>

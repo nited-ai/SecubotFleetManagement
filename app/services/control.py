@@ -31,10 +31,17 @@ class ControlService:
     - Emergency stop management
     """
     
-    def __init__(self, state_service):
-        """Initialize ControlService."""
+    def __init__(self, state_service, debug_level=1):
+        """
+        Initialize ControlService.
+
+        Args:
+            state_service: StateService instance for state management
+            debug_level: Logging verbosity (0=Silent, 1=Basic, 2=Verbose, 3=Deep Debug)
+        """
         self.state = state_service
         self.logger = logging.getLogger(__name__)
+        self.debug_level = debug_level
 
         # Slew Rate Limiter State (prevents jerky "freaking out" movements)
         # Tracks current velocity and time to implement smooth acceleration ramps
@@ -265,8 +272,9 @@ class ControlService:
 
                 is_zero = (abs(lx) < 0.001 and abs(ly) < 0.001 and abs(rx) < 0.001 and abs(ry) < 0.001)
 
-                if not is_zero:
-                    self.logger.info(f"🎯 [POSE MODE] lx(roll)={lx:.3f}, ly(height)={ly:.3f}, rx(yaw)={rx:.3f}, ry(pitch)={ry:.3f}")
+                # Only log Pose Mode movement at DEBUG_LEVEL >= 2 (Verbose)
+                if not is_zero and self.debug_level >= 2:
+                    self.logger.debug(f"🎯 [POSE MODE] lx(roll)={lx:.3f}, ly(height)={ly:.3f}, rx(yaw)={rx:.3f}, ry(pitch)={ry:.3f}")
 
                 return self.send_movement_command_sync(lx, ly, rx, ry, is_zero)
 
@@ -431,11 +439,12 @@ class ControlService:
                 pitch = max(-max_pitch, min(max_pitch, self.current_pitch))
 
             # Debug logging for keyboard/mouse commands (shows slew rate limiter in action)
+            # Changed to DEBUG level to reduce console spam (30-60 Hz during movement)
             if is_keyboard_mouse and (abs(vx) > 0.01 or abs(vy) > 0.01 or abs(vyaw) > 0.01 or abs(pitch) > 0.005):
                 if rage_mode:
-                    self.logger.info(f"[KB/Mouse Backend RAGE] vx={vx:.3f}, vy={vy:.3f}, vyaw={vyaw:.3f}, pitch={pitch:.3f}")
+                    self.logger.debug(f"[KB/Mouse Backend RAGE] vx={vx:.3f}, vy={vy:.3f}, vyaw={vyaw:.3f}, pitch={pitch:.3f}")
                 else:
-                    self.logger.info(f"[KB/Mouse Backend] rx={rx:.3f} → vyaw={vyaw:.3f}, ry={ry:.3f} → pitch={pitch:.3f} (dt={dt*1000:.1f}ms)")
+                    self.logger.debug(f"[KB/Mouse Backend] rx={rx:.3f} → vyaw={vyaw:.3f}, ry={ry:.3f} → pitch={pitch:.3f} (dt={dt*1000:.1f}ms)")
 
             # Check if all velocities AND pitch are zero
             is_zero_velocity = (abs(vx) < 0.01 and abs(vy) < 0.01 and abs(vyaw) < 0.01 and abs(pitch) < 0.005)
@@ -552,8 +561,9 @@ class ControlService:
             from unitree_webrtc_connect.constants import RTC_TOPIC
 
             # Debug logging for non-trivial commands
+            # Changed to DEBUG level to reduce console spam (30-60 Hz during movement)
             if abs(ly) > 0.01 or abs(lx) > 0.01 or abs(rx) > 0.01:
-                self.logger.info(
+                self.logger.debug(
                     f"🤖 [ROBOT COMMAND] WirelessController: lx={lx:.3f}, ly={ly:.3f}, rx={rx:.3f}"
                 )
 
@@ -566,9 +576,9 @@ class ControlService:
                 {"lx": round(lx, 4), "ly": round(ly, 4), "rx": round(rx, 4), "ry": ry_value, "keys": 0}
             )
 
-            # Log zero velocity commands for debugging
-            if is_zero_velocity:
-                self.logger.info("✓ Zero velocity command sent - robot should stop immediately")
+            # Log zero velocity commands at DEBUG_LEVEL >= 2 (Verbose) to reduce spam
+            if is_zero_velocity and self.debug_level >= 2:
+                self.logger.debug("✓ Zero velocity command sent - robot should stop immediately")
 
         except Exception as e:
             self.logger.error(f"Error sending WirelessController command: {e}")
@@ -621,7 +631,7 @@ class ControlService:
             dict: Result with status and action
         """
         try:
-            from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD
+            from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD, MCF_CMD
 
             if action == 'emergency_stop':
                 # Emergency stop - damp all motors
@@ -653,21 +663,74 @@ class ControlService:
                 )
                 self.logger.info("Leash Mode (Lead Follow) toggle command sent")
 
-            elif action == 'stand_up':
-                # Stand up first
-                await self.state.connection.datachannel.pub_sub.publish_request_new(
-                    RTC_TOPIC["SPORT_MOD"],
-                    {"api_id": SPORT_CMD["StandUp"]}
-                )
-                self.logger.info("Stand up command sent")
+            elif action == 'switch_avoid_mode':
+                # Toggle Obstacle Avoidance Mode - FIXED BASED ON SDK2 ANALYSIS
+                # SDK2 Reference: obstacles_avoid_api.hpp
+                # - API ID: ROBOT_API_ID_OBSTACLES_AVOID_SWITCH_SET = 1001
+                # - Parameter: {"enable": true/false}  (NOT {"data": ...})
+                # - Topic: rt/api/obstacles_avoid/request (OBSTACLES_AVOID topic)
+                from unitree_webrtc_connect.constants import AUDIO_API, OBSTACLES_AVOID_API
+                import json
 
-                # Wait for stand up to complete, then enter BalanceStand for AI mode movement
-                await asyncio.sleep(1.5)
+                # Toggle state tracking
+                if not hasattr(self.state, 'obstacle_avoid_active'):
+                    self.state.obstacle_avoid_active = False
+
+                self.state.obstacle_avoid_active = not self.state.obstacle_avoid_active
+
+                # Define callbacks for debugging (removed ULIDAR_STATE to prevent spam)
+                def obstacles_avoid_response_callback(message):
+                    self.logger.info(f"🔍 OBSTACLES_AVOID/response: {json.dumps(message, indent=2)}")
+
+                def sport_mod_state_callback(message):
+                    self.logger.info(f"🔍 SPORT_MOD_STATE (rt/sportmodestate): {json.dumps(message, indent=2)}")
+
+                def service_state_callback(message):
+                    self.logger.info(f"🔍 SERVICE_STATE (rt/servicestate): {json.dumps(message, indent=2)}")
+
+                # Subscribe to debug topics (excluding ULIDAR_STATE to prevent console spam)
+                # Note: rt/sportmodestate and rt/servicestate may only publish on state changes, not continuously
+                try:
+                    self.state.connection.datachannel.pub_sub.subscribe("rt/api/obstacles_avoid/response", obstacles_avoid_response_callback)
+                    self.state.connection.datachannel.pub_sub.subscribe("rt/sportmodestate", sport_mod_state_callback)
+                    self.state.connection.datachannel.pub_sub.subscribe("rt/servicestate", service_state_callback)
+                    self.logger.info("📡 Subscribed to debug topics: obstacles_avoid/response, sport_mod_state, service_state")
+                    self.logger.info("ℹ️  Note: sport_mod_state and service_state may only publish on state changes")
+                except Exception as e:
+                    self.logger.warning(f"Failed to subscribe to some topics: {e}")
+
+                # Send the CORRECT obstacle avoidance command based on SDK2
+                # API ID: OBSTACLES_AVOID_API["SWITCH_SET"] = 1001 (ROBOT_API_ID_OBSTACLES_AVOID_SWITCH_SET)
+                # Parameter: {"enable": true/false}
+                self.logger.info(f"Sending OBSTACLES_AVOID SwitchSet (API {OBSTACLES_AVOID_API['SWITCH_SET']}): {'ENABLE' if self.state.obstacle_avoid_active else 'DISABLE'}")
+                response = await self.state.connection.datachannel.pub_sub.publish_request_new(
+                    RTC_TOPIC["OBSTACLES_AVOID"],
+                    {
+                        "api_id": OBSTACLES_AVOID_API["SWITCH_SET"],  # 1001 - ROBOT_API_ID_OBSTACLES_AVOID_SWITCH_SET from SDK2
+                        "parameter": {"enable": self.state.obstacle_avoid_active}  # Correct parameter format from SDK2
+                    }
+                )
+                self.logger.info(f"✅ Response from OBSTACLES_AVOID topic: {response}")
+
+                # Play audio feedback (like the official app does)
+                audio_api_id = AUDIO_API["PLAY_START_OBSTACLE_AVOIDANCE"] if self.state.obstacle_avoid_active else AUDIO_API["PLAY_EXIT_OBSTACLE_AVOIDANCE"]
+                await self.state.connection.datachannel.pub_sub.publish_request_new(
+                    RTC_TOPIC["AUDIO_HUB_REQ"],
+                    {"api_id": audio_api_id}
+                )
+                self.logger.info(f"🔊 Audio feedback sent: {'START' if self.state.obstacle_avoid_active else 'EXIT'} obstacle avoidance")
+
+                # Wait a moment to collect any responses
+                await asyncio.sleep(1)
+                self.logger.info("🎧 Listening for topic responses... (check logs above)")
+
+            elif action == 'stand_up':
+                # RecoveryStand (1006) - reliable command for standing with full movement capabilities
                 await self.state.connection.datachannel.pub_sub.publish_request_new(
                     RTC_TOPIC["SPORT_MOD"],
-                    {"api_id": SPORT_CMD["BalanceStand"]}
+                    {"api_id": SPORT_CMD["RecoveryStand"]}
                 )
-                self.logger.info("BalanceStand command sent - robot ready for AI movement")
+                self.logger.info("RecoveryStand command sent - robot standing with movement enabled")
 
             elif action == 'crouch':
                 # Crouch down (StandDown)
@@ -684,6 +747,37 @@ class ControlService:
                     {"api_id": SPORT_CMD["Sit"]}
                 )
                 self.logger.info("Sit down command sent")
+
+            elif action == 'hello':
+                # Hello gesture (wave) - triggered by left mouse click
+                self.logger.info("Sending Hello gesture (wave)")
+                try:
+                    response = await self.state.connection.datachannel.pub_sub.publish_request_new(
+                        RTC_TOPIC["SPORT_MOD"],
+                        {"api_id": SPORT_CMD["Hello"]}
+                    )
+
+                    status_code = None
+                    if response and 'data' in response:
+                        status_code = response.get('data', {}).get('header', {}).get('status', {}).get('code')
+                        if status_code == 0:
+                            self.logger.info("✓ Hello gesture executed successfully")
+
+                            # Send RecoveryStand immediately to restore FreeWalk/AI mode
+                            # The Hello gesture leaves the robot in a mode where body springs back to center
+                            # RecoveryStand (1006) restores normal movement controls
+                            try:
+                                recovery_response = await self.state.connection.datachannel.pub_sub.publish_request_new(
+                                    RTC_TOPIC["SPORT_MOD"],
+                                    {"api_id": SPORT_CMD["RecoveryStand"]}
+                                )
+                                self.logger.info("✓ Restored FreeWalk mode after Hello gesture (RecoveryStand 1006)")
+                            except Exception as recovery_error:
+                                self.logger.error(f"Error sending RecoveryStand after Hello gesture: {recovery_error}")
+                        else:
+                            self.logger.warning(f"Hello gesture returned status code: {status_code}")
+                except Exception as e:
+                    self.logger.error(f"Error sending Hello gesture: {e}")
 
             elif action == 'toggle_height':
                 # Cycle through heights: 0 (low), 1 (middle), 2 (high)
