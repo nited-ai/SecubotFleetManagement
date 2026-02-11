@@ -1140,7 +1140,7 @@ await conn.datachannel.disableTrafficSaving(True)
 conn.datachannel.set_decoder(decoder_type='libvoxel')
 
 # Turn LIDAR on
-conn.datachannel.pub_sub.publish_without_callback("rt/utlidar/switch", "on")
+conn.datachannel.pub_sub.publish_without_callback("rt/utlidar/switch", "ON")
 
 # Subscribe to LIDAR data
 def lidar_callback(message):

@@ -31,15 +31,17 @@ class ControlService:
     - Emergency stop management
     """
     
-    def __init__(self, state_service, debug_level=1):
+    def __init__(self, state_service, socketio=None, debug_level=1):
         """
         Initialize ControlService.
 
         Args:
             state_service: StateService instance for state management
+            socketio: Flask-SocketIO instance for emitting state updates (optional)
             debug_level: Logging verbosity (0=Silent, 1=Basic, 2=Verbose, 3=Deep Debug)
         """
         self.state = state_service
+        self.socketio = socketio
         self.logger = logging.getLogger(__name__)
         self.debug_level = debug_level
 
@@ -664,65 +666,101 @@ class ControlService:
                 self.logger.info("Leash Mode (Lead Follow) toggle command sent")
 
             elif action == 'switch_avoid_mode':
-                # Toggle Obstacle Avoidance Mode - FIXED BASED ON SDK2 ANALYSIS
+                # Toggle Obstacle Avoidance Mode
                 # SDK2 Reference: obstacles_avoid_api.hpp
                 # - API ID: ROBOT_API_ID_OBSTACLES_AVOID_SWITCH_SET = 1001
-                # - Parameter: {"enable": true/false}  (NOT {"data": ...})
+                # - Parameter: {"enable": true/false}
                 # - Topic: rt/api/obstacles_avoid/request (OBSTACLES_AVOID topic)
+                #
+                # COORDINATION: Obstacle avoidance requires LiDAR to be running.
+                # - Enabling: If LiDAR is OFF, turn it ON first, then enable obstacle avoidance
+                # - Disabling: Just disable obstacle avoidance, keep LiDAR spinning
+                #   (user can toggle obstacle avoidance ON/OFF rapidly for narrow spaces
+                #    without the ~2-3s LiDAR spin-up delay; only R key turns off LiDAR)
                 from unitree_webrtc_connect.constants import AUDIO_API, OBSTACLES_AVOID_API
-                import json
 
-                # Toggle state tracking
+                # Initialize state if needed
                 if not hasattr(self.state, 'obstacle_avoid_active'):
                     self.state.obstacle_avoid_active = False
 
-                self.state.obstacle_avoid_active = not self.state.obstacle_avoid_active
+                new_avoid_state = not self.state.obstacle_avoid_active
 
-                # Define callbacks for debugging (removed ULIDAR_STATE to prevent spam)
-                def obstacles_avoid_response_callback(message):
-                    self.logger.info(f"🔍 OBSTACLES_AVOID/response: {json.dumps(message, indent=2)}")
-
-                def sport_mod_state_callback(message):
-                    self.logger.info(f"🔍 SPORT_MOD_STATE (rt/sportmodestate): {json.dumps(message, indent=2)}")
-
-                def service_state_callback(message):
-                    self.logger.info(f"🔍 SERVICE_STATE (rt/servicestate): {json.dumps(message, indent=2)}")
-
-                # Subscribe to debug topics (excluding ULIDAR_STATE to prevent console spam)
-                # Note: rt/sportmodestate and rt/servicestate may only publish on state changes, not continuously
                 try:
-                    self.state.connection.datachannel.pub_sub.subscribe("rt/api/obstacles_avoid/response", obstacles_avoid_response_callback)
-                    self.state.connection.datachannel.pub_sub.subscribe("rt/sportmodestate", sport_mod_state_callback)
-                    self.state.connection.datachannel.pub_sub.subscribe("rt/servicestate", service_state_callback)
-                    self.logger.info("📡 Subscribed to debug topics: obstacles_avoid/response, sport_mod_state, service_state")
-                    self.logger.info("ℹ️  Note: sport_mod_state and service_state may only publish on state changes")
+                    if new_avoid_state:
+                        # === ENABLING Obstacle Avoidance ===
+                        # If LiDAR is OFF, turn it ON first (obstacle avoidance needs LiDAR)
+                        if not self.state.lidar_state:
+                            self.logger.info("Obstacle Avoidance ON → LiDAR is OFF, turning LiDAR ON first...")
+
+                            # Turn LiDAR ON sequence
+                            await self.state.connection.datachannel.disableTrafficSaving(True)
+                            self.state.connection.datachannel.pub_sub.publish_without_callback(
+                                RTC_TOPIC["ULIDAR_SWITCH"],
+                                "ON"  # Uppercase required by DDS std_msgs::msg::String_
+                            )
+                            self.state.lidar_state = True
+
+                            # Emit LiDAR state update to frontend
+                            if self.socketio:
+                                self.socketio.emit('lidar_state_update', {'enabled': True})
+                            self.logger.info("Obstacle Avoidance ON → LiDAR turned ON")
+
+                            # Brief wait for LiDAR to initialize before enabling obstacle avoidance
+                            await asyncio.sleep(1.0)
+
+                        # Enable obstacle avoidance
+                        self.state.obstacle_avoid_active = True
+                        self.logger.info("Sending OBSTACLES_AVOID SwitchSet: ENABLE")
+
+                        await self.state.connection.datachannel.pub_sub.publish_request_new(
+                            RTC_TOPIC["OBSTACLES_AVOID"],
+                            {
+                                "api_id": OBSTACLES_AVOID_API["SWITCH_SET"],
+                                "parameter": {"enable": True}
+                            }
+                        )
+
+                        # Play audio feedback
+                        await self.state.connection.datachannel.pub_sub.publish_request_new(
+                            RTC_TOPIC["AUDIO_HUB_REQ"],
+                            {"api_id": AUDIO_API["PLAY_START_OBSTACLE_AVOIDANCE"]}
+                        )
+
+                        # Emit obstacle avoidance state update to frontend
+                        if self.socketio:
+                            self.socketio.emit('obstacle_avoid_state_update', {'enabled': True})
+                        self.logger.info("✅ Obstacle avoidance ENABLED")
+
+                    else:
+                        # === DISABLING Obstacle Avoidance ===
+                        # Just disable obstacle avoidance, keep LiDAR spinning
+                        # (allows rapid ON/OFF toggling for narrow space navigation)
+                        self.state.obstacle_avoid_active = False
+                        self.logger.info("Sending OBSTACLES_AVOID SwitchSet: DISABLE")
+
+                        await self.state.connection.datachannel.pub_sub.publish_request_new(
+                            RTC_TOPIC["OBSTACLES_AVOID"],
+                            {
+                                "api_id": OBSTACLES_AVOID_API["SWITCH_SET"],
+                                "parameter": {"enable": False}
+                            }
+                        )
+
+                        # Play audio feedback
+                        await self.state.connection.datachannel.pub_sub.publish_request_new(
+                            RTC_TOPIC["AUDIO_HUB_REQ"],
+                            {"api_id": AUDIO_API["PLAY_EXIT_OBSTACLE_AVOIDANCE"]}
+                        )
+
+                        # Emit obstacle avoidance state update to frontend
+                        if self.socketio:
+                            self.socketio.emit('obstacle_avoid_state_update', {'enabled': False})
+                        self.logger.info("✅ Obstacle avoidance DISABLED (LiDAR remains ON)")
+
                 except Exception as e:
-                    self.logger.warning(f"Failed to subscribe to some topics: {e}")
-
-                # Send the CORRECT obstacle avoidance command based on SDK2
-                # API ID: OBSTACLES_AVOID_API["SWITCH_SET"] = 1001 (ROBOT_API_ID_OBSTACLES_AVOID_SWITCH_SET)
-                # Parameter: {"enable": true/false}
-                self.logger.info(f"Sending OBSTACLES_AVOID SwitchSet (API {OBSTACLES_AVOID_API['SWITCH_SET']}): {'ENABLE' if self.state.obstacle_avoid_active else 'DISABLE'}")
-                response = await self.state.connection.datachannel.pub_sub.publish_request_new(
-                    RTC_TOPIC["OBSTACLES_AVOID"],
-                    {
-                        "api_id": OBSTACLES_AVOID_API["SWITCH_SET"],  # 1001 - ROBOT_API_ID_OBSTACLES_AVOID_SWITCH_SET from SDK2
-                        "parameter": {"enable": self.state.obstacle_avoid_active}  # Correct parameter format from SDK2
-                    }
-                )
-                self.logger.info(f"✅ Response from OBSTACLES_AVOID topic: {response}")
-
-                # Play audio feedback (like the official app does)
-                audio_api_id = AUDIO_API["PLAY_START_OBSTACLE_AVOIDANCE"] if self.state.obstacle_avoid_active else AUDIO_API["PLAY_EXIT_OBSTACLE_AVOIDANCE"]
-                await self.state.connection.datachannel.pub_sub.publish_request_new(
-                    RTC_TOPIC["AUDIO_HUB_REQ"],
-                    {"api_id": audio_api_id}
-                )
-                self.logger.info(f"🔊 Audio feedback sent: {'START' if self.state.obstacle_avoid_active else 'EXIT'} obstacle avoidance")
-
-                # Wait a moment to collect any responses
-                await asyncio.sleep(1)
-                self.logger.info("🎧 Listening for topic responses... (check logs above)")
+                    self.logger.error(f"Error toggling obstacle avoidance: {e}")
+                    # Don't change state on error - revert if we already changed it
+                    self.state.obstacle_avoid_active = not new_avoid_state
 
             elif action == 'stand_up':
                 # RecoveryStand (1006) - reliable command for standing with full movement capabilities
@@ -811,27 +849,126 @@ class ControlService:
             # elif action == 'decrease_height': ...
 
             elif action == 'lidar_switch':
-                # Toggle lidar using publish_without_callback
-                self.state.lidar_state = not self.state.lidar_state
-                switch_value = "on" if self.state.lidar_state else "off"
+                # Toggle LiDAR hardware (4D LiDAR L1/L2) with proper ON/OFF sequencing
+                # The 4D LiDAR has a high-speed motor (internal mirror) and low-speed motor (360° rotation).
+                # Proper sequencing is critical to ensure both motors stop on OFF.
+                #
+                # COORDINATION: LiDAR and obstacle avoidance are linked:
+                # - LiDAR ON  → auto-enable obstacle avoidance
+                # - LiDAR OFF → auto-disable obstacle avoidance first (MCF would override OFF)
+                from unitree_webrtc_connect.constants import AUDIO_API, OBSTACLES_AVOID_API
 
-                self.logger.info(f"Toggling lidar to: {switch_value}")
+                new_state = not self.state.lidar_state
+                self.logger.info(f"LiDAR switch: {'ON' if new_state else 'OFF'} (current: {'ON' if self.state.lidar_state else 'OFF'})")
+
                 try:
-                    # If turning lidar ON, must disable traffic saving first
-                    if self.state.lidar_state:
-                        self.logger.info("Disabling traffic saving for lidar...")
+                    if new_state:
+                        # === LiDAR ON Sequence ===
+                        # 1. Disable traffic saving first (required for LiDAR data to flow)
+                        self.logger.info("LiDAR ON [1/2]: Disabling traffic saving...")
                         await self.state.connection.datachannel.disableTrafficSaving(True)
-                        self.logger.info("Traffic saving disabled")
 
-                    # Now toggle the lidar
-                    self.state.connection.datachannel.pub_sub.publish_without_callback(
-                        RTC_TOPIC["ULIDAR_SWITCH"],
-                        switch_value
-                    )
-                    self.logger.info(f"Lidar switched {switch_value} successfully")
+                        # 2. Send ON command to start both LiDAR motors
+                        self.state.connection.datachannel.pub_sub.publish_without_callback(
+                            RTC_TOPIC["ULIDAR_SWITCH"],
+                            "ON"  # Uppercase required by DDS std_msgs::msg::String_
+                        )
+                        self.logger.info("LiDAR ON [2/2]: Switch command sent")
+
+                        # Update LiDAR state and emit to frontend
+                        self.state.lidar_state = True
+                        if self.socketio:
+                            self.socketio.emit('lidar_state_update', {'enabled': True})
+
+                        # 3. Auto-enable obstacle avoidance (LiDAR is now available)
+                        obs_avoid = getattr(self.state, 'obstacle_avoid_active', False)
+                        if not obs_avoid:
+                            self.logger.info("LiDAR ON → Auto-enabling obstacle avoidance...")
+                            self.state.obstacle_avoid_active = True
+
+                            await self.state.connection.datachannel.pub_sub.publish_request_new(
+                                RTC_TOPIC["OBSTACLES_AVOID"],
+                                {
+                                    "api_id": OBSTACLES_AVOID_API["SWITCH_SET"],
+                                    "parameter": {"enable": True}
+                                }
+                            )
+
+                            # Play audio feedback
+                            await self.state.connection.datachannel.pub_sub.publish_request_new(
+                                RTC_TOPIC["AUDIO_HUB_REQ"],
+                                {"api_id": AUDIO_API["PLAY_START_OBSTACLE_AVOIDANCE"]}
+                            )
+
+                            if self.socketio:
+                                self.socketio.emit('obstacle_avoid_state_update', {'enabled': True})
+                            self.logger.info("LiDAR ON → Obstacle avoidance auto-enabled")
+
+                    else:
+                        # === LiDAR OFF Sequence ===
+                        # 1. Auto-disable obstacle avoidance FIRST (MCF would override LiDAR OFF)
+                        obs_avoid = getattr(self.state, 'obstacle_avoid_active', False)
+                        if obs_avoid:
+                            self.logger.info("LiDAR OFF → Auto-disabling obstacle avoidance first...")
+                            self.state.obstacle_avoid_active = False
+
+                            await self.state.connection.datachannel.pub_sub.publish_request_new(
+                                RTC_TOPIC["OBSTACLES_AVOID"],
+                                {
+                                    "api_id": OBSTACLES_AVOID_API["SWITCH_SET"],
+                                    "parameter": {"enable": False}
+                                }
+                            )
+
+                            # Play audio feedback
+                            await self.state.connection.datachannel.pub_sub.publish_request_new(
+                                RTC_TOPIC["AUDIO_HUB_REQ"],
+                                {"api_id": AUDIO_API["PLAY_EXIT_OBSTACLE_AVOIDANCE"]}
+                            )
+
+                            if self.socketio:
+                                self.socketio.emit('obstacle_avoid_state_update', {'enabled': False})
+                            self.logger.info("LiDAR OFF → Obstacle avoidance auto-disabled")
+
+                            # Brief wait for obstacle avoidance to fully disengage
+                            await asyncio.sleep(0.5)
+
+                        # 2. Unsubscribe from all LiDAR data topics to remove active subscribers
+                        lidar_data_topics = [
+                            RTC_TOPIC["ULIDAR_ARRAY"],   # rt/utlidar/voxel_map_compressed
+                            RTC_TOPIC["ULIDAR"],          # rt/utlidar/voxel_map
+                            RTC_TOPIC["ULIDAR_STATE"],    # rt/utlidar/lidar_state
+                            RTC_TOPIC["ROBOTODOM"],        # rt/utlidar/robot_pose
+                        ]
+                        self.logger.info(f"LiDAR OFF [1/3]: Unsubscribing from {len(lidar_data_topics)} LiDAR data topics...")
+                        for topic in lidar_data_topics:
+                            try:
+                                self.state.connection.datachannel.pub_sub.unsubscribe(topic)
+                                self.logger.debug(f"  Unsubscribed from: {topic}")
+                            except Exception as unsub_err:
+                                self.logger.warning(f"  Failed to unsubscribe from {topic}: {unsub_err}")
+
+                        # 3. Send OFF command to shut down both LiDAR motors
+                        self.state.connection.datachannel.pub_sub.publish_without_callback(
+                            RTC_TOPIC["ULIDAR_SWITCH"],
+                            "OFF"  # Uppercase required by DDS std_msgs::msg::String_
+                        )
+                        self.logger.info("LiDAR OFF [2/3]: Switch OFF command sent")
+
+                        # 4. Re-enable traffic saving (was disabled when LiDAR was turned ON)
+                        await self.state.connection.datachannel.disableTrafficSaving(False)
+                        self.logger.info("LiDAR OFF [3/3]: Traffic saving re-enabled")
+
+                        # Update LiDAR state and emit to frontend
+                        self.state.lidar_state = False
+                        if self.socketio:
+                            self.socketio.emit('lidar_state_update', {'enabled': False})
+
+                    self.logger.info(f"LiDAR is now {'ON' if new_state else 'OFF'}")
+
                 except Exception as e:
-                    self.logger.error(f"Error toggling lidar: {e}")
-                    self.state.lidar_state = not self.state.lidar_state  # Revert state on error
+                    self.logger.error(f"Error toggling LiDAR: {e}")
+                    # Don't change state on error - it remains at its previous value
 
             elif action == 'stop_move':
                 # Stop all movement

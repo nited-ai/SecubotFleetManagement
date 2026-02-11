@@ -60,6 +60,13 @@ class WebSocketClient {
             }
         });
 
+        // LiDAR state update handler (coordinates with obstacle avoidance UI)
+        this.socket.on('lidar_state_update', (data) => {
+            if (typeof updateLidarState === 'function') {
+                updateLidarState(data.enabled);
+            }
+        });
+
         console.log('WebSocket client initialized');
         return true;
     }

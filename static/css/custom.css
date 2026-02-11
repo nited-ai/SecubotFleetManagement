@@ -713,6 +713,16 @@ input[type="range"]::-moz-range-thumb:hover {
     filter: drop-shadow(0 0 8px rgba(107, 114, 128, 0.6));
 }
 
+/* Disabled state - LiDAR is OFF, obstacle avoidance cannot run */
+.obstacle-avoid-disabled svg {
+    opacity: 0.4;
+}
+
+.obstacle-avoid-disabled:hover svg {
+    filter: drop-shadow(0 0 8px rgba(107, 114, 128, 0.4));
+    opacity: 0.6;
+}
+
 /* Pulse animation for loading state */
 .obstacle-avoid-loading svg {
     animation: pulse-opacity 2s ease-in-out infinite;

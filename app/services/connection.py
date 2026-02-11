@@ -507,6 +507,13 @@ class ConnectionService:
             # Query current obstacle avoidance state from robot
             await self.query_obstacle_avoidance_state()
 
+            # Go2 boots with LiDAR ON (AI mode + obstacle avoidance enabled by default)
+            # Sync initial LiDAR state to backend and frontend
+            self.state.lidar_state = True
+            if self.socketio:
+                self.socketio.emit('lidar_state_update', {'enabled': True})
+                self.logger.info("📡 Sent initial LiDAR state to frontend: ON (Go2 default)")
+
             # Emit completion event
             self.emit_progress('complete')
             if self.socketio:

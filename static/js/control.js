@@ -1348,8 +1348,17 @@ async function toggleLeashMode() {
 
 /**
  * Toggle Obstacle Avoidance Mode
+ *
+ * COORDINATION: Obstacle avoidance and LiDAR are linked:
+ * - Enabling obstacle avoidance: if LiDAR is OFF, backend auto-turns LiDAR ON first
+ * - Disabling obstacle avoidance: LiDAR stays ON (for rapid ON/OFF toggling in narrow spaces)
+ * - LiDAR OFF (R key): backend auto-disables obstacle avoidance first
+ * - LiDAR ON (R key): backend auto-enables obstacle avoidance
+ *
+ * State updates are driven by Socket.IO events from backend (not optimistic toggle).
  */
 let obstacleAvoidActive = null; // null = loading/unknown, true = ON, false = OFF
+let lidarActive = null; // null = unknown, true = ON, false = OFF (Go2 boots with LiDAR ON)
 
 async function toggleObstacleAvoidance() {
     // Don't allow toggle while state is loading
@@ -1359,32 +1368,33 @@ async function toggleObstacleAvoidance() {
     }
 
     try {
+        // Show loading state while backend processes (may involve LiDAR ON sequence)
+        updateObstacleAvoidanceUI(null);
+
         // Send switch_avoid_mode action to backend
+        // Backend handles LiDAR coordination and emits state updates via Socket.IO
         const response = await fetch('/api/control/action', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'switch_avoid_mode' })
         });
 
-        if (response.ok) {
-            // Toggle state
-            obstacleAvoidActive = !obstacleAvoidActive;
-
-            // Update UI
-            updateObstacleAvoidanceUI(obstacleAvoidActive);
-
-            console.log('Obstacle Avoidance toggled:', obstacleAvoidActive ? 'ON (Active)' : 'OFF (Inactive)');
-        } else {
+        if (!response.ok) {
+            // Restore previous UI state on HTTP failure
             console.error('Obstacle Avoidance toggle failed');
+            updateObstacleAvoidanceUI(obstacleAvoidActive);
         }
+        // On success, UI will be updated by Socket.IO events from backend
     } catch (error) {
         console.error('Error toggling Obstacle Avoidance:', error);
+        // Restore previous UI state on error
+        updateObstacleAvoidanceUI(obstacleAvoidActive);
     }
 }
 
 /**
  * Update obstacle avoidance state from backend (called via Socket.IO)
- * This syncs the frontend UI with the robot's actual state on connection
+ * This is the authoritative state sync — all UI updates go through here.
  */
 function updateObstacleAvoidanceState(enabled) {
     obstacleAvoidActive = enabled;
@@ -1393,7 +1403,23 @@ function updateObstacleAvoidanceState(enabled) {
 }
 
 /**
+ * Update LiDAR state from backend (called via Socket.IO)
+ * When LiDAR is OFF, obstacle avoidance button shows as disabled.
+ */
+function updateLidarState(enabled) {
+    lidarActive = enabled;
+    console.log('✅ LiDAR state synced from robot:', enabled ? 'ON' : 'OFF');
+
+    // When LiDAR turns OFF, obstacle avoidance is also auto-disabled by backend
+    // (backend emits obstacle_avoid_state_update separately)
+    // But we still need to refresh the obstacle avoidance button appearance
+    // because its disabled/enabled visual depends on LiDAR state
+    updateObstacleAvoidanceUI(obstacleAvoidActive);
+}
+
+/**
  * Update obstacle avoidance UI elements (button class and icon color)
+ * States: loading (gray pulse), active (cyan), inactive (red), disabled (dim red, LiDAR OFF)
  * @param {boolean|null} enabled - true = ON, false = OFF, null = loading
  */
 function updateObstacleAvoidanceUI(enabled) {
@@ -1402,16 +1428,22 @@ function updateObstacleAvoidanceUI(enabled) {
 
     if (button) {
         // Remove all state classes
-        button.classList.remove('obstacle-avoid-active', 'obstacle-avoid-inactive', 'obstacle-avoid-loading');
+        button.classList.remove('obstacle-avoid-active', 'obstacle-avoid-inactive', 'obstacle-avoid-loading', 'obstacle-avoid-disabled');
 
-        // Add appropriate class based on state
         if (enabled === null) {
+            // Loading/querying state
             button.classList.add('obstacle-avoid-loading');
             button.title = 'Obstacle Avoidance: Querying state...';
         } else if (enabled) {
+            // Active (ON)
             button.classList.add('obstacle-avoid-active');
             button.title = 'Obstacle Avoidance: ON (Click to disable)';
+        } else if (lidarActive === false) {
+            // Disabled — LiDAR is OFF, obstacle avoidance cannot run
+            button.classList.add('obstacle-avoid-disabled');
+            button.title = 'Obstacle Avoidance: Disabled (LiDAR is OFF — click to enable both)';
         } else {
+            // Inactive — LiDAR is ON but obstacle avoidance is OFF
             button.classList.add('obstacle-avoid-inactive');
             button.title = 'Obstacle Avoidance: OFF (Click to enable)';
         }
@@ -1423,8 +1455,10 @@ function updateObstacleAvoidanceUI(enabled) {
             newColor = '#6b7280'; // Gray for loading
         } else if (enabled) {
             newColor = '#00E8DA'; // Cyan for ON
+        } else if (lidarActive === false) {
+            newColor = '#6b7280'; // Dim gray for disabled (LiDAR OFF)
         } else {
-            newColor = '#ef4444'; // Red for OFF
+            newColor = '#ef4444'; // Red for OFF (but can be toggled)
         }
         icon.querySelector('path').setAttribute('fill', newColor);
     }

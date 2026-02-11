@@ -61,7 +61,7 @@ state = StateService()
 connection_service = ConnectionService(state, debug_level=DEBUG_LEVEL)
 video_service = VideoService(state)
 audio_service = AudioService(state)
-control_service = ControlService(state, debug_level=DEBUG_LEVEL)
+control_service = ControlService(state, socketio=socketio, debug_level=DEBUG_LEVEL)
 
 # Store services in app config for blueprint access
 app.config['STATE_SERVICE'] = state

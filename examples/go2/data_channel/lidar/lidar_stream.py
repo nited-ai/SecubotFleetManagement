@@ -25,7 +25,7 @@ async def main():
         # conn.datachannel.set_decoder(decoder_type='native')
 
         # Publish a message to turn the LIDAR sensor on.
-        conn.datachannel.pub_sub.publish_without_callback("rt/utlidar/switch", "on")
+        conn.datachannel.pub_sub.publish_without_callback("rt/utlidar/switch", "ON")
 
         # Define a callback function to handle LIDAR messages when received.
         def lidar_callback(message):

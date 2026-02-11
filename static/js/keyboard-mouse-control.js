@@ -417,7 +417,7 @@ class KeyboardMouseControl {
         } else if (key === 'q') {
             this.handleAction('crouch');
         } else if (key === 'r') {
-            this.handleAction('toggle_lidar');
+            this.handleAction('lidar_switch');
         // Height adjustment disabled - BodyHeight API (1013) returns code 3203 in AI mode
         // } else if (key === 'arrowup' && !this.poseMode) {
         //     if (e.repeat) return;

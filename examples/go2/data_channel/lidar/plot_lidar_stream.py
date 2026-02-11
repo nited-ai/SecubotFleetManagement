@@ -144,7 +144,7 @@ async def lidar_webrtc_connection():
             await conn.datachannel.disableTrafficSaving(True)
 
             # Turn LIDAR sensor on
-            conn.datachannel.pub_sub.publish_without_callback("rt/utlidar/switch", "on")
+            conn.datachannel.pub_sub.publish_without_callback("rt/utlidar/switch", "ON")
 
             # Set up CSV outputs
             setup_csv_output()
