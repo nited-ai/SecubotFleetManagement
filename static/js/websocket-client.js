@@ -53,6 +53,13 @@ class WebSocketClient {
             }
         });
 
+        // Obstacle avoidance state update handler
+        this.socket.on('obstacle_avoid_state_update', (data) => {
+            if (typeof updateObstacleAvoidanceState === 'function') {
+                updateObstacleAvoidanceState(data.enabled);
+            }
+        });
+
         console.log('WebSocket client initialized');
         return true;
     }

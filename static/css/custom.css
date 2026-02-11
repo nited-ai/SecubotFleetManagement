@@ -506,7 +506,7 @@ input[type="range"]::-moz-range-thumb:hover {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 20px;
+    gap: 0px;
     z-index: 100;
 }
 
@@ -696,12 +696,31 @@ input[type="range"]::-moz-range-thumb:hover {
 }
 
 /* Obstacle Avoidance States - icon color toggled via JS setAttribute('fill', color) */
+/* Base drop-shadow for all states (matches hud-btn) */
+#obstacle-avoid-btn svg {
+    filter: drop-shadow(0px 0px 2px black);
+}
+
 .obstacle-avoid-active:hover svg {
     filter: drop-shadow(0 0 8px rgba(0, 232, 218, 0.6));
 }
 
 .obstacle-avoid-inactive:hover svg {
     filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
+}
+
+.obstacle-avoid-loading:hover svg {
+    filter: drop-shadow(0 0 8px rgba(107, 114, 128, 0.6));
+}
+
+/* Pulse animation for loading state */
+.obstacle-avoid-loading svg {
+    animation: pulse-opacity 2s ease-in-out infinite;
+}
+
+@keyframes pulse-opacity {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
 }
 
 /* Horizontal Sliders - Higher specificity to override input[type="range"] */

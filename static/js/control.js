@@ -1349,9 +1349,15 @@ async function toggleLeashMode() {
 /**
  * Toggle Obstacle Avoidance Mode
  */
-let obstacleAvoidActive = false;
+let obstacleAvoidActive = null; // null = loading/unknown, true = ON, false = OFF
 
 async function toggleObstacleAvoidance() {
+    // Don't allow toggle while state is loading
+    if (obstacleAvoidActive === null) {
+        console.warn('Obstacle Avoidance state is still loading, please wait...');
+        return;
+    }
+
     try {
         // Send switch_avoid_mode action to backend
         const response = await fetch('/api/control/action', {
@@ -1364,19 +1370,8 @@ async function toggleObstacleAvoidance() {
             // Toggle state
             obstacleAvoidActive = !obstacleAvoidActive;
 
-            // Update button class and icon color
-            const button = document.getElementById('obstacle-avoid-btn');
-            const icon = document.getElementById('obstacle-avoid-icon');
-
-            if (button) {
-                button.classList.remove('obstacle-avoid-active', 'obstacle-avoid-inactive');
-                button.classList.add(obstacleAvoidActive ? 'obstacle-avoid-active' : 'obstacle-avoid-inactive');
-            }
-
-            if (icon) {
-                const newColor = obstacleAvoidActive ? '#00E8DA' : '#ef4444';
-                icon.querySelector('path').setAttribute('fill', newColor);
-            }
+            // Update UI
+            updateObstacleAvoidanceUI(obstacleAvoidActive);
 
             console.log('Obstacle Avoidance toggled:', obstacleAvoidActive ? 'ON (Active)' : 'OFF (Inactive)');
         } else {
@@ -1384,5 +1379,53 @@ async function toggleObstacleAvoidance() {
         }
     } catch (error) {
         console.error('Error toggling Obstacle Avoidance:', error);
+    }
+}
+
+/**
+ * Update obstacle avoidance state from backend (called via Socket.IO)
+ * This syncs the frontend UI with the robot's actual state on connection
+ */
+function updateObstacleAvoidanceState(enabled) {
+    obstacleAvoidActive = enabled;
+    updateObstacleAvoidanceUI(enabled);
+    console.log('✅ Obstacle Avoidance state synced from robot:', enabled ? 'ON (Active)' : 'OFF (Inactive)');
+}
+
+/**
+ * Update obstacle avoidance UI elements (button class and icon color)
+ * @param {boolean|null} enabled - true = ON, false = OFF, null = loading
+ */
+function updateObstacleAvoidanceUI(enabled) {
+    const button = document.getElementById('obstacle-avoid-btn');
+    const icon = document.getElementById('obstacle-avoid-icon');
+
+    if (button) {
+        // Remove all state classes
+        button.classList.remove('obstacle-avoid-active', 'obstacle-avoid-inactive', 'obstacle-avoid-loading');
+
+        // Add appropriate class based on state
+        if (enabled === null) {
+            button.classList.add('obstacle-avoid-loading');
+            button.title = 'Obstacle Avoidance: Querying state...';
+        } else if (enabled) {
+            button.classList.add('obstacle-avoid-active');
+            button.title = 'Obstacle Avoidance: ON (Click to disable)';
+        } else {
+            button.classList.add('obstacle-avoid-inactive');
+            button.title = 'Obstacle Avoidance: OFF (Click to enable)';
+        }
+    }
+
+    if (icon) {
+        let newColor;
+        if (enabled === null) {
+            newColor = '#6b7280'; // Gray for loading
+        } else if (enabled) {
+            newColor = '#00E8DA'; // Cyan for ON
+        } else {
+            newColor = '#ef4444'; // Red for OFF
+        }
+        icon.querySelector('path').setAttribute('fill', newColor);
     }
 }

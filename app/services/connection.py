@@ -27,7 +27,7 @@ from typing import Optional, Callable, Dict, Any
 import pyaudio
 
 from unitree_webrtc_connect.webrtc_driver import UnitreeWebRTCConnection, WebRTCConnectionMethod
-from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD
+from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD, OBSTACLES_AVOID_API
 
 
 class ConnectionService:
@@ -221,6 +221,10 @@ class ConnectionService:
             # Update state
             self.state.connection = conn
             self.state.is_connected = True
+
+            # Query obstacle avoidance state early to sync frontend UI ASAP
+            # This prevents visual flicker from loading state → actual state
+            asyncio.create_task(self.query_obstacle_avoidance_state())
 
             # Subscribe to LOW_STATE for battery data
             self.subscribe_to_robot_status()
@@ -500,6 +504,9 @@ class ConnectionService:
             await asyncio.sleep(1)
             self.logger.info("Robot initialized successfully (AI mode + FreeWalk)")
 
+            # Query current obstacle avoidance state from robot
+            await self.query_obstacle_avoidance_state()
+
             # Emit completion event
             self.emit_progress('complete')
             if self.socketio:
@@ -511,6 +518,66 @@ class ConnectionService:
             if self.socketio:
                 self.socketio.emit('connection_error', {'message': str(e)})
             raise
+
+    async def query_obstacle_avoidance_state(self):
+        """
+        Query current obstacle avoidance state from robot.
+
+        Uses OBSTACLES_AVOID_API["SWITCH_GET"] (API ID 1002) to retrieve
+        the current enable/disable state and syncs it with backend and frontend.
+
+        This ensures consistency between:
+        - Robot's actual obstacle avoidance state
+        - Backend state (StateService.obstacle_avoid_active)
+        - Frontend UI (toggle button appearance)
+        """
+        try:
+            self.logger.info("Querying obstacle avoidance state from robot...")
+
+            response = await self.state.connection.datachannel.pub_sub.publish_request_new(
+                RTC_TOPIC["OBSTACLES_AVOID"],
+                {"api_id": OBSTACLES_AVOID_API["SWITCH_GET"]}
+            )
+
+            if response and 'data' in response:
+                import json
+
+                # Check response status
+                header = response.get('data', {}).get('header', {})
+                status = header.get('status', {})
+                status_code = status.get('code', -1)
+
+                if status_code == 0:
+                    # Success - parse the data
+                    if 'data' in response['data']:
+                        data = json.loads(response['data']['data'])
+                        enable_state = data.get('enable', False)
+
+                        # Store in state
+                        self.state.obstacle_avoid_active = enable_state
+
+                        self.logger.info(f"✅ Obstacle avoidance state: {'ENABLED' if enable_state else 'DISABLED'}")
+
+                        # Emit to frontend to sync UI
+                        if self.socketio:
+                            self.socketio.emit('obstacle_avoid_state_update', {
+                                'enabled': enable_state
+                            })
+                            self.logger.info(f"📡 Sent obstacle avoidance state to frontend: {enable_state}")
+                    else:
+                        self.logger.warning("No data field in obstacle avoidance state response")
+                        self.state.obstacle_avoid_active = False
+                else:
+                    self.logger.warning(f"Failed to query obstacle avoidance state (status code: {status_code})")
+                    self.state.obstacle_avoid_active = False
+            else:
+                self.logger.warning("No response received when querying obstacle avoidance state")
+                self.state.obstacle_avoid_active = False
+
+        except Exception as e:
+            self.logger.error(f"Error querying obstacle avoidance state: {e}")
+            # Default to disabled on error
+            self.state.obstacle_avoid_active = False
 
     async def disconnect_connection(self):
         """
